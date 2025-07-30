@@ -1,0 +1,16 @@
+port: :8081
+ginMode: release # debug or release
+
+redisURL: redis://@localhost:6379/1
+
+arweaveURL: https://arweave.net
+hymxURL: http://127.0.0.1:8080 # for sending messages via the SDK
+
+prvKey:
+keyfilePath: ./test_keyfile2.json
+
+nodeName: test2
+nodeDesc: second test node
+nodeURL: http://127.0.0.1:8081
+
+joinNetwork: true

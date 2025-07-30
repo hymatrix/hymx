@@ -1,0 +1,11 @@
+.DS_Store
+
+*.log
+ckp
+
+go.sum
+
+.vscode
+
+build
+checkpoint

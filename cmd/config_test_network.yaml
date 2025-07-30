@@ -1,0 +1,17 @@
+# join test network
+port: :8080
+ginMode: release # debug or release
+
+redisURL: redis://@localhost:6379/2
+
+arweaveURL: https://arweave.net
+hymxURL: https://hymatrix.ai # for sending messages via the SDK
+
+prvKey: 0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b
+keyfilePath: ./test_keyfile.json
+
+nodeName: test2
+nodeDesc: test2node
+nodeURL: http://127.0.0.1:8080
+
+joinNetwork: true 
