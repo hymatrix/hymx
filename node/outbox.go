@@ -100,7 +100,21 @@ func (n *Node) trySend(pid, target string) {
 			return
 		}
 
-		assignItem, err := n.tryGetAssign(item.Id, nodes, itemBin)
+		if len(nodes) == 0 {
+			return
+		}
+
+		if n.isSelf(nodes[0]) {
+			log.Debug("outbox --- send to self")
+			_, err = n.tryGetLocalAssign(item.Id, nodes, *item)
+			if err != nil {
+				log.Error("outbox try get local assignment failed", "pid", pid, "target", target, "itemId", item.Id, "err", err)
+			}
+			return
+		}
+
+		var assignItem goarSchema.BundleItem
+		assignItem, err = n.tryGetAssign(item.Id, nodes, itemBin)
 		if err != nil {
 			log.Error("outbox try get assignment failed", "pid", pid, "target", target, "itemId", item.Id, "err", err)
 			return
@@ -111,6 +125,63 @@ func (n *Node) trySend(pid, target string) {
 			return
 		}
 	}
+}
+
+func (n *Node) tryGetLocalAssign(msgId string, nodes []registrySchema.Node, item goarSchema.BundleItem) (assignItem goarSchema.BundleItem, err error) {
+	// make channel for assignment result
+	resultChan := make(chan schema.AssignmentResult, 1)
+	n.outboxAssignmentMu.Lock()
+	n.outboxAssignmentChans[msgId] = resultChan
+	n.outboxAssignmentMu.Unlock()
+
+	// clean channel
+	defer func() {
+		n.outboxAssignmentMu.Lock()
+		delete(n.outboxAssignmentChans, msgId)
+		n.outboxAssignmentMu.Unlock()
+		close(resultChan)
+	}()
+
+	for retry := 0; retry < 5; retry++ {
+		log.Debug("outbox try get assign retry", "retry", retry)
+		if retry > 0 {
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		err = n.Handle(item)
+		if err != nil {
+			continue
+		}
+
+		// wait for assignment result
+		select {
+		case assignmentResult := <-resultChan:
+			if assignmentResult.Error != nil {
+				err = assignmentResult.Error
+				continue
+			}
+			assignItem = assignmentResult.AssignItem
+			err = goarUtils.VerifyBundleItem(assignItem)
+			if err != nil {
+				continue
+			}
+			accid := ""
+			_, accid, _, _, err = utils.Decode(assignItem)
+			if err != nil {
+				continue
+			}
+			if accid != nodes[0].AccId {
+				err = schema.ErrUnauthorizedNode
+				continue
+			}
+			return
+		case <-time.After(2 * time.Second):
+			err = fmt.Errorf("timeout waiting for assignment result")
+			continue
+		}
+	}
+
+	return
 }
 
 func (n *Node) tryGetAssign(msgId string, nodes []registrySchema.Node, itemBin []byte) (assignItem goarSchema.BundleItem, err error) {

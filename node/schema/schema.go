@@ -1,8 +1,10 @@
 package schema
 
 import (
+	hymxSchema "github.com/hymatrix/hymx/schema"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
+	goarSchema "github.com/permadao/goar/schema"
 )
 
 type Info struct {
@@ -15,3 +17,13 @@ type Info struct {
 }
 
 type ResultHandler func(vmmSchema.Result)
+
+type AssignmentResult struct {
+	Assign     hymxSchema.Assignment
+	AssignItem goarSchema.BundleItem
+	Error      error
+	Pid        string
+	ItemId     string
+}
+
+type AssignmentHandler func(AssignmentResult)

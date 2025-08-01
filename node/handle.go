@@ -151,6 +151,7 @@ func (n *Node) authNode(accid, fromProcess string) (err error) {
 		}
 	}
 	if !validNode {
+		log.Error("auth node failed", "accid", accid, "fromProcess", fromProcess)
 		return schema.ErrUnauthorizedNode
 	}
 

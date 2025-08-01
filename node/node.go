@@ -45,6 +45,10 @@ type Node struct {
 	outboxSendingLock map[string]bool
 	outboxLockMu      sync.RWMutex
 
+	// outbox assignment result channels
+	outboxAssignmentChans map[string]chan schema.AssignmentResult
+	outboxAssignmentMu    sync.RWMutex
+
 	db       schema.IDB
 	outboxDB schema.IDBOutbox
 
@@ -84,6 +88,8 @@ func New(
 
 		outboxChan:        outboxChan,
 		outboxSendingLock: map[string]bool{},
+
+		outboxAssignmentChans: map[string]chan schema.AssignmentResult{},
 
 		db:               rdb.New(redisURL),
 		outboxDB:         cache.NewOutbox(),
@@ -200,4 +206,13 @@ func (n *Node) AddResultHandler(handler ...schema.ResultHandler) {
 	defer n.resultHandlerLockMu.Unlock()
 
 	n.resultHandlers = append(n.resultHandlers, handler...)
+}
+
+func (n *Node) isSelf(node registrySchema.Node) bool {
+	if n.Info().Node.AccId == node.AccId {
+		if n.Info().Node.URL == node.URL {
+			return true
+		}
+	}
+	return false
 }
