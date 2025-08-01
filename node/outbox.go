@@ -104,20 +104,20 @@ func (n *Node) trySend(pid, target string) {
 			return
 		}
 
+		var assignItem goarSchema.BundleItem
 		if n.isSelf(nodes[0]) {
-			log.Debug("outbox --- send to self")
-			_, err = n.tryGetLocalAssign(item.Id, nodes, *item)
+			assignItem, err = n.tryGetLocalAssign(item.Id, nodes, *item)
 			if err != nil {
 				log.Error("outbox try get local assignment failed", "pid", pid, "target", target, "itemId", item.Id, "err", err)
+				return
 			}
-			return
-		}
 
-		var assignItem goarSchema.BundleItem
-		assignItem, err = n.tryGetAssign(item.Id, nodes, itemBin)
-		if err != nil {
-			log.Error("outbox try get assignment failed", "pid", pid, "target", target, "itemId", item.Id, "err", err)
-			return
+		} else {
+			assignItem, err = n.tryGetAssign(item.Id, nodes, itemBin)
+			if err != nil {
+				log.Error("outbox try get assignment failed", "pid", pid, "target", target, "itemId", item.Id, "err", err)
+				return
+			}
 		}
 
 		if err = n.outboxDB.Commit(pid, target, assignItem); err != nil {
@@ -158,6 +158,10 @@ func (n *Node) tryGetLocalAssign(msgId string, nodes []registrySchema.Node, item
 		case assignmentResult := <-resultChan:
 			if assignmentResult.Error != nil {
 				err = assignmentResult.Error
+				if err == schema.ErrDuplicateItem {
+					log.Debug("outbox try get duplicate item, exit", "msgid", msgId)
+					return
+				}
 				continue
 			}
 			assignItem = assignmentResult.AssignItem
@@ -174,6 +178,7 @@ func (n *Node) tryGetLocalAssign(msgId string, nodes []registrySchema.Node, item
 				err = schema.ErrUnauthorizedNode
 				continue
 			}
+			log.Debug("outbox try get assign success", "msgid", msgId)
 			return
 		case <-time.After(2 * time.Second):
 			err = fmt.Errorf("timeout waiting for assignment result")
