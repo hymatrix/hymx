@@ -16,7 +16,8 @@ func (n *Node) runMsgChan() {
 
 		case i := <-n.assignMesChan:
 
-			assign, _, err := n.assignment(i.Pid, i.Item)
+			assign, assignItem, err := n.assignment(i.Pid, i.Item)
+			n.sendAssignmentResult(i.Pid, i.Item, assign, assignItem, err)
 			if err != nil {
 				log.Error("assignment failed", "pid", i.Pid, "itemId", i.Item.Id, "err", err)
 				continue
@@ -46,7 +47,9 @@ func (n *Node) runProcChan() {
 				continue
 			}
 
-			if _, _, err := n.assignment(i.Pid, i.Item); err != nil {
+			assign, assignItem, err := n.assignment(i.Pid, i.Item)
+			n.sendAssignmentResult(i.Pid, i.Item, assign, assignItem, err)
+			if err != nil {
 				log.Error("assignment failed", "pid", i.Pid, "itemId", i.Item.Id, "err", err)
 			}
 

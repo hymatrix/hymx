@@ -15,7 +15,6 @@ func (n *Node) assignment(pid string, item goarSchema.BundleItem) (assign hymxSc
 	msg, _ := n.db.GetMessage(item.Id)
 	if msg != nil {
 		err = schema.ErrDuplicateItem
-		n.sendAssignmentResult(pid, item, assign, assignItem, err)
 		return
 	}
 
@@ -23,7 +22,6 @@ func (n *Node) assignment(pid string, item goarSchema.BundleItem) (assign hymxSc
 	nonce, err = n.db.GetNonce(pid)
 	if err != nil {
 		log.Error("assignment get nonce failed", "pid", pid, "err", err)
-		n.sendAssignmentResult(pid, item, assign, assignItem, err)
 		return
 	}
 	nonce = nonce + 1
@@ -31,19 +29,14 @@ func (n *Node) assignment(pid string, item goarSchema.BundleItem) (assign hymxSc
 	assign, assignItem, err = n.signAssign(pid, item.Id, nonce)
 	if err != nil {
 		log.Error("assignment sign assign failed", "pid", pid, "err", err)
-		n.sendAssignmentResult(pid, item, assign, assignItem, err)
 		return
 	}
 
 	err = n.db.Commit(pid, nonce, item, assignItem)
 	if err != nil {
 		log.Error("assignment commit failed", "pid", pid, "err", err)
-		n.sendAssignmentResult(pid, item, assign, assignItem, err)
 		return
 	}
-
-	// send assignment success message to channel
-	n.sendAssignmentResult(pid, item, assign, assignItem, nil)
 
 	return
 }
