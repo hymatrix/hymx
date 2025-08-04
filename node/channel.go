@@ -3,6 +3,8 @@ package node
 import (
 	"fmt"
 	"time"
+
+	"github.com/hymatrix/hymx/node/schema"
 )
 
 func (n *Node) runMsgChan() {
@@ -16,7 +18,14 @@ func (n *Node) runMsgChan() {
 
 		case i := <-n.assignMesChan:
 
-			assign, _, err := n.assignment(i.Pid, i.Item)
+			assign, assignItem, err := n.assignment(i.Pid, i.Item)
+			n.assignmentChan <- schema.AssignmentResult{
+				Pid:        i.Pid,
+				Item:       i.Item,
+				Assign:     assign,
+				AssignItem: assignItem,
+				Error:      err,
+			}
 			if err != nil {
 				log.Error("assignment failed", "pid", i.Pid, "itemId", i.Item.Id, "err", err)
 				continue
@@ -46,7 +55,15 @@ func (n *Node) runProcChan() {
 				continue
 			}
 
-			if _, _, err := n.assignment(i.Pid, i.Item); err != nil {
+			assign, assignItem, err := n.assignment(i.Pid, i.Item)
+			n.assignmentChan <- schema.AssignmentResult{
+				Pid:        i.Pid,
+				Item:       i.Item,
+				Assign:     assign,
+				AssignItem: assignItem,
+				Error:      err,
+			}
+			if err != nil {
 				log.Error("assignment failed", "pid", i.Pid, "itemId", i.Item.Id, "err", err)
 			}
 
@@ -85,6 +102,27 @@ func (n *Node) runResultChan() {
 				log.Error("save result failed", "msgid", result.ItemId, "err", err)
 			}
 
+		}
+	}
+}
+
+func (n *Node) runAssignmentChan() {
+	n.wg.Add(1)
+	defer n.wg.Done()
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+
+		case assignmentResult := <-n.assignmentChan:
+			log.Debug("assign chan get notice", "msgid", assignmentResult.Item.Id)
+
+			// handle assignment success
+			n.assignmentHandlerLockMu.RLock()
+			for _, handler := range n.assignmentHandlers {
+				handler(assignmentResult)
+			}
+			n.assignmentHandlerLockMu.RUnlock()
 		}
 	}
 }

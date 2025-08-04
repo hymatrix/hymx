@@ -100,10 +100,20 @@ func (n *Node) trySend(pid, target string) {
 			return
 		}
 
-		assignItem, err := n.tryGetAssign(item.Id, nodes, itemBin)
-		if err != nil {
-			log.Error("outbox try get assignment failed", "pid", pid, "target", target, "itemId", item.Id, "err", err)
-			return
+		var assignItem goarSchema.BundleItem
+		if n.isSelf(nodes[0]) {
+			assignItem, err = n.tryGetLocalAssign(*item)
+			if err != nil {
+				log.Error("outbox try get local assignment failed", "pid", pid, "target", target, "itemId", item.Id, "err", err)
+				return
+			}
+
+		} else {
+			assignItem, err = n.tryGetAssign(item.Id, nodes, itemBin)
+			if err != nil {
+				log.Error("outbox try get assignment failed", "pid", pid, "target", target, "itemId", item.Id, "err", err)
+				return
+			}
 		}
 
 		if err = n.outboxDB.Commit(pid, target, assignItem); err != nil {
@@ -111,6 +121,68 @@ func (n *Node) trySend(pid, target string) {
 			return
 		}
 	}
+}
+
+func (n *Node) tryGetLocalAssign(item goarSchema.BundleItem) (assignItem goarSchema.BundleItem, err error) {
+	// Use callback function to wait for assignment result
+	resultChan := make(chan schema.AssignmentResult, 1)
+	closed := make(chan bool, 1)
+
+	// Create temporary assignment handler
+	handler := func(result schema.AssignmentResult) {
+		if result.Item.Id == item.Id {
+			select {
+			case <-closed:
+				// channel is closed, do nothing
+				return
+			default:
+			}
+
+			resultChan <- result
+		}
+	}
+
+	// Register handler
+	n.AddAssignmentHandler(handler)
+
+	// Ensure cleanup when function ends
+	defer func() {
+		n.RemoveAssignmentHandler(handler)
+		close(closed)
+		close(resultChan)
+	}()
+
+	for retry := 0; retry < 5; retry++ {
+		log.Debug("outbox try get assign retry", "retry", retry)
+		if retry > 0 {
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		err = n.Handle(item)
+		if err != nil {
+			continue
+		}
+
+		// Wait for assignment result
+		select {
+		case assignmentResult := <-resultChan:
+			if assignmentResult.Error != nil {
+				err = assignmentResult.Error
+				if err == schema.ErrDuplicateItem {
+					log.Debug("outbox try get duplicate item, exit", "msgid", item.Id)
+					return
+				}
+				continue
+			}
+			log.Debug("outbox try get assign success", "msgid", item.Id)
+			return
+		case <-time.After(2 * time.Second):
+			err = fmt.Errorf("timeout waiting for assignment result")
+			continue
+		}
+	}
+
+	return
 }
 
 func (n *Node) tryGetAssign(msgId string, nodes []registrySchema.Node, itemBin []byte) (assignItem goarSchema.BundleItem, err error) {

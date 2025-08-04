@@ -11,6 +11,7 @@ import (
 )
 
 func (n *Node) assignment(pid string, item goarSchema.BundleItem) (assign hymxSchema.Assignment, assignItem goarSchema.BundleItem, err error) {
+
 	msg, _ := n.db.GetMessage(item.Id)
 	if msg != nil {
 		err = schema.ErrDuplicateItem
@@ -36,6 +37,7 @@ func (n *Node) assignment(pid string, item goarSchema.BundleItem) (assign hymxSc
 		log.Error("assignment commit failed", "pid", pid, "err", err)
 		return
 	}
+
 	return
 }
 

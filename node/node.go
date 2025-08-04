@@ -41,6 +41,10 @@ type Node struct {
 	resultHandlers      []schema.ResultHandler
 	resultHandlerLockMu sync.RWMutex
 
+	assignmentChan          chan schema.AssignmentResult
+	assignmentHandlers      []schema.AssignmentHandler
+	assignmentHandlerLockMu sync.RWMutex
+
 	outboxChan        <-chan vmmSchema.Outbox
 	outboxSendingLock map[string]bool
 	outboxLockMu      sync.RWMutex
@@ -82,6 +86,9 @@ func New(
 		resultChan:     resultChan,
 		resultHandlers: []schema.ResultHandler{},
 
+		assignmentChan:     make(chan schema.AssignmentResult, 1000),
+		assignmentHandlers: []schema.AssignmentHandler{},
+
 		outboxChan:        outboxChan,
 		outboxSendingLock: map[string]bool{},
 
@@ -96,6 +103,7 @@ func (n *Node) Run() {
 	go n.runMsgChan()
 	go n.runProcChan()
 	go n.runResultChan()
+	go n.runAssignmentChan()
 	go n.runOutboxChan()
 	go n.runRecovery()
 
@@ -200,4 +208,32 @@ func (n *Node) AddResultHandler(handler ...schema.ResultHandler) {
 	defer n.resultHandlerLockMu.Unlock()
 
 	n.resultHandlers = append(n.resultHandlers, handler...)
+}
+
+func (n *Node) AddAssignmentHandler(handler ...schema.AssignmentHandler) {
+	n.assignmentHandlerLockMu.Lock()
+	defer n.assignmentHandlerLockMu.Unlock()
+
+	n.assignmentHandlers = append(n.assignmentHandlers, handler...)
+}
+
+func (n *Node) RemoveAssignmentHandler(handler schema.AssignmentHandler) {
+	n.assignmentHandlerLockMu.Lock()
+	defer n.assignmentHandlerLockMu.Unlock()
+
+	for i, h := range n.assignmentHandlers {
+		if &h == &handler {
+			n.assignmentHandlers = append(n.assignmentHandlers[:i], n.assignmentHandlers[i+1:]...)
+			break
+		}
+	}
+}
+
+func (n *Node) isSelf(node registrySchema.Node) bool {
+	if n.Info().Node.AccId == node.AccId {
+		if n.Info().Node.URL == node.URL {
+			return true
+		}
+	}
+	return false
 }
