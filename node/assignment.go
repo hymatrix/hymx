@@ -56,14 +56,3 @@ func (n *Node) signAssign(pid, msgid string, nonce int64) (assign hymxSchema.Ass
 	assignItem, err = n.bundler.CreateAndSignItem([]byte{}, "", "", tags)
 	return
 }
-
-// sendAssignmentResult send assignment result to channel
-func (n *Node) sendAssignmentResult(pid string, item goarSchema.BundleItem, assign hymxSchema.Assignment, assignItem goarSchema.BundleItem, err error) {
-	n.assignmentChan <- schema.AssignmentResult{
-		Pid:        pid,
-		Item:       item,
-		Assign:     assign,
-		AssignItem: assignItem,
-		Error:      err,
-	}
-}
