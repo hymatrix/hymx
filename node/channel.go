@@ -89,6 +89,27 @@ func (n *Node) runResultChan() {
 	}
 }
 
+func (n *Node) runAssignmentChan() {
+	n.wg.Add(1)
+	defer n.wg.Done()
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+
+		case assignmentResult := <-n.assignmentChan:
+			log.Debug("assign chan get notice", "msgid", assignmentResult.ItemId)
+
+			// handle assignment success
+			n.assignmentHandlerLockMu.RLock()
+			for _, handler := range n.assignmentHandlers {
+				handler(assignmentResult)
+			}
+			n.assignmentHandlerLockMu.RUnlock()
+		}
+	}
+}
+
 func (n *Node) runOutboxChan() {
 	n.wg.Add(1)
 	defer n.wg.Done()

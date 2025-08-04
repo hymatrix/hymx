@@ -74,16 +74,10 @@ func (n *Node) sendAssignmentResult(pid, itemId string, assign hymxSchema.Assign
 		ItemId:     itemId,
 	}
 
-	n.outboxAssignmentMu.RLock()
-	resultChan, exists := n.outboxAssignmentChans[itemId]
-	n.outboxAssignmentMu.RUnlock()
-
-	if exists {
-		select {
-		case resultChan <- assignmentResult:
-
-		default:
-			log.Warn("Failed to send assignment result to outbox channel", "itemId", itemId)
-		}
+	select {
+	case n.assignmentChan <- assignmentResult:
+		// send success to channel
+	default:
+		//
 	}
 }

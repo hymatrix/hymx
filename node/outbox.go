@@ -128,17 +128,26 @@ func (n *Node) trySend(pid, target string) {
 }
 
 func (n *Node) tryGetLocalAssign(msgId string, nodes []registrySchema.Node, item goarSchema.BundleItem) (assignItem goarSchema.BundleItem, err error) {
-	// make channel for assignment result
+	// Use callback function to wait for assignment result
 	resultChan := make(chan schema.AssignmentResult, 1)
-	n.outboxAssignmentMu.Lock()
-	n.outboxAssignmentChans[msgId] = resultChan
-	n.outboxAssignmentMu.Unlock()
+	
+	// Create temporary assignment handler
+	handler := func(result schema.AssignmentResult) {
+		if result.ItemId == msgId {
+			select {
+			case resultChan <- result:
+			default:
+				// channel is full
+			}
+		}
+	}
+	
+	// Register handler
+	n.AddAssignmentHandler(handler)
 
-	// clean channel
+	// Ensure cleanup when function ends
 	defer func() {
-		n.outboxAssignmentMu.Lock()
-		delete(n.outboxAssignmentChans, msgId)
-		n.outboxAssignmentMu.Unlock()
+		n.RemoveAssignmentHandler(handler)
 		close(resultChan)
 	}()
 
@@ -147,13 +156,13 @@ func (n *Node) tryGetLocalAssign(msgId string, nodes []registrySchema.Node, item
 		if retry > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
-
+		
 		err = n.Handle(item)
 		if err != nil {
 			continue
 		}
 
-		// wait for assignment result
+		// Wait for assignment result
 		select {
 		case assignmentResult := <-resultChan:
 			if assignmentResult.Error != nil {
@@ -162,20 +171,6 @@ func (n *Node) tryGetLocalAssign(msgId string, nodes []registrySchema.Node, item
 					log.Debug("outbox try get duplicate item, exit", "msgid", msgId)
 					return
 				}
-				continue
-			}
-			assignItem = assignmentResult.AssignItem
-			err = goarUtils.VerifyBundleItem(assignItem)
-			if err != nil {
-				continue
-			}
-			accid := ""
-			_, accid, _, _, err = utils.Decode(assignItem)
-			if err != nil {
-				continue
-			}
-			if accid != nodes[0].AccId {
-				err = schema.ErrUnauthorizedNode
 				continue
 			}
 			log.Debug("outbox try get assign success", "msgid", msgId)
