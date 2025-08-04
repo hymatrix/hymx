@@ -98,7 +98,7 @@ func (n *Node) runAssignmentChan() {
 			return
 
 		case assignmentResult := <-n.assignmentChan:
-			log.Debug("assign chan get notice", "msgid", assignmentResult.ItemId)
+			log.Debug("assign chan get notice", "msgid", assignmentResult.Item.Id)
 
 			// handle assignment success
 			n.assignmentHandlerLockMu.RLock()

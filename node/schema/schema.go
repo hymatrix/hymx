@@ -19,11 +19,11 @@ type Info struct {
 type ResultHandler func(vmmSchema.Result)
 
 type AssignmentResult struct {
+	Pid        string
+	Item       goarSchema.BundleItem
 	Assign     hymxSchema.Assignment
 	AssignItem goarSchema.BundleItem
 	Error      error
-	Pid        string
-	ItemId     string
 }
 
 type AssignmentHandler func(AssignmentResult)

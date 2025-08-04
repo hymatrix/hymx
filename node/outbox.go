@@ -106,7 +106,7 @@ func (n *Node) trySend(pid, target string) {
 
 		var assignItem goarSchema.BundleItem
 		if n.isSelf(nodes[0]) {
-			assignItem, err = n.tryGetLocalAssign(item.Id, nodes, *item)
+			assignItem, err = n.tryGetLocalAssign(item.Id, *item)
 			if err != nil {
 				log.Error("outbox try get local assignment failed", "pid", pid, "target", target, "itemId", item.Id, "err", err)
 				return
@@ -127,27 +127,32 @@ func (n *Node) trySend(pid, target string) {
 	}
 }
 
-func (n *Node) tryGetLocalAssign(msgId string, nodes []registrySchema.Node, item goarSchema.BundleItem) (assignItem goarSchema.BundleItem, err error) {
+func (n *Node) tryGetLocalAssign(msgId string, item goarSchema.BundleItem) (assignItem goarSchema.BundleItem, err error) {
 	// Use callback function to wait for assignment result
 	resultChan := make(chan schema.AssignmentResult, 1)
-	
+	closed := make(chan bool, 1)
+
 	// Create temporary assignment handler
 	handler := func(result schema.AssignmentResult) {
-		if result.ItemId == msgId {
+		if result.Item.Id == msgId {
 			select {
-			case resultChan <- result:
+			case <-closed:
+				// channel is closed, do nothing
+				return
 			default:
-				// channel is full
 			}
+
+			resultChan <- result
 		}
 	}
-	
+
 	// Register handler
 	n.AddAssignmentHandler(handler)
 
 	// Ensure cleanup when function ends
 	defer func() {
 		n.RemoveAssignmentHandler(handler)
+		close(closed)
 		close(resultChan)
 	}()
 
@@ -156,7 +161,7 @@ func (n *Node) tryGetLocalAssign(msgId string, nodes []registrySchema.Node, item
 		if retry > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
-		
+
 		err = n.Handle(item)
 		if err != nil {
 			continue
