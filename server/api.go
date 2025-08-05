@@ -20,6 +20,7 @@ func (s *Server) runAPI(endpoint string) {
 	engine.Use(common.CORSMiddleware())
 
 	engine.GET("/info", s.Info)
+	engine.GET("/callback", s.Callback)
 
 	// api post message
 	engine.POST("/", s.Submit)
@@ -70,6 +71,26 @@ func (s *Server) closeAPI() {
 
 func (s *Server) Info(c *gin.Context) {
 	c.JSON(http.StatusOK, s.node.Info())
+}
+
+func (s *Server) Callback(c *gin.Context) {
+	url := c.Query("url")
+	if url == "" {
+		schema.ErrorResponse(c, schema.ErrInvalidParams.Error())
+		return
+	}
+
+	client := http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil || resp.StatusCode != 200 {
+		schema.ErrorResponse(c, schema.ErrCallbackFailed.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	c.JSON(http.StatusOK, schema.Response{
+		Message: "ok",
+	})
 }
 
 func (s *Server) Submit(c *gin.Context) {

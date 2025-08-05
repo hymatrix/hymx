@@ -1,6 +1,9 @@
 package node
 
 import (
+	"net/url"
+	"path"
+
 	tokenSchema "github.com/hymatrix/hymx/vmm/core/token/schema"
 	goarSchema "github.com/permadao/goar/schema"
 )
@@ -8,6 +11,16 @@ import (
 func (n *Node) runJoin() {
 	if !n.info.JoinNetwork {
 		return
+	}
+
+	u, err := url.Parse(n.info.Node.URL)
+	if err != nil {
+		panic(err)
+	}
+	u.Path = path.Join(u.Path, "info")
+	if _, err := n.sdk.Client.Callback(u.String()); err != nil {
+		log.Error("failed to join the network, current URL cannot respond to internet requests", "url", u, "err", err)
+		panic(err)
 	}
 
 	info, err := n.sdk.Client.Info()

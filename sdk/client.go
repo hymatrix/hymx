@@ -7,6 +7,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/hymatrix/hymx/node/schema"
@@ -77,6 +78,29 @@ func (c *Client) Info() (info schema.Info, err error) {
 
 	err = json.NewDecoder(resp.Body).Decode(&info)
 	return
+}
+
+func (c *Client) Callback(targetURL string) (res string, err error) {
+	encoded := url.QueryEscape(targetURL)
+	fullURL := fmt.Sprintf("%s/callback?url=%s", c.baseURL, encoded)
+
+	resp, err := c.httpClient.Get(fullURL)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		err = fmt.Errorf("callback request error: status %d", resp.StatusCode)
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read response body failed: %w", err)
+	}
+
+	return string(body), nil
 }
 
 func (c *Client) GetResult(msgid string) (result vmmSchema.Result, err error) {
