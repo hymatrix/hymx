@@ -6,7 +6,7 @@ import (
 
 const (
 	DataProtocol = "hymx"
-	Variant      = "v0.1.1"
+	Variant      = "v0.1.2"
 
 	TypeModule            = "Module"
 	TypeProcess           = "Process"
