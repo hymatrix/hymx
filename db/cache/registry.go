@@ -220,6 +220,7 @@ func (r *Registry) Checkpoint() (data string, err error) {
 		MainIndex:             r.mainIndex,
 		ProcessToNodeIndex:    r.processToNodeIndex,
 		AccidToProcessesIndex: r.accidToProcessesIndex,
+		Registered:            r.registered,
 		Nodes:                 r.nodes,
 	}
 
@@ -246,6 +247,7 @@ func (r *Registry) Restore(data string) error {
 	r.mainIndex = sp.MainIndex
 	r.processToNodeIndex = sp.ProcessToNodeIndex
 	r.accidToProcessesIndex = sp.AccidToProcessesIndex
+	r.registered = sp.Registered
 	r.nodes = sp.Nodes
 
 	return nil
