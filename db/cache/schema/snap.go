@@ -27,6 +27,7 @@ type RegistrySnapshot struct {
 
 	ProcessToNodeIndex    map[string]map[string]*schema.Node `json:"pi"`
 	AccidToProcessesIndex map[string]map[string]string       `json:"ai"`
+	Registered            map[string]bool                    `json:"re"`
 	Nodes                 map[string]*schema.Node            `json:"n"`
 }
 
