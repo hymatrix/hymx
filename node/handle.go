@@ -1,6 +1,8 @@
 package node
 
 import (
+	"errors"
+
 	"github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/utils"
@@ -26,7 +28,13 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	// If this io a registration request sent to the registry, this step is skipped.
 	if fromProcess != "" {
 		if pid == n.vmm.RegistryId() {
-			// todo: need verify register process(spawned) message
+			// Verify register process(spawned) message
+			// For registry messages, the fromProcess should be the same as the process being registered
+			// and the accid should be registered in the node list
+			if err = n.verifyRegistryMessage(item, fromProcess); err != nil {
+				log.Error("verify registry process message failed", "pid", pid, "accid", accid, "fromProcess", fromProcess)
+				return
+			}
 		} else {
 			if err = n.authNode(accid, fromProcess); err != nil {
 				log.Error("auth node failed", "pid", pid, "accid", accid, "fromProcess", fromProcess)
@@ -152,6 +160,49 @@ func (n *Node) authNode(accid, fromProcess string) (err error) {
 	}
 	if !validNode {
 		log.Error("auth node failed", "accid", accid, "fromProcess", fromProcess)
+		return schema.ErrUnauthorizedNode
+	}
+
+	return
+}
+
+// verifyRegistryMessage verifies registry process registration messages with 4 steps
+func (n *Node) verifyRegistryMessage(item goarSchema.BundleItem, fromProcess string) (err error) {
+	// 1. get 'Pid' and 'Acc-Id' from Tags
+	pid := utils.GetTagsValue("Pid", item.Tags)
+	accid := utils.GetTagsValue("Acc-Id", item.Tags)
+	action := utils.GetTagsValue("Action", item.Tags)
+
+	// Verify this is a RegisterProcess action
+	if action != "RegisterProcess" {
+		return schema.ErrInvalidType
+	}
+
+	if pid == "" || accid == "" {
+		log.Error("missing required tags in registry message", "Pid", pid, "Acc-Id", accid)
+		return schema.ErrUnauthorizedNode
+	}
+
+	// 2. get original message by 'Pid'
+	// * pid is the id of the spawn message that created the process
+	// * so we can use pid to query the original message
+	spawnMsg, err := n.GetMessage(pid)
+	if err != nil {
+		return errors.New("get origin spawn message failed, msgid: " + pid)
+	}
+	if spawnMsg == nil {
+		return errors.New("spawn message not found, msgid: " + pid)
+	}
+
+	// 3. verify original message
+	if err = goarUtils.VerifyBundleItem(*spawnMsg); err != nil {
+		return
+	}
+
+	// 4. Validate that the spawn message's scheduler matches the node via RegisterProcess.​
+	scheduler := utils.GetTagsValue("Scheduler", spawnMsg.Tags)
+	if accid != scheduler {
+		log.Error("verify registry message failed, node accid not match", "pid", pid, "accid", accid, "fromProcess", fromProcess, "scheduler", scheduler)
 		return schema.ErrUnauthorizedNode
 	}
 
