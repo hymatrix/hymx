@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/hymatrix/hymx/node/schema"
+	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	serverSchema "github.com/hymatrix/hymx/server/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
@@ -32,12 +32,80 @@ func NewClient(hmxURL string) *Client {
 				MaxConnsPerHost:     2000,
 			},
 			Timeout: 30 * time.Second,
+			// Disable automatic redirect handling to support 308 redirect
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
 		},
 	}
 }
 
 func (c *Client) Close() {
 	c.httpClient.CloseIdleConnections()
+}
+
+// handleRedirect handles 308 redirect responses by trying alternative nodes
+func (c *Client) handleRedirect(resp *http.Response, originalReq *http.Request, originalBody []byte) (*http.Response, error) {
+	if resp.StatusCode != 308 {
+		return resp, nil
+	}
+
+	// Read redirect response body
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read redirect response: %w", err)
+	}
+
+	// Parse nodes from response
+	var redirectResp nodeSchema.RedirectError
+	if err := json.Unmarshal(body, &redirectResp); err != nil {
+		return nil, fmt.Errorf("failed to parse redirect response: %w", err)
+	}
+
+	// Try each node in the redirect response
+	for _, node := range redirectResp.Nodes {
+		// Create new request with the same method, path, and body as original
+		newURL := node.URL + originalReq.URL.Path
+		if originalReq.URL.RawQuery != "" {
+			newURL += "?" + originalReq.URL.RawQuery
+		}
+
+		// Create new request with original body
+		newReq, err := http.NewRequest(originalReq.Method, newURL, bytes.NewReader(originalBody))
+		if err != nil {
+			continue // Skip invalid URLs
+		}
+
+		// Copy headers from original request
+		for key, values := range originalReq.Header {
+			for _, value := range values {
+				newReq.Header.Add(key, value)
+			}
+		}
+
+		// Execute request to alternative node
+		newResp, err := c.httpClient.Do(newReq)
+		if err != nil {
+			continue // Try next node
+		}
+
+		// If successful (2xx status), return this response
+		if newResp.StatusCode >= 200 && newResp.StatusCode < 300 {
+			return newResp, nil
+		}
+
+		// If still 308, try next node
+		newResp.Body.Close()
+	}
+
+	// If all nodes failed, return original redirect response
+	return &http.Response{
+		StatusCode: 308,
+		Status:     "308 Permanent Redirect",
+		Body:       io.NopCloser(bytes.NewReader(body)),
+		Header:     resp.Header,
+	}, nil
 }
 
 func (c *Client) Send(itemBin []byte) (res *serverSchema.Response, err error) {
@@ -52,9 +120,19 @@ func (c *Client) Send(itemBin []byte) (res *serverSchema.Response, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Handle 308 redirect
+	resp, err = c.handleRedirect(resp, req, itemBin)
+	if err != nil {
+		return nil, err
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// If it's a 308 redirect that couldn't be resolved, return nil response
+		if resp.StatusCode == 308 {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("invalid server response: %d", resp.StatusCode)
 	}
 
@@ -63,7 +141,7 @@ func (c *Client) Send(itemBin []byte) (res *serverSchema.Response, err error) {
 	return res, err
 }
 
-func (c *Client) Info() (info schema.Info, err error) {
+func (c *Client) Info() (info nodeSchema.Info, err error) {
 	url := fmt.Sprintf("%s/info", c.baseURL)
 	resp, err := c.httpClient.Get(url)
 	if err != nil {

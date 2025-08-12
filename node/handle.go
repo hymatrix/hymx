@@ -87,8 +87,8 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	case hymxSchema.Message:
 		// check if need redirect
 		if isRedirect {
-			// todo: return nodes, schema.ErrRedirect
-			err = schema.ErrRedirect
+			// return nodes with redirect error for 308 redirect
+			err = schema.NewRedirectError(nodes)
 			log.Warn("handle message failed", "pid", pid, "err", err)
 			return
 		}

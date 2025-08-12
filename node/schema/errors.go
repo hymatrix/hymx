@@ -1,6 +1,9 @@
 package schema
 
-import "errors"
+import (
+	"errors"
+	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
+)
 
 var (
 	ErrInvalidType               = errors.New("err_invalid_type")
@@ -15,3 +18,17 @@ var (
 	ErrUnrecognizedSignatureType = errors.New("err_unrecognized_signature_type")
 	ErrUnauthorizedNode          = errors.New("err_unauthorized_node")
 )
+
+// RedirectError contains nodes information for 308 redirect
+type RedirectError struct {
+	Nodes []registrySchema.Node `json:"nodes"`
+}
+
+func (e *RedirectError) Error() string {
+	return "err_redirect"
+}
+
+// NewRedirectError creates a new redirect error with nodes information
+func NewRedirectError(nodes []registrySchema.Node) *RedirectError {
+	return &RedirectError{Nodes: nodes}
+}
