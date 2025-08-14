@@ -5,6 +5,7 @@ import (
 
 	"github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
+	"github.com/hymatrix/hymx/sdk"
 	"github.com/hymatrix/hymx/utils"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	goarSchema "github.com/permadao/goar/schema"
@@ -186,10 +187,29 @@ func (n *Node) verifyRegistryMessage(item goarSchema.BundleItem, fromProcess str
 	// 2. get original message by 'Pid'
 	// * pid is the id of the spawn message that created the process
 	// * so we can use pid to query the original message
-	spawnMsg, err := n.GetMessage(pid)
-	if err != nil {
-		return errors.New("get origin spawn message failed, msgid: " + pid)
+	var spawnMsg *goarSchema.BundleItem
+	if accid == n.Info().Node.AccId { // get message from local
+		spawnMsg, err = n.GetMessage(pid)
+		if err != nil {
+			return errors.New("get origin spawn message failed, msgid: " + pid)
+		}
+	} else { // get message from other node
+		var node *registrySchema.Node
+		node, err = n.GetNode(accid)
+		if err != nil {
+			return
+		}
+		if node == nil {
+			return errors.New("node not found, accid: " + accid)
+		}
+		cli := sdk.NewClient(node.URL)
+		msg, msgErr := cli.GetMessage(pid)
+		if msgErr != nil {
+			return errors.New("get origin spawn message failed, msgid: " + pid)
+		}
+		spawnMsg = &msg
 	}
+
 	if spawnMsg == nil {
 		return errors.New("spawn message not found, msgid: " + pid)
 	}
