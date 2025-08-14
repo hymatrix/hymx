@@ -17,7 +17,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 		return
 	}
 
-	pid, accid, fromProcess, instance, err := utils.Decode(item)
+	pid, signer, fromProcess, instance, err := utils.Decode(item)
 	if err != nil {
 		return
 	}
@@ -32,13 +32,13 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 			// Verify register process(spawned) message
 			// For registry messages, the fromProcess should be the same as the process being registered
 			// and the accid should be registered in the node list
-			if err = n.verifyRegistryMessage(item, fromProcess); err != nil {
-				log.Error("verify registry process message failed", "pid", pid, "accid", accid, "fromProcess", fromProcess)
+			if err = n.verifyRegistryMessage(item, signer, fromProcess); err != nil {
+				log.Error("verify registry process message failed", "pid", pid, "signer", signer, "fromProcess", fromProcess)
 				return
 			}
 		} else {
-			if err = n.authNode(accid, fromProcess); err != nil {
-				log.Error("auth node failed", "pid", pid, "accid", accid, "fromProcess", fromProcess)
+			if err = n.authNode(signer, fromProcess); err != nil {
+				log.Error("auth node failed", "pid", pid, "signer", signer, "fromProcess", fromProcess)
 				return
 			}
 		}
@@ -81,7 +81,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 
 		n.assignProcChan <- schema.AssignProcess{
 			Pid:     pid,
-			AccId:   accid,
+			AccId:   signer,
 			Process: v,
 			Item:    item,
 		}
@@ -103,7 +103,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 
 		n.assignMesChan <- schema.AssignMessage{
 			Pid:     pid,
-			AccId:   accid,
+			AccId:   signer,
 			Message: v,
 			Item:    item,
 		}
@@ -168,7 +168,7 @@ func (n *Node) authNode(accid, fromProcess string) (err error) {
 }
 
 // verifyRegistryMessage verifies registry process registration messages with 4 steps
-func (n *Node) verifyRegistryMessage(item goarSchema.BundleItem, fromProcess string) (err error) {
+func (n *Node) verifyRegistryMessage(item goarSchema.BundleItem, signer, fromProcess string) (err error) {
 	// 1. get 'Pid' and 'Acc-Id' from Tags
 	pid := utils.GetTagsValue("Pid", item.Tags)
 	accid := utils.GetTagsValue("Acc-Id", item.Tags)
@@ -188,19 +188,19 @@ func (n *Node) verifyRegistryMessage(item goarSchema.BundleItem, fromProcess str
 	// * pid is the id of the spawn message that created the process
 	// * so we can use pid to query the original message
 	var spawnMsg *goarSchema.BundleItem
-	if accid == n.Info().Node.AccId { // get message from local
+	if signer == n.Info().Node.AccId { // get message from local
 		spawnMsg, err = n.GetMessage(pid)
 		if err != nil {
 			return errors.New("get origin spawn message failed, msgid: " + pid)
 		}
 	} else { // get message from other node
 		var node *registrySchema.Node
-		node, err = n.GetNode(accid)
+		node, err = n.GetNode(signer)
 		if err != nil {
 			return
 		}
 		if node == nil {
-			return errors.New("node not found, accid: " + accid)
+			return errors.New("node not found, accid: " + signer)
 		}
 		cli := sdk.NewClient(node.URL)
 		msg, msgErr := cli.GetMessage(pid)

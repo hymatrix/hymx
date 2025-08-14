@@ -66,13 +66,17 @@ func (c *Client) handleRedirect(resp *http.Response, originalReq *http.Request, 
 	// Try each node in the redirect response
 	for _, node := range redirectResp.Nodes {
 		// Create new request with the same method, path, and body as original
-		newURL := node.URL + originalReq.URL.Path
-		if originalReq.URL.RawQuery != "" {
-			newURL += "?" + originalReq.URL.RawQuery
+		newURL, err := url.Parse(node.URL)
+		if err != nil {
+			continue
+		}
+		if newURL.Path == "" || newURL.Path == "/" {
+			newURL.Path = originalReq.URL.Path
+			newURL.RawQuery = originalReq.URL.RawQuery
 		}
 
 		// Create new request with original body
-		newReq, err := http.NewRequest(originalReq.Method, newURL, bytes.NewReader(originalBody))
+		newReq, err := http.NewRequest(originalReq.Method, newURL.String(), bytes.NewReader(originalBody))
 		if err != nil {
 			continue // Skip invalid URLs
 		}
@@ -83,6 +87,11 @@ func (c *Client) handleRedirect(resp *http.Response, originalReq *http.Request, 
 				newReq.Header.Add(key, value)
 			}
 		}
+
+		// Copy other relevant fields from the original request
+		newReq.Host = newURL.Host
+		newReq.URL = newURL
+		newReq.Close = originalReq.Close
 
 		// Execute request to alternative node
 		newResp, err := c.httpClient.Do(newReq)
