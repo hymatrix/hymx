@@ -32,9 +32,14 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 			// Verify register process(spawned) message
 			// For registry messages, the fromProcess should be the same as the process being registered
 			// and the accid should be registered in the node list
-			if err = n.verifyRegistryMessage(item, signer, fromProcess); err != nil {
-				log.Error("verify registry process message failed", "pid", pid, "signer", signer, "fromProcess", fromProcess)
-				return
+
+			// Verify this is a RegisterProcess action
+			action := utils.GetTagsValue("Action", item.Tags)
+			if action == "RegisterProcess" {
+				if err = n.verifyRegistryMessage(item, signer, fromProcess); err != nil {
+					log.Error("verify registry process message failed", "pid", pid, "signer", signer, "fromProcess", fromProcess, "err", err)
+					return
+				}
 			}
 		} else {
 			if err = n.authNode(signer, fromProcess); err != nil {
@@ -172,13 +177,6 @@ func (n *Node) verifyRegistryMessage(item goarSchema.BundleItem, signer, fromPro
 	// 1. get 'Pid' and 'Acc-Id' from Tags
 	pid := utils.GetTagsValue("Pid", item.Tags)
 	accid := utils.GetTagsValue("Acc-Id", item.Tags)
-	action := utils.GetTagsValue("Action", item.Tags)
-
-	// Verify this is a RegisterProcess action
-	if action != "RegisterProcess" {
-		return schema.ErrInvalidType
-	}
-
 	if pid == "" || accid == "" {
 		log.Error("missing required tags in registry message", "Pid", pid, "Acc-Id", accid)
 		return schema.ErrUnauthorizedNode
