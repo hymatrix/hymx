@@ -24,3 +24,8 @@ type Cursor struct {
 	Cron      string `json:"cron"`
 	Sort      string `json:"sort"`
 }
+
+type TrySendRequest struct {
+	Pid    string `json:"pid"`
+	Target string `json:"target"`
+}
