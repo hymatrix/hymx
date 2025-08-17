@@ -12,6 +12,7 @@ import (
 
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	serverSchema "github.com/hymatrix/hymx/server/schema"
+	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
 )
@@ -44,30 +45,47 @@ func (c *Client) Close() {
 	c.httpClient.CloseIdleConnections()
 }
 
+func (c *Client) buildURL(path string) (string, error) {
+	baseURL, err := url.Parse(c.baseURL)
+	if err != nil {
+		return "", err
+	}
+	relativePath, err := url.Parse(path)
+	if err != nil {
+		return "", err
+	}
+	return baseURL.ResolveReference(relativePath).String(), nil
+}
+
 // handleRedirect handles 308 redirect responses by trying alternative nodes
-func (c *Client) handleRedirect(resp *http.Response, originalReq *http.Request, originalBody []byte) (*http.Response, error) {
+func (c *Client) handleRedirect(resp *http.Response, originalReq *http.Request, originalBody []byte) (*http.Response, string, error) {
+	log.Debug("===> status code", "code", resp.StatusCode)
 	if resp.StatusCode != 308 {
-		return resp, nil
+		return resp, "", nil
 	}
 
 	// Read redirect response body
 	body, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read redirect response: %w", err)
+		return nil, "", fmt.Errorf("failed to read redirect response: %w", err)
 	}
 
 	// Parse nodes from response
-	var redirectResp nodeSchema.RedirectError
-	if err := json.Unmarshal(body, &redirectResp); err != nil {
-		return nil, fmt.Errorf("failed to parse redirect response: %w", err)
+	// Try to parse as RedirectError first (standard format)
+	var nodes []registrySchema.Node
+	if err := json.Unmarshal(body, &nodes); err != nil {
+		log.Error("unmarshal redirect response failed", "body", string(body), "err", err)
+		return nil, "", fmt.Errorf("failed to parse redirect response: %w", err)
 	}
 
 	// Try each node in the redirect response
-	for _, node := range redirectResp.Nodes {
+	for _, node := range nodes {
+		fmt.Println("get node url", node.URL)
 		// Create new request with the same method, path, and body as original
 		newURL, err := url.Parse(node.URL)
 		if err != nil {
+			log.Error("parse node url failed", "url", node.URL, "err", err)
 			continue
 		}
 		if newURL.Path == "" || newURL.Path == "/" {
@@ -78,6 +96,7 @@ func (c *Client) handleRedirect(resp *http.Response, originalReq *http.Request, 
 		// Create new request with original body
 		newReq, err := http.NewRequest(originalReq.Method, newURL.String(), bytes.NewReader(originalBody))
 		if err != nil {
+			log.Error("create new request failed", "url", newURL.String(), "err", err)
 			continue // Skip invalid URLs
 		}
 
@@ -94,14 +113,17 @@ func (c *Client) handleRedirect(resp *http.Response, originalReq *http.Request, 
 		newReq.Close = originalReq.Close
 
 		// Execute request to alternative node
+		log.Debug("send redirect msg", "new url", newURL, "ori url", originalReq.URL.String())
 		newResp, err := c.httpClient.Do(newReq)
 		if err != nil {
+			log.Error("send redirect msg failed", "new url", newURL, "ori url", originalReq.URL.String(), "err", err)
 			continue // Try next node
 		}
 
-		// If successful (2xx status), return this response
+		// If successful (2xx status), return this response with the redirected URL
 		if newResp.StatusCode >= 200 && newResp.StatusCode < 300 {
-			return newResp, nil
+			log.Debug("send redirect msg success", "new url", newURL, "ori url", originalReq.URL.String(), "statusCode", newResp.StatusCode)
+			return newResp, newURL.String(), nil
 		}
 
 		// If still 308, try next node
@@ -114,44 +136,47 @@ func (c *Client) handleRedirect(resp *http.Response, originalReq *http.Request, 
 		Status:     "308 Permanent Redirect",
 		Body:       io.NopCloser(bytes.NewReader(body)),
 		Header:     resp.Header,
-	}, nil
+	}, "", nil
 }
 
-func (c *Client) Send(itemBin []byte) (res *serverSchema.Response, err error) {
-	url := fmt.Sprintf("%s/", c.baseURL)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(itemBin))
+func (c *Client) Send(itemBin []byte) (res *serverSchema.Response, redirectedURL string, err error) {
+	endpointURL, err := c.buildURL("/")
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+
+	req, err := http.NewRequest("POST", endpointURL, bytes.NewBuffer(itemBin))
+	if err != nil {
+		return nil, "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Handle 308 redirect
-	resp, err = c.handleRedirect(resp, req, itemBin)
+	resp, redirectedURL, err = c.handleRedirect(resp, req, itemBin)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// If it's a 308 redirect that couldn't be resolved, return nil response
-		if resp.StatusCode == 308 {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		return nil, "", fmt.Errorf("invalid server response: %d", resp.StatusCode)
 	}
 
 	res = &serverSchema.Response{}
 	err = json.NewDecoder(resp.Body).Decode(res)
-	return res, err
+	return res, redirectedURL, err
 }
 
 func (c *Client) Info() (info nodeSchema.Info, err error) {
-	url := fmt.Sprintf("%s/info", c.baseURL)
+	url, err := c.buildURL("/info")
+	if err != nil {
+		return
+	}
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
 		return
@@ -169,7 +194,10 @@ func (c *Client) Info() (info nodeSchema.Info, err error) {
 
 func (c *Client) Callback(targetURL string) (res string, err error) {
 	encoded := url.QueryEscape(targetURL)
-	fullURL := fmt.Sprintf("%s/callback?url=%s", c.baseURL, encoded)
+	fullURL, err := c.buildURL("/callback?url=" + encoded)
+	if err != nil {
+		return
+	}
 
 	resp, err := c.httpClient.Get(fullURL)
 	if err != nil {
@@ -191,8 +219,16 @@ func (c *Client) Callback(targetURL string) (res string, err error) {
 }
 
 func (c *Client) GetResult(msgid string) (result vmmSchema.Result, err error) {
-	url := fmt.Sprintf("%s/result/%s", c.baseURL, msgid)
-	resp, err := c.httpClient.Get(url)
+	url, err := c.buildURL("/result/" + msgid)
+	if err != nil {
+		return
+	}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return
 	}
@@ -208,8 +244,17 @@ func (c *Client) GetResult(msgid string) (result vmmSchema.Result, err error) {
 }
 
 func (c *Client) GetResults(pid string, limit int64) (results []vmmSchema.Result, err error) {
-	url := fmt.Sprintf("%s/results/%s?sort=DESC&limit=%d", c.baseURL, pid, limit)
-	resp, err := c.httpClient.Get(url)
+	path := fmt.Sprintf("/results/%s?sort=DESC&limit=%d", pid, limit)
+	url, err := c.buildURL(path)
+	if err != nil {
+		return
+	}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return
 	}
@@ -225,8 +270,16 @@ func (c *Client) GetResults(pid string, limit int64) (results []vmmSchema.Result
 }
 
 func (c *Client) GetMessage(msgid string) (item goarSchema.BundleItem, err error) {
-	url := fmt.Sprintf("%s/message/%s", c.baseURL, msgid)
-	resp, err := c.httpClient.Get(url)
+	url, err := c.buildURL("/message/" + msgid)
+	if err != nil {
+		return
+	}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return
 	}
@@ -242,7 +295,11 @@ func (c *Client) GetMessage(msgid string) (item goarSchema.BundleItem, err error
 }
 
 func (c *Client) GetMessageByNonce(pid string, nonce int64) (item goarSchema.BundleItem, err error) {
-	url := fmt.Sprintf("%s/messageByNonce/%s/%d", c.baseURL, pid, nonce)
+	path := fmt.Sprintf("/messageByNonce/%s/%d", pid, nonce)
+	url, err := c.buildURL(path)
+	if err != nil {
+		return
+	}
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
 		return
@@ -259,7 +316,11 @@ func (c *Client) GetMessageByNonce(pid string, nonce int64) (item goarSchema.Bun
 }
 
 func (c *Client) GetAssignByNonce(pid string, nonce int64) (item goarSchema.BundleItem, err error) {
-	url := fmt.Sprintf("%s/assignmentByNonce/%s/%d", c.baseURL, pid, nonce)
+	path := fmt.Sprintf("/assignmentByNonce/%s/%d", pid, nonce)
+	url, err := c.buildURL(path)
+	if err != nil {
+		return
+	}
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
 		return
@@ -276,7 +337,10 @@ func (c *Client) GetAssignByNonce(pid string, nonce int64) (item goarSchema.Bund
 }
 
 func (c *Client) GetAssignByMessage(msgid string) (item goarSchema.BundleItem, err error) {
-	url := fmt.Sprintf("%s/assignmentByMessage/%s", c.baseURL, msgid)
+	url, err := c.buildURL("/assignmentByMessage/" + msgid)
+	if err != nil {
+		return
+	}
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
 		return
@@ -293,7 +357,10 @@ func (c *Client) GetAssignByMessage(msgid string) (item goarSchema.BundleItem, e
 }
 
 func (c *Client) BalanceOf(accid string) (amt *big.Int, err error) {
-	url := fmt.Sprintf("%s/balanceof/%s", c.baseURL, accid)
+	url, err := c.buildURL("/balanceof/" + accid)
+	if err != nil {
+		return
+	}
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
 		return
@@ -321,7 +388,10 @@ func (c *Client) BalanceOf(accid string) (amt *big.Int, err error) {
 }
 
 func (c *Client) StakeOf(accid string) (amt *big.Int, err error) {
-	url := fmt.Sprintf("%s/stakeof/%s", c.baseURL, accid)
+	url, err := c.buildURL("/stakeof/" + accid)
+	if err != nil {
+		return
+	}
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
 		return

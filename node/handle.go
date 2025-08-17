@@ -95,7 +95,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 		if isRedirect {
 			// return nodes with redirect error for 308 redirect
 			err = schema.NewRedirectError(nodes)
-			log.Warn("handle message failed", "pid", pid, "err", err)
+			log.Warn("message redirect", "pid", pid, "err", err)
 			return
 		}
 

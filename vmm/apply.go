@@ -11,7 +11,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 	if err != nil {
 		return err
 	}
-
+	log.Debug("===> apply", "meta", meta, "env", env)
 	from, err := v.applyCheck(vm, env, meta)
 	if err != nil {
 		return err
@@ -51,7 +51,6 @@ func (v *Vmm) applyCheck(vm schema.Vm, env *schema.Env, m schema.Meta) (from str
 		return
 	}
 	env.Nonce = m.Nonce
-	log.Debug("===>env", "env", env)
 
 	from = m.AccId
 	if m.FromProcess != "" {

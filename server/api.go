@@ -110,7 +110,6 @@ func (s *Server) Submit(c *gin.Context) {
 
 	err = s.node.Handle(item)
 	if err != nil {
-		log.Error("handle item failed", "err", err)
 		// Check if it's a redirect error
 		if redirectErr, ok := err.(*nodeSchema.RedirectError); ok {
 			// Return 308 Permanent Redirect with Location header and nodes information
@@ -122,6 +121,7 @@ func (s *Server) Submit(c *gin.Context) {
 			c.JSON(http.StatusPermanentRedirect, redirectErr.Nodes)
 			return
 		}
+		log.Error("handle item failed", "err", err)
 		schema.ErrorResponse(c, err.Error())
 		return
 	}

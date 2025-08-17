@@ -49,7 +49,7 @@ func (s *SDK) GetAddress() string {
 	return s.Bundler.Address
 }
 
-func (s *SDK) Send(processId, data string, tags []goarSchema.Tag) (res *serverSchema.Response, err error) {
+func (s *SDK) Send(processId, data string, tags []goarSchema.Tag) (res *serverSchema.Response, redirectedURL string, err error) {
 	tags = utils.MergeTags([]goarSchema.Tag{
 		{Name: "SDK-Timestamp", Value: fmt.Sprintf("%d", time.Now().UnixNano())},
 	}, tags)
@@ -63,7 +63,7 @@ func (s *SDK) Send(processId, data string, tags []goarSchema.Tag) (res *serverSc
 }
 
 // Send message to process
-func (s *SDK) SendMessage(target, data string, params []goarSchema.Tag) (*serverSchema.Response, error) {
+func (s *SDK) SendMessage(target, data string, params []goarSchema.Tag) (resp *serverSchema.Response, err error) {
 	msg := schema.Message{
 		Base: schema.DefaultBaseMessage,
 	}
@@ -73,11 +73,12 @@ func (s *SDK) SendMessage(target, data string, params []goarSchema.Tag) (*server
 	}
 	// merge params -> tags
 	msgTags = utils.MergeTags(msgTags, params)
-	return s.Send(target, data, msgTags)
+	resp, _, err = s.Send(target, data, msgTags)
+	return
 }
 
 // Spawn for process creation
-func (s *SDK) Spawn(module, scheduler string, params []goarSchema.Tag) (*serverSchema.Response, error) {
+func (s *SDK) Spawn(module, scheduler string, params []goarSchema.Tag) (resp *serverSchema.Response, err error) {
 	process := schema.Process{
 		Base:      schema.DefaultBaseProcess,
 		Module:    module,
@@ -90,7 +91,8 @@ func (s *SDK) Spawn(module, scheduler string, params []goarSchema.Tag) (*serverS
 
 	// merge params -> processTags
 	processTags = utils.MergeTags(processTags, params)
-	return s.Send("", "", processTags)
+	resp, _, err = s.Send("", "", processTags)
+	return
 }
 
 func (s *SDK) GenerateModule(moduleBytes []byte, module schema.Module) (item goarSchema.BundleItem, err error) {
