@@ -58,9 +58,14 @@ func TestSendRedirectHandling(t *testing.T) {
 	testData := []byte(`{"test": "data"}`)
 
 	// Call Send method
-	response, err := client.Send(testData)
+	response, redirectedURL, err := client.Send(testData)
 	if err != nil {
 		t.Fatalf("Send failed: %v", err)
+	}
+
+	// Verify redirected URL is set
+	if redirectedURL == "" {
+		t.Errorf("Expected redirected URL to be set, got empty string")
 	}
 
 	// Verify response is not nil
@@ -110,7 +115,7 @@ func TestSendRedirectWithFailedNodes(t *testing.T) {
 	testData := []byte(`{"test": "data"}`)
 
 	// Call Send method
-	response, err := client.Send(testData)
+	response, redirectedURL, err := client.Send(testData)
 
 	// Should not return error, but should get 308 response
 	if err != nil {
@@ -120,6 +125,11 @@ func TestSendRedirectWithFailedNodes(t *testing.T) {
 	// The response should be nil since we can't parse a successful response from 308
 	if response != nil {
 		t.Errorf("Expected nil response when all nodes fail, got %+v", response)
+	}
+
+	// Redirected URL should be empty when all nodes fail
+	if redirectedURL != "" {
+		t.Errorf("Expected empty redirected URL when all nodes fail, got %s", redirectedURL)
 	}
 
 	t.Log("✅ Send method correctly handled failed alternative nodes")
@@ -162,9 +172,14 @@ func TestSendWithoutRedirect(t *testing.T) {
 	testData := []byte(`{"test": "data"}`)
 
 	// Call Send method
-	response, err := client.Send(testData)
+	response, redirectedURL, err := client.Send(testData)
 	if err != nil {
 		t.Fatalf("Send failed: %v", err)
+	}
+
+	// Redirected URL should be empty when no redirect occurs
+	if redirectedURL != "" {
+		t.Errorf("Expected empty redirected URL when no redirect occurs, got %s", redirectedURL)
 	}
 
 	// Verify response is not nil
@@ -227,9 +242,14 @@ func TestSendRedirectPreservesRequestBody(t *testing.T) {
 	testData := []byte(`{"complex": {"nested": "data", "array": [1, 2, 3]}, "message": "test redirect body preservation"}`)
 
 	// Call Send method
-	_, err := client.Send(testData)
+	_, redirectedURL, err := client.Send(testData)
 	if err != nil {
 		t.Fatalf("Send failed: %v", err)
+	}
+
+	// Verify redirected URL is set
+	if redirectedURL == "" {
+		t.Errorf("Expected redirected URL to be set, got empty string")
 	}
 
 	// Verify the request body was preserved
