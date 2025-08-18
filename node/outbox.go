@@ -262,3 +262,8 @@ func (n *Node) isSending(pid, target string) bool {
 	}
 	return locked
 }
+
+// TrySend is a public wrapper for the private trySend method
+func (n *Node) TrySend(pid, target string) {
+	go n.trySend(pid, target)
+}

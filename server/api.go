@@ -46,6 +46,8 @@ func (s *Server) runAPI(endpoint string) {
 	// cache for status query
 	engine.GET("/cache/:pid/:key", s.GetCache)
 
+	engine.POST("/trysend", s.TrySend)
+
 	s.apiServer = &http.Server{
 		Addr:    endpoint,
 		Handler: engine,
@@ -320,4 +322,22 @@ func (s *Server) GetCache(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, res)
+}
+
+func (s *Server) TrySend(c *gin.Context) {
+	var req schema.TrySendRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		schema.ErrorResponse(c, err.Error())
+		return
+	}
+
+	if req.Pid == "" || req.Target == "" {
+		schema.ErrorResponse(c, "pid and target are required")
+		return
+	}
+
+	// Call the trySend method
+	s.node.TrySend(req.Pid, req.Target)
+
+	c.Status(http.StatusOK)
 }
