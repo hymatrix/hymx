@@ -13,19 +13,4 @@ var (
 		URL:   "https://hymatrix.ai",
 		// URL:   "http://127.0.0.1:8080",
 	}
-
-	NonExtractableTags = map[string]string{
-		"Data-Protocol": "Data-Protocol",
-		"Variant":       "Variant",
-		"From-Process":  "From-Process",
-		"From-Module":   "From-Module",
-		"Type":          "Type",
-		"From":          "From",
-		"Owner":         "Owner",
-		"Anchor":        "Anchor",
-		"Target":        "Target",
-		"Data":          "Data",
-		"Tags":          "Tags",
-		"Read-Only":     "Read-Only",
-	}
 )
