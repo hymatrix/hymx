@@ -27,26 +27,8 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	// If the accid is registered in the node list, it is allowed to send a From-Process message.
 	// The From-Process value must also be registered under the corresponding node.
 	// If this io a registration request sent to the registry, this step is skipped.
-	if fromProcess != "" {
-		if pid == n.vmm.RegistryId() {
-			// Verify register process(spawned) message
-			// For registry messages, the fromProcess should be the same as the process being registered
-			// and the accid should be registered in the node list
-
-			// Verify this is a RegisterProcess action
-			action := utils.GetTagsValue("Action", item.Tags)
-			if action == "RegisterProcess" {
-				if err = n.verifyRegistryMessage(item, signer, fromProcess); err != nil {
-					log.Error("verify registry process message failed", "pid", pid, "signer", signer, "fromProcess", fromProcess, "err", err)
-					return
-				}
-			}
-		} else {
-			if err = n.authNode(signer, fromProcess); err != nil {
-				log.Error("auth node failed", "pid", pid, "signer", signer, "fromProcess", fromProcess)
-				return
-			}
-		}
+	if err = n.verifyFromProcess(item, pid, signer, fromProcess); err != nil {
+		return
 	}
 
 	// check if process in recovering
@@ -117,6 +99,47 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	}
 
 	return
+}
+
+// verifyFromProcess verifies the fromProcess authentication
+// It handles both registry process verification and regular node authentication
+func (n *Node) verifyFromProcess(item goarSchema.BundleItem, pid, signer, fromProcess string) error {
+	if fromProcess == "" {
+		return nil
+	}
+
+	// Handle registry process verification
+	if pid == n.vmm.RegistryId() {
+		return n.verifyRegistryProcess(item, pid, signer, fromProcess)
+	}
+
+	// Handle regular node authentication
+	if err := n.authNode(signer, fromProcess); err != nil {
+		log.Error("auth node failed", "pid", pid, "signer", signer, "fromProcess", fromProcess)
+		return err
+	}
+
+	return nil
+}
+
+// verifyRegistryProcess handles registry process verification
+func (n *Node) verifyRegistryProcess(item goarSchema.BundleItem, pid, signer, fromProcess string) error {
+	// Verify register process(spawned) message
+	// For registry messages, the fromProcess should be the same as the process being registered
+	// and the accid should be registered in the node list
+
+	// Verify this is a RegisterProcess action
+	action := utils.GetTagsValue("Action", item.Tags)
+	if action != "RegisterProcess" {
+		return nil
+	}
+
+	if err := n.verifyRegistryMessage(item, signer, fromProcess); err != nil {
+		log.Error("verify registry process message failed", "pid", pid, "signer", signer, "fromProcess", fromProcess, "err", err)
+		return err
+	}
+
+	return nil
 }
 
 func (n *Node) HandleDryRun(item goarSchema.BundleItem, assign hymxSchema.Assignment, maxNonce int64) (err error) {
