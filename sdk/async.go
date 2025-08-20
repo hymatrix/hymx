@@ -47,6 +47,7 @@ func (s *SDK) SendAndWait(processId, data string, tags []goarSchema.Tag) (res *s
 	if redirectUrl != "" {
 		log.Debug("redirect to url", "url", redirectUrl)
 		realSdk = NewFromBundler(redirectUrl, s.Bundler)
+		defer realSdk.Close()
 	}
 
 	result, err := realSdk.ResultAndWait(res.Id)

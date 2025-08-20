@@ -110,32 +110,22 @@ func (n *Node) verifyFromProcess(item goarSchema.BundleItem, pid, signer, fromPr
 
 	// Handle registry process verification
 	if pid == n.vmm.RegistryId() {
-		return n.verifyRegistryProcess(item, pid, signer, fromProcess)
+		// return n.verifyRegistryProcess(item, pid, signer, fromProcess)
+		// Verify this is a RegisterProcess action
+		action := utils.GetTagsValue("Action", item.Tags)
+		if action != "RegisterProcess" {
+			return nil
+		}
+
+		if err := n.verifyRegistry(item, signer, fromProcess); err != nil {
+			log.Error("verify registry process message failed", "pid", pid, "signer", signer, "fromProcess", fromProcess, "err", err)
+			return err
+		}
 	}
 
 	// Handle regular node authentication
 	if err := n.authNode(signer, fromProcess); err != nil {
 		log.Error("auth node failed", "pid", pid, "signer", signer, "fromProcess", fromProcess)
-		return err
-	}
-
-	return nil
-}
-
-// verifyRegistryProcess handles registry process verification
-func (n *Node) verifyRegistryProcess(item goarSchema.BundleItem, pid, signer, fromProcess string) error {
-	// Verify register process(spawned) message
-	// For registry messages, the fromProcess should be the same as the process being registered
-	// and the accid should be registered in the node list
-
-	// Verify this is a RegisterProcess action
-	action := utils.GetTagsValue("Action", item.Tags)
-	if action != "RegisterProcess" {
-		return nil
-	}
-
-	if err := n.verifyRegistryMessage(item, signer, fromProcess); err != nil {
-		log.Error("verify registry process message failed", "pid", pid, "signer", signer, "fromProcess", fromProcess, "err", err)
 		return err
 	}
 
@@ -195,8 +185,8 @@ func (n *Node) authNode(accid, fromProcess string) (err error) {
 	return
 }
 
-// verifyRegistryMessage verifies registry process registration messages with 4 steps
-func (n *Node) verifyRegistryMessage(item goarSchema.BundleItem, signer, fromProcess string) (err error) {
+// verifyRegistry verifies registry process registration messages with 4 steps
+func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess string) (err error) {
 	// 1. get 'Pid' and 'Acc-Id' from Tags
 	pid := utils.GetTagsValue("Pid", item.Tags)
 	accid := utils.GetTagsValue("Acc-Id", item.Tags)
