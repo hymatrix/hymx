@@ -121,6 +121,7 @@ func (n *Node) verifyFromProcess(item goarSchema.BundleItem, pid, signer, fromPr
 			log.Error("verify registry process message failed", "pid", pid, "signer", signer, "fromProcess", fromProcess, "err", err)
 			return err
 		}
+		return nil
 	}
 
 	// Handle regular node authentication

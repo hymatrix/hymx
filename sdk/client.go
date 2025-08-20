@@ -59,7 +59,6 @@ func (c *Client) buildURL(path string) (string, error) {
 
 // handleRedirect handles 308 redirect responses by trying alternative nodes
 func (c *Client) handleRedirect(resp *http.Response, originalReq *http.Request, originalBody []byte) (*http.Response, string, error) {
-	log.Debug("===> status code", "code", resp.StatusCode)
 	if resp.StatusCode != 308 {
 		return resp, "", nil
 	}
