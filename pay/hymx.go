@@ -1,11 +1,12 @@
 package pay
 
 import (
-	"fmt"
+	"math/big"
 
 	"github.com/hymatrix/hymx/utils"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
+	goarUtils "github.com/permadao/goar/utils"
 )
 
 func (p *Pay) HymxHandler(res vmmSchema.Result) {
@@ -15,7 +16,7 @@ func (p *Pay) HymxHandler(res vmmSchema.Result) {
 
 	tagsList := [][]goarSchema.Tag{}
 	for _, msg := range res.Messages {
-		if msg.Target == p.sdk.GetAddress() && utils.GetTagsValue("Action", msg.Tags) == "Credit-Notice" {
+		if msg.Target == p.Address() && utils.GetTagsValue("Action", msg.Tags) == "Credit-Notice" {
 			tagsList = append(tagsList, msg.Tags)
 		}
 	}
@@ -25,6 +26,38 @@ func (p *Pay) HymxHandler(res vmmSchema.Result) {
 	}
 
 	for _, tags := range tagsList {
-		fmt.Println(tags)
+		sender := utils.GetTagsValue("Sender", tags)
+		qtyStr := utils.GetTagsValue("Quantity", tags)
+
+		qty, ok := new(big.Int).SetString(qtyStr, 10)
+		if !ok {
+			log.Error("invalid quantity", "item", res.ItemId, "sender", sender, "quantity", qtyStr)
+			continue
+		}
+
+		beneficiary, err := p.getHymxBeneficiary(sender, res.ItemId)
+		if err != nil {
+			log.Warn("can not get beneficiary", "item", res.ItemId, "sender", sender, "err", err)
+			beneficiary = sender
+		}
+		p.handleDeposit(res.ItemId, p.config.AxToken, sender, beneficiary, qty)
 	}
+}
+
+func (p *Pay) getHymxBeneficiary(sender, itemId string) (beneficiary string, err error) {
+	item, err := p.sdk.Client.GetMessage(itemId)
+	if err != nil {
+		return
+	}
+
+	if err = goarUtils.VerifyBundleItem(item); err != nil {
+		return
+	}
+
+	beneficiary = utils.GetTagsValue("Beneficiary", item.Tags)
+	if beneficiary == "" {
+		beneficiary = sender
+	}
+
+	return
 }

@@ -1,14 +1,15 @@
 package pay
 
 import (
-	"github.com/everFinance/goether"
+	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/pay/schema"
 	"github.com/hymatrix/hymx/sdk"
 )
 
+var log = common.NewLog("node")
+
 type Pay struct {
-	signer *goether.Signer
-	sdk    *sdk.SDK
+	sdk *sdk.SDK
 
 	config *schema.Config
 	db     schema.IDB
@@ -25,7 +26,7 @@ func (p *Pay) Close() error {
 }
 
 func (p *Pay) Address() string {
-	return p.signer.Address.String()
+	return p.sdk.GetAddress()
 }
 
 func (p *Pay) Checkpoint() (string, error) {
