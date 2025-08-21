@@ -1,13 +1,26 @@
 package cache
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"sort"
 	"sync"
+
+	"github.com/hymatrix/hymx/db/cache/schema"
 )
 
+// Pay provides an in-memory implementation of the payment
+// settlement logic.
+//
+// NOTE:
+//   - This version is fully in-memory (maps + big.Int), no persistence.
+//   - It is intended only for unit tests, logic verification, and prototyping.
+//   - It is NOT suitable for production use.
+//
+// For production environments, replace this with a persistent and transactional
+// implementation (e.g. backed by a database).
 type Pay struct {
 	whitelist        map[string]bool
 	executed         map[string]bool                // txHash -> executed?
@@ -366,10 +379,40 @@ func (p *Pay) SettleTxFee(beneficiary string, devShareRatio *big.Int) (nodeFee *
 }
 
 func (p *Pay) Checkpoint() (data string, err error) {
-	return
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	sp := schema.PaySnapshot{
+		Whitelist:        p.whitelist,
+		Executed:         p.executed,
+		Ledger:           p.ledger,
+		TxPending:        p.txPending,
+		SpawnPending:     p.spawnPending,
+		ResidencyPending: p.residencyPending,
+	}
+
+	by, err := json.Marshal(sp)
+	if err != nil {
+		return "", err
+	}
+	return string(by), nil
 }
 
 func (p *Pay) Restore(data string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	sp := &schema.PaySnapshot{}
+	if err := json.Unmarshal([]byte(data), sp); err != nil {
+		return err
+	}
+
+	p.whitelist = sp.Whitelist
+	p.executed = sp.Executed
+	p.ledger = sp.Ledger
+	p.txPending = sp.TxPending
+	p.spawnPending = sp.SpawnPending
+	p.residencyPending = sp.ResidencyPending
 	return nil
 }
 
