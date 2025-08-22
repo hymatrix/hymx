@@ -19,7 +19,7 @@ func (n *Node) runMsgChan() {
 		case i := <-n.assignMesChan:
 
 			assign, assignItem, err := n.assignment(i.Pid, i.Item)
-			n.assignmentChan <- schema.AssignmentResult{
+			n.assignResChan <- schema.AssignmentResult{
 				Pid:        i.Pid,
 				Item:       i.Item,
 				Assign:     assign,
@@ -56,7 +56,7 @@ func (n *Node) runProcChan() {
 			}
 
 			assign, assignItem, err := n.assignment(i.Pid, i.Item)
-			n.assignmentChan <- schema.AssignmentResult{
+			n.assignResChan <- schema.AssignmentResult{
 				Pid:        i.Pid,
 				Item:       i.Item,
 				Assign:     assign,
@@ -114,15 +114,15 @@ func (n *Node) runAssignmentChan() {
 		case <-n.ctx.Done():
 			return
 
-		case assignmentResult := <-n.assignmentChan:
+		case assignmentResult := <-n.assignResChan:
 			log.Debug("assign chan get notice", "msgid", assignmentResult.Item.Id)
 
 			// handle assignment success
-			n.assignmentHandlerLockMu.RLock()
-			for _, handler := range n.assignmentHandlers {
+			n.assignResHandlerLockMu.RLock()
+			for _, handler := range n.assignResHandlers {
 				handler(assignmentResult)
 			}
-			n.assignmentHandlerLockMu.RUnlock()
+			n.assignResHandlerLockMu.RUnlock()
 		}
 	}
 }

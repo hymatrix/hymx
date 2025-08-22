@@ -16,7 +16,14 @@ type Info struct {
 	Node        registrySchema.Node `json:"Node"`
 }
 
-type ResultHandler func(vmmSchema.Result)
+type ItemMeta struct {
+	Pid         string
+	Signer      string
+	FromProcess string
+	Item        goarSchema.BundleItem
+}
+
+type ItemHandler func(ItemMeta) error
 
 type AssignmentResult struct {
 	Pid        string
@@ -26,4 +33,6 @@ type AssignmentResult struct {
 	Error      error
 }
 
-type AssignmentHandler func(AssignmentResult)
+type AssignResHandler func(AssignmentResult)
+
+type ResultHandler func(vmmSchema.Result)
