@@ -36,12 +36,21 @@ func (s *SDK) ResultAndWait(msgid string) (result vmmSchema.Result, err error) {
 }
 
 func (s *SDK) SendAndWait(processId, data string, tags []goarSchema.Tag) (res *serverSchema.Response, err error) {
-	res, err = s.Send(processId, data, tags)
+	var redirectUrl string
+	res, redirectUrl, err = s.Send(processId, data, tags)
 	if err != nil {
 		return
 	}
 
-	result, err := s.ResultAndWait(res.Id)
+	// Handle redirect
+	realSdk := s
+	if redirectUrl != "" {
+		log.Debug("redirect to url", "url", redirectUrl)
+		realSdk = NewFromBundler(redirectUrl, s.Bundler)
+		defer realSdk.Close()
+	}
+
+	result, err := realSdk.ResultAndWait(res.Id)
 	if err != nil {
 		return
 	}
