@@ -16,5 +16,3 @@ func (p *Pay) handleDeposit(txHash, token, sponsor, beneficiary string, qty *big
 }
 
 func (p *Pay) handleWithdraw(token, sponsor, beneficiary string, qty *big.Int) {}
-
-func (p *Pay) handleCharge(token, beneficiary string, qty *big.Int) {}

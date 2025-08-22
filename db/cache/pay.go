@@ -161,6 +161,15 @@ func (p *Pay) Withdraw(sponsor, beneficiary string, amount *big.Int) error {
 	if cur == nil || cur.Cmp(amount) < 0 {
 		return fmt.Errorf("insufficient, sponsor: %v, beneficiary: %v", sponsor, beneficiary)
 	}
+
+	// check pending constraint: beneficiary’s available = total - pending
+	totalBal := p.totalBal(beneficiary)
+	totalPending := p.totalPending(beneficiary)
+	available := new(big.Int).Sub(totalBal, totalPending)
+	if available.Cmp(amount) < 0 {
+		return fmt.Errorf("insufficient (pending locked), sponsor: %v, beneficiary: %v, amount: %v, available: %v", sponsor, beneficiary, amount, available)
+	}
+
 	cur.Sub(cur, amount)
 	if cur.Sign() == 0 {
 		delete(row, beneficiary)
@@ -267,29 +276,25 @@ func (p *Pay) SettleTxFee(beneficiary string, devShareRatio *big.Int) (nodeFee *
 	txRow := p.txPending[beneficiary]
 	devFees = make(map[string]*big.Int)
 	totalTx := new(big.Int)
-	if txRow != nil {
-		for pid, amt := range txRow {
-			if amt == nil || amt.Sign() <= 0 {
-				continue
-			}
-			totalTx.Add(totalTx, amt)
-			// dev = amt * ratio / 10000
-			dev := new(big.Int).Mul(amt, devShareRatio)
-			dev.Quo(dev, big.NewInt(10000))
-			if devFees[pid] == nil {
-				devFees[pid] = new(big.Int)
-			}
-			devFees[pid].Add(devFees[pid], dev)
+	for pid, amt := range txRow {
+		if amt == nil || amt.Sign() <= 0 {
+			continue
 		}
+		totalTx.Add(totalTx, amt)
+		// dev = amt * ratio / 10000
+		dev := new(big.Int).Mul(amt, devShareRatio)
+		dev.Quo(dev, big.NewInt(10000))
+		if devFees[pid] == nil {
+			devFees[pid] = new(big.Int)
+		}
+		devFees[pid].Add(devFees[pid], dev)
 	}
 
 	spawnRow := p.spawnPending[beneficiary]
 	totalSpawn := new(big.Int)
-	if spawnRow != nil {
-		for _, amt := range spawnRow {
-			if amt != nil && amt.Sign() > 0 {
-				totalSpawn.Add(totalSpawn, amt)
-			}
+	for _, amt := range spawnRow {
+		if amt != nil && amt.Sign() > 0 {
+			totalSpawn.Add(totalSpawn, amt)
 		}
 	}
 
