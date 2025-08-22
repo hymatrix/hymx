@@ -17,7 +17,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 		return
 	}
 
-	pid, accid, fromProcess, instance, err := utils.Decode(item)
+	pid, signer, fromProcess, instance, err := utils.Decode(item)
 	if err != nil {
 		return
 	}
@@ -27,21 +27,8 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	// If the accid is registered in the node list, it is allowed to send a From-Process message.
 	// The From-Process value must also be registered under the corresponding node.
 	// If this io a registration request sent to the registry, this step is skipped.
-	if fromProcess != "" {
-		if pid == n.vmm.RegistryId() {
-			// Verify register process(spawned) message
-			// For registry messages, the fromProcess should be the same as the process being registered
-			// and the accid should be registered in the node list
-			if err = n.verifyRegistryMessage(item, fromProcess); err != nil {
-				log.Error("verify registry process message failed", "pid", pid, "accid", accid, "fromProcess", fromProcess)
-				return
-			}
-		} else {
-			if err = n.authNode(accid, fromProcess); err != nil {
-				log.Error("auth node failed", "pid", pid, "accid", accid, "fromProcess", fromProcess)
-				return
-			}
-		}
+	if err = n.verifyFromProcess(item, pid, signer, fromProcess); err != nil {
+		return
 	}
 
 	// check if process in recovering
@@ -81,16 +68,16 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 
 		n.assignProcChan <- schema.AssignProcess{
 			Pid:     pid,
-			AccId:   accid,
+			AccId:   signer,
 			Process: v,
 			Item:    item,
 		}
 	case hymxSchema.Message:
 		// check if need redirect
 		if isRedirect {
-			// todo: return nodes, schema.ErrRedirect
-			err = schema.ErrRedirect
-			log.Warn("handle message failed", "pid", pid, "err", err)
+			// return nodes with redirect error for 308 redirect
+			err = schema.NewRedirectError(nodes)
+			log.Warn("message redirect", "pid", pid, "err", err)
 			return
 		}
 
@@ -103,7 +90,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 
 		n.assignMesChan <- schema.AssignMessage{
 			Pid:     pid,
-			AccId:   accid,
+			AccId:   signer,
 			Message: v,
 			Item:    item,
 		}
@@ -112,6 +99,38 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	}
 
 	return
+}
+
+// verifyFromProcess verifies the fromProcess authentication
+// It handles both registry process verification and regular node authentication
+func (n *Node) verifyFromProcess(item goarSchema.BundleItem, pid, signer, fromProcess string) error {
+	if fromProcess == "" {
+		return nil
+	}
+
+	// Handle registry process verification
+	if pid == n.vmm.RegistryId() {
+		// return n.verifyRegistryProcess(item, pid, signer, fromProcess)
+		// Verify this is a RegisterProcess action
+		action := utils.GetTagsValue("Action", item.Tags)
+		if action != "RegisterProcess" {
+			return nil
+		}
+
+		if err := n.verifyRegistry(item, signer, fromProcess); err != nil {
+			log.Error("verify registry process message failed", "pid", pid, "signer", signer, "fromProcess", fromProcess, "err", err)
+			return err
+		}
+		return nil
+	}
+
+	// Handle regular node authentication
+	if err := n.authNode(signer, fromProcess); err != nil {
+		log.Error("auth node failed", "pid", pid, "signer", signer, "fromProcess", fromProcess)
+		return err
+	}
+
+	return nil
 }
 
 func (n *Node) HandleDryRun(item goarSchema.BundleItem, assign hymxSchema.Assignment, maxNonce int64) (err error) {
@@ -167,18 +186,11 @@ func (n *Node) authNode(accid, fromProcess string) (err error) {
 	return
 }
 
-// verifyRegistryMessage verifies registry process registration messages with 4 steps
-func (n *Node) verifyRegistryMessage(item goarSchema.BundleItem, fromProcess string) (err error) {
+// verifyRegistry verifies registry process registration messages with 4 steps
+func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess string) (err error) {
 	// 1. get 'Pid' and 'Acc-Id' from Tags
 	pid := utils.GetTagsValue("Pid", item.Tags)
 	accid := utils.GetTagsValue("Acc-Id", item.Tags)
-	action := utils.GetTagsValue("Action", item.Tags)
-
-	// Verify this is a RegisterProcess action
-	if action != "RegisterProcess" {
-		return schema.ErrInvalidType
-	}
-
 	if pid == "" || accid == "" {
 		log.Error("missing required tags in registry message", "Pid", pid, "Acc-Id", accid)
 		return schema.ErrUnauthorizedNode
@@ -188,19 +200,19 @@ func (n *Node) verifyRegistryMessage(item goarSchema.BundleItem, fromProcess str
 	// * pid is the id of the spawn message that created the process
 	// * so we can use pid to query the original message
 	var spawnMsg *goarSchema.BundleItem
-	if accid == n.Info().Node.AccId { // get message from local
+	if signer == n.Info().Node.AccId { // get message from local
 		spawnMsg, err = n.GetMessage(pid)
 		if err != nil {
 			return errors.New("get origin spawn message failed, msgid: " + pid)
 		}
 	} else { // get message from other node
 		var node *registrySchema.Node
-		node, err = n.GetNode(accid)
+		node, err = n.GetNode(signer)
 		if err != nil {
 			return
 		}
 		if node == nil {
-			return errors.New("node not found, accid: " + accid)
+			return errors.New("node not found, accid: " + signer)
 		}
 		cli := sdk.NewClient(node.URL)
 		msg, msgErr := cli.GetMessage(pid)

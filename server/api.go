@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hymatrix/hymx/common"
+	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/server/schema"
 	goarUtils "github.com/permadao/goar/utils"
 )
@@ -111,6 +112,17 @@ func (s *Server) Submit(c *gin.Context) {
 
 	err = s.node.Handle(item)
 	if err != nil {
+		// Check if it's a redirect error
+		if redirectErr, ok := err.(*nodeSchema.RedirectError); ok {
+			// Return 308 Permanent Redirect with Location header and nodes information
+			if len(redirectErr.Nodes) > 0 {
+				// Set Location header to the first available node URL for browser auto-redirect
+				c.Header("Location", redirectErr.Nodes[0].URL)
+			}
+			// Also return nodes information in response body for client SDK usage
+			c.JSON(http.StatusPermanentRedirect, redirectErr.Nodes)
+			return
+		}
 		log.Error("handle item failed", "err", err)
 		schema.ErrorResponse(c, err.Error())
 		return
