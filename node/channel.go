@@ -88,6 +88,10 @@ func (n *Node) runResultChan() {
 			}
 			n.resultHandlerLockMu.RUnlock()
 
+			if result.DryRun {
+				continue
+			}
+
 			// save cache to db
 			for k, v := range result.Cache {
 				if err := n.db.SaveCache(result.FromProcess, k, v); err != nil {

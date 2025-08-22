@@ -34,9 +34,10 @@ func (v *Vmm) apply(meta schema.Meta) error {
 	if meta.PushedFor != "" {
 		result.PushedFor = meta.PushedFor
 	}
+	result.DryRun = meta.DryRun
 	// send message outbox
-	v.outbox(env, result, meta.RecoveryDryRun)
-	if meta.RecoveryDryRun && meta.Nonce == meta.RecoveryMaxNonce {
+	v.outbox(env, result)
+	if meta.DryRun && meta.Nonce == meta.RecoveryMaxNonce {
 		v.RecoveryUnlock(meta.Pid)
 	}
 
