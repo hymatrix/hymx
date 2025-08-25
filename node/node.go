@@ -199,6 +199,10 @@ func (n *Node) GetCache(pid, key string) (string, error) {
 	return n.db.GetCache(pid, key)
 }
 
+func (n *Node) GetModuleNames() []string {
+	return n.vmm.GetModuleNames()
+}
+
 func (n *Node) Mount(moduleFormat string, spawner vmmSchema.VmSpawnFunc) error {
 	return n.vmm.Mount(moduleFormat, spawner)
 }

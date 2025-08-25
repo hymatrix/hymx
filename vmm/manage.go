@@ -76,6 +76,17 @@ func (v *Vmm) GetVmPids() (pids []string) {
 	return
 }
 
+func (v *Vmm) GetModuleNames() (names []string) {
+	v.vmsLockMu.RLock()
+	defer v.vmsLockMu.RUnlock()
+
+	names = make([]string, 0, len(v.vmFactors))
+	for name := range v.vmFactors {
+		names = append(names, name)
+	}
+	return
+}
+
 func (v *Vmm) RecoveryLock(pid string) {
 	v.vmsLockMu.Lock()
 	defer v.vmsLockMu.Unlock()
