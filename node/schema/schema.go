@@ -14,6 +14,7 @@ type Info struct {
 	Token       string              `json:"Token"`
 	Registry    string              `json:"Registry"`
 	Node        registrySchema.Node `json:"Node"`
+	VmCount     int64               `json:"Vm-Count"`
 }
 
 type ResultHandler func(vmmSchema.Result)

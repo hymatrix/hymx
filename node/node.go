@@ -133,6 +133,7 @@ func (n *Node) Info() schema.Info {
 	if n.vmm.RegistryId() != "" {
 		n.info.Registry = n.vmm.RegistryId()
 	}
+	n.info.VmCount = n.vmm.GetVmCount()
 	return *n.info
 }
 
@@ -197,6 +198,10 @@ func (n *Node) StakeOf(accid string) (*big.Int, error) {
 
 func (n *Node) GetCache(pid, key string) (string, error) {
 	return n.db.GetCache(pid, key)
+}
+
+func (n *Node) GetModuleNames() []string {
+	return n.vmm.GetModuleNames()
 }
 
 func (n *Node) Mount(moduleFormat string, spawner vmmSchema.VmSpawnFunc) error {
