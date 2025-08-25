@@ -5,6 +5,7 @@ import (
 
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/pay/schema"
+	hymxSchema "github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/utils"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
@@ -12,7 +13,7 @@ import (
 )
 
 // hymx fee
-func (p *Pay) HymxFeeHandler(itemMeta nodeSchema.ItemMeta) error {
+func (p *Pay) HymxFeeHandler(itemMeta nodeSchema.ItemMeta) (err error) {
 	payer := itemMeta.Signer
 	if itemMeta.FromProcess != "" {
 		payer = itemMeta.FromProcess
@@ -22,7 +23,15 @@ func (p *Pay) HymxFeeHandler(itemMeta nodeSchema.ItemMeta) error {
 		return nil
 	}
 
-	if err := p.db.UseOnce(payer, itemMeta.Pid, p.config.TxFee); err != nil {
+	switch itemMeta.Instance.(type) {
+	case hymxSchema.Process:
+		err = p.db.SpawnFee(payer, itemMeta.Pid, p.config.SpawnFee)
+	case hymxSchema.Message:
+		err = p.db.UseOnce(payer, itemMeta.Pid, p.config.TxFee)
+	default:
+		err = nodeSchema.ErrInvalidType
+	}
+	if err != nil {
 		log.Warn("unable to process payment for this transaction", "payer", payer, "itemMeta", itemMeta, "err", err)
 		return schema.ErrPaymentFailed
 	}

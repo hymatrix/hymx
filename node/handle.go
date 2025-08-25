@@ -29,7 +29,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 			Pid:         pid,
 			Signer:      signer,
 			FromProcess: fromProcess,
-			Item:        item,
+			Instance:    instance,
 		}); err != nil {
 			n.itemHandlerLockMu.RUnlock()
 			return

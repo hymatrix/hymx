@@ -20,7 +20,7 @@ type ItemMeta struct {
 	Pid         string
 	Signer      string
 	FromProcess string
-	Item        goarSchema.BundleItem
+	Instance    interface{}
 }
 
 type ItemHandler func(ItemMeta) error
