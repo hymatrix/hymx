@@ -87,11 +87,11 @@ func (v *Vmm) GetModuleNames() (names []string) {
 	return
 }
 
-func (v *Vmm) GetVmCount() uint32 {
+func (v *Vmm) GetVmCount() int64 {
 	v.vmsLockMu.RLock()
 	defer v.vmsLockMu.RUnlock()
 
-	return uint32(len(v.vms))
+	return int64(len(v.vms))
 }
 
 func (v *Vmm) RecoveryLock(pid string) {
