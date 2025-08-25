@@ -87,6 +87,13 @@ func (v *Vmm) GetModuleNames() (names []string) {
 	return
 }
 
+func (v *Vmm) GetVmCount() uint32 {
+	v.vmsLockMu.RLock()
+	defer v.vmsLockMu.RUnlock()
+
+	return uint32(len(v.vms))
+}
+
 func (v *Vmm) RecoveryLock(pid string) {
 	v.vmsLockMu.Lock()
 	defer v.vmsLockMu.Unlock()

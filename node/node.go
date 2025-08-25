@@ -133,6 +133,7 @@ func (n *Node) Info() schema.Info {
 	if n.vmm.RegistryId() != "" {
 		n.info.Registry = n.vmm.RegistryId()
 	}
+	n.info.VmCount = n.vmm.GetVmCount()
 	return *n.info
 }
 
