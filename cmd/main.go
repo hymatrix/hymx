@@ -63,9 +63,6 @@ func run(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	if pay != nil {
-		pay.LoadCheckpoint()
-	}
 
 	gin.SetMode(ginMode)
 	if ginMode == "release" {
@@ -74,6 +71,15 @@ func run(c *cli.Context) (err error) {
 	}
 
 	s := server.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo)
+
+	// add payment middleware
+	if pay != nil {
+		pay.LoadCheckpoint()
+		pay.Run()
+
+		s.AddResultHandler(pay.HymxDepositHandler)
+		s.AddItemHandler(pay.HymxFeeHandler)
+	}
 
 	// mount your vm here.....
 	// ex:
@@ -91,6 +97,8 @@ func run(c *cli.Context) (err error) {
 
 	<-signals
 	s.Close()
+
+	// close payment middleware
 	if pay != nil {
 		pay.Close()
 		pay.SaveCheckpoint()

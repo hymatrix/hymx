@@ -14,16 +14,3 @@ nodeDesc: first test node
 nodeURL: http://127.0.0.1:8080
 
 joinNetwork: false
-
-# ---- Payment Configuration ----
-enablePayment: true # toggle payment system on/off
-
-payment:
-  prvKey: 0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b
-  URL: http://127.0.0.1:8080
-  settAddr: 0x1234567890abcdef1234567890abcdef12345678
-  axToken: tAX
-  txFee: "10000000000"            # 0.01 tAX (12 decimals)
-  spawnFee: "100000000000"        # 0.1 tAX (12 decimals)
-  residencyFee: "10000000000"     # 0.01 tAX (12 decimals)
-  developerShareRatio: "5000"     # basis points, 5000 = 50%

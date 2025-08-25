@@ -12,21 +12,21 @@ import (
 	"github.com/spf13/viper"
 )
 
-func LoadPayConfig() (p *pay.Pay, err error) {
+func LoadPayConfig() (*pay.Pay, error) {
 	if !viper.GetBool("enablePayment") {
 		return nil, nil
 	}
 
-	url := viper.GetString("payment.URL")
+	axURL := viper.GetString("payment.axURL")
 	prvKey := viper.GetString("payment.prvKey")
 
 	signer, err := goether.NewSigner(prvKey)
 	if err != nil {
-		return
+		return nil, err
 	}
 	bundler, err := goar.NewBundler(signer)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	settlementAddrStr := viper.GetString("payment.settlementAddress")
@@ -45,8 +45,7 @@ func LoadPayConfig() (p *pay.Pay, err error) {
 		DeveloperShareRatio: mustBigInt(devRatioStr),
 	}
 
-	p = pay.New(url, bundler, cfg)
-	return
+	return pay.New(axURL, bundler, cfg), nil
 }
 
 func mustBigInt(s string) *big.Int {

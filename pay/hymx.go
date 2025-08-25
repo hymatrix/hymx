@@ -3,13 +3,35 @@ package pay
 import (
 	"math/big"
 
+	nodeSchema "github.com/hymatrix/hymx/node/schema"
+	"github.com/hymatrix/hymx/pay/schema"
 	"github.com/hymatrix/hymx/utils"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
 	goarUtils "github.com/permadao/goar/utils"
 )
 
-func (p *Pay) HymxHandler(res vmmSchema.Result) {
+// hymx fee
+func (p *Pay) HymxFeeHandler(itemMeta nodeSchema.ItemMeta) error {
+	payer := itemMeta.Signer
+	if itemMeta.FromProcess != "" {
+		payer = itemMeta.FromProcess
+	}
+
+	if p.db.IsWhitelist(payer) {
+		return nil
+	}
+
+	if err := p.db.UseOnce(payer, itemMeta.Pid, p.config.TxFee); err != nil {
+		log.Warn("unable to process payment for this transaction", "payer", payer, "itemMeta", itemMeta, "err", err)
+		return schema.ErrPaymentFailed
+	}
+
+	return nil
+}
+
+// hmxy Deposit
+func (p *Pay) HymxDepositHandler(res vmmSchema.Result) {
 	if res.FromProcess != p.config.AxToken {
 		return
 	}

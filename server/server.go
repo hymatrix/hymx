@@ -43,6 +43,10 @@ func (s *Server) Mount(moduleFormat string, spawner vmmSchema.VmSpawnFunc) error
 	return s.node.Mount(moduleFormat, spawner)
 }
 
+func (s *Server) AddItemHandler(handlers ...schema.ItemHandler) {
+	s.node.AddItemHandler(handlers...)
+}
+
 func (s *Server) AddResultHandler(handlers ...schema.ResultHandler) {
 	s.node.AddResultHandler(handlers...)
 }

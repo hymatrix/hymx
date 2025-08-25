@@ -26,9 +26,12 @@ func New(url string, bundler *goar.Bundler, config *schema.Config) *Pay {
 	}
 }
 
-func (p *Pay) Run() {}
+func (p *Pay) Run() {
+	// todo: ResidencyFee
+}
 
 func (p *Pay) Close() error {
+	// todo: graceful close
 	return nil
 }
 
@@ -37,9 +40,11 @@ func (p *Pay) Address() string {
 }
 
 func (p *Pay) SaveCheckpoint() error {
+	// todo
 	return nil
 }
 
 func (p *Pay) LoadCheckpoint() error {
+	// todo
 	return nil
 }
