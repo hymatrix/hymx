@@ -37,7 +37,7 @@ func LoadPayConfig() (*pay.Pay, error) {
 	devRatioStr := viper.GetString("payment.developerShareRatio")
 
 	cfg := &schema.Config{
-		SettlementAddress:   common.HexToAddress(settlementAddrStr),
+		SettlementAddress:   common.HexToAddress(settlementAddrStr).String(),
 		AxToken:             axToken,
 		TxFee:               mustBigInt(txFeeStr),
 		SpawnFee:            mustBigInt(spawnFeeStr),

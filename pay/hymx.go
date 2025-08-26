@@ -72,6 +72,8 @@ func (p *Pay) HymxDepositHandler(res vmmSchema.Result) {
 			beneficiary = sender
 		}
 		p.handleDeposit(res.ItemId, p.config.AxToken, sender, beneficiary, qty)
+
+		log.Info("deposit is successfully!", "sender", sender, "beneficiary", beneficiary, "amount", qty)
 	}
 }
 

@@ -9,19 +9,20 @@ hymxURL: http://127.0.0.1:8080 # for sending messages via the SDK
 prvKey: 0xbf9cdeced304f1ef845362c4527fe4ddaecb3fa36fa9ed615447abdffdd16418
 keyfilePath:
 
-nodeName: payTestNode
+nodeName: PayTestNode
 nodeDesc: payment node
 nodeURL: http://127.0.0.1:8082
 
-joinNetwork: false
+joinNetwork: true
 
 # ---- Payment Configuration ----
+# only support evm address
 enablePayment: true # toggle payment system on/off
 
 payment:
   prvKey: 0x1ff6b9ed3e98da7fab080d062a3fab77f60c9ba0017ef2bc43aea8ccb74fbddb
-  settAddr: 0x0b1A48055E9cCf6A30f8AAfE00bD48a860b9C1A0
-  axToken: fHQbzw6acg2nqmCqzdr2GFaeoGzcRd0paVTD2kMGyU4
+  settlementAddress: 0x0b1A48055E9cCf6A30f8AAfE00bD48a860b9C1A0 # use ethereum address(evm)
+  axToken: 4dTm0TJxkhx87wnvUU6O3RdTIIBAVhTYWIPu7eeKPhA
   axURL: http://127.0.0.1:8080
   txFee: 10000000000            # 0.01 tAX (12 decimals)
   spawnFee: 100000000000        # 0.1 tAX (12 decimals)

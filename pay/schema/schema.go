@@ -2,18 +2,19 @@ package schema
 
 import (
 	"math/big"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 type Config struct {
+	// ChargeAddress is the address where prepaid fees should be transferred
+	ChargeAddress string `json:"Charge-Address"`
+
 	// SettlementAddress is the node’s settlement address (e.g. cold wallet or revenue sink)
-	SettlementAddress common.Address
+	SettlementAddress string `json:"-"`
 
-	AxToken      string
-	TxFee        *big.Int
-	SpawnFee     *big.Int
-	ResidencyFee *big.Int
+	AxToken      string   `json:"Ax-Token"`
+	TxFee        *big.Int `json:"Tx-Fee"`
+	SpawnFee     *big.Int `json:"Spawn-Fee"`
+	ResidencyFee *big.Int `json:"Residency-Fee"`
 
-	DeveloperShareRatio *big.Int
+	DeveloperShareRatio *big.Int `json:"Developer-Share-Ratio"`
 }

@@ -383,6 +383,13 @@ func (p *Pay) SettleTxFee(beneficiary string, devShareRatio *big.Int) (nodeFee *
 	return nodeFee, devFees, nil
 }
 
+func (p *Pay) TotalPending(beneficiary string) *big.Int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	return p.totalPending(beneficiary)
+}
+
 func (p *Pay) Checkpoint() (data string, err error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

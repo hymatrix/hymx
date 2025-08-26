@@ -13,6 +13,7 @@ type IDB interface {
 	SponsorBreakdown(sponsor string) map[string]*big.Int
 	BeneficiaryTotal(beneficiary string) *big.Int
 	BeneficiaryBreakdown(beneficiary string) map[string]*big.Int
+	TotalPending(beneficiary string) *big.Int
 
 	Deposit(sponsor, beneficiary string, amount *big.Int) error
 	Withdraw(sponsor, beneficiary string, amount *big.Int) error

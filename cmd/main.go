@@ -70,7 +70,7 @@ func run(c *cli.Context) (err error) {
 
 	}
 
-	s := server.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo)
+	s := server.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo, pay)
 
 	// add payment middleware
 	if pay != nil {
