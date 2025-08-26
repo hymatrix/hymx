@@ -1,7 +1,7 @@
-port: :8080
+port: :8082
 ginMode: release # debug or release
 
-redisURL: redis://@localhost:6379/0
+redisURL: redis://@localhost:6379/3
 
 arweaveURL: https://arweave.net
 hymxURL: http://127.0.0.1:8080 # for sending messages via the SDK
@@ -9,9 +9,9 @@ hymxURL: http://127.0.0.1:8080 # for sending messages via the SDK
 prvKey: 0xbf9cdeced304f1ef845362c4527fe4ddaecb3fa36fa9ed615447abdffdd16418
 keyfilePath:
 
-nodeName: test1
-nodeDesc: first test node
-nodeURL: http://127.0.0.1:8080
+nodeName: payTestNode
+nodeDesc: payment node
+nodeURL: http://127.0.0.1:8082
 
 joinNetwork: false
 
