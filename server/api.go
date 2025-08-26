@@ -49,6 +49,9 @@ func (s *Server) runAPI(endpoint string) {
 
 	engine.POST("/trysend", s.TrySend)
 
+	// get all supported modules
+	engine.GET("/modules", s.GetModules)
+
 	s.apiServer = &http.Server{
 		Addr:    endpoint,
 		Handler: engine,
@@ -352,4 +355,9 @@ func (s *Server) TrySend(c *gin.Context) {
 	s.node.TrySend(req.Pid, req.Target)
 
 	c.Status(http.StatusOK)
+}
+
+func (s *Server) GetModules(c *gin.Context) {
+	names := s.node.GetModuleNames()
+	c.JSON(http.StatusOK, names)
 }
