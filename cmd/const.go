@@ -1,9 +1,12 @@
 package main
 
-import "github.com/hymatrix/hymx/schema"
+import (
+	nodeSchema "github.com/hymatrix/hymx/node/schema"
+	"github.com/hymatrix/hymx/schema"
+)
 
 const (
-	Pid = schema.DataProtocol + "-" + schema.Variant + ".lock"
+	Pid = schema.DataProtocol + "-" + nodeSchema.NodeVersion + ".lock"
 
 	DefaultConfig = "./config.yaml"
 )
