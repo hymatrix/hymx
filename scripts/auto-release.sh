@@ -268,7 +268,7 @@ main() {
     
     # Pull latest changes
     print_info "Pulling latest changes..."
-    git pull origin main
+    git pull origin develop
     
     # Check existing tag
     check_existing_tag
