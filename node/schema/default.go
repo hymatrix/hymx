@@ -11,6 +11,6 @@ var (
 		Role:  schema.RoleMain,
 		Desc:  "Test network genesis node",
 		URL:   "https://hymatrix.ai",
-		// URL:   "http://127.0.0.1:8080",
+		// URL: "http://127.0.0.1:8080",
 	}
 )

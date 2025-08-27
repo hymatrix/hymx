@@ -390,6 +390,62 @@ func (p *Pay) TotalPending(beneficiary string) *big.Int {
 	return p.totalPending(beneficiary)
 }
 
+func (p *Pay) AllPending() map[string]*big.Int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	out := make(map[string]*big.Int)
+
+	// txPending: beneficiary -> pid -> amount
+	for ben, row := range p.txPending {
+		if row == nil {
+			continue
+		}
+		for _, amt := range row {
+			if amt == nil || amt.Sign() == 0 {
+				continue
+			}
+			if out[ben] == nil {
+				out[ben] = new(big.Int)
+			}
+			out[ben].Add(out[ben], amt)
+		}
+	}
+
+	// spawnPending: beneficiary -> pid -> amount
+	for ben, row := range p.spawnPending {
+		if row == nil {
+			continue
+		}
+		for _, amt := range row {
+			if amt == nil || amt.Sign() == 0 {
+				continue
+			}
+			if out[ben] == nil {
+				out[ben] = new(big.Int)
+			}
+			out[ben].Add(out[ben], amt)
+		}
+	}
+
+	// residencyPending: beneficiary(pid) -> amount
+	for ben, amt := range p.residencyPending {
+		if amt == nil || amt.Sign() == 0 {
+			continue
+		}
+		if out[ben] == nil {
+			out[ben] = new(big.Int)
+		}
+		out[ben].Add(out[ben], amt)
+	}
+
+	// defensive: return copies so callers can't mutate internal state
+	for k, v := range out {
+		out[k] = new(big.Int).Set(v)
+	}
+	return out
+}
+
 func (p *Pay) Checkpoint() (data string, err error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

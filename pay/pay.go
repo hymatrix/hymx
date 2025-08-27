@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/go-co-op/gocron/v2"
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/db/cache"
 	"github.com/hymatrix/hymx/pay/schema"
@@ -15,6 +16,8 @@ import (
 var log = common.NewLog("pay")
 
 type Pay struct {
+	scheduler gocron.Scheduler
+
 	sdk *sdk.SDK
 
 	config *schema.Config
@@ -32,13 +35,13 @@ func New(url string, bundler *goar.Bundler, config *schema.Config) *Pay {
 }
 
 func (p *Pay) Run() {
-	// todo: ResidencyFee
+	p.runJobs()
 
 	log.Info("payment is running", "wallet", p.Address(), "settle", p.config.SettlementAddress)
 }
 
 func (p *Pay) Close() error {
-	// todo: graceful close
+	p.scheduler.Shutdown()
 	return nil
 }
 

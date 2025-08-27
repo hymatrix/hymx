@@ -31,6 +31,13 @@ func New(
 }
 
 func (s *Server) Run(endpoint string) {
+	if s.pay != nil {
+		s.pay.LoadCheckpoint()
+		s.pay.Run()
+		s.AddResultHandler(s.pay.HymxDepositHandler)
+		s.AddItemHandler(s.pay.HymxFeeHandler)
+	}
+
 	go s.runAPI(endpoint)
 
 	s.node.Run()
@@ -40,6 +47,12 @@ func (s *Server) Close() {
 	log.Info("server is shutting down")
 	s.closeAPI()
 	s.node.Close()
+
+	// close payment middleware
+	if s.pay != nil {
+		s.pay.Close()
+		s.pay.SaveCheckpoint()
+	}
 	log.Info("server has been shut down")
 }
 

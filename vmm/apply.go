@@ -24,7 +24,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 
 	// set result
 	if result == nil {
-		log.Warn("no result response from process", "meta", meta)
+		log.Debug("no result response from process", "meta", meta)
 		result = &schema.Result{}
 	}
 	result.Nonce = fmt.Sprintf("%d", env.Nonce)

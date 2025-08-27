@@ -206,3 +206,43 @@ func TestWithdraw_CleansUpEmptyMaps(t *testing.T) {
 	_, ok := p.ledger["s"]
 	assert.False(t, ok)
 }
+
+func TestAllPending(t *testing.T) {
+	p := NewPay()
+
+	// Prepare ledger: sponsorA -> ben1:100, sponsorB -> ben2:200
+	require.NoError(t, p.Deposit("sponsorA", "ben1", bi(100)))
+	require.NoError(t, p.Deposit("sponsorB", "ben2", bi(200)))
+
+	// Add pending balances:
+	// ben1: txPending=30, spawnPending=20
+	require.NoError(t, p.UseOnce("ben1", "pidX", bi(30)))
+	require.NoError(t, p.SpawnFee("ben1", "pidX", bi(20)))
+
+	// ben2: residencyPending=50 (here the pid is the same as beneficiary = "ben2")
+	require.NoError(t, p.Deposit("sponsorC", "ben2", bi(100)))
+	require.NoError(t, p.ResidencyFee("ben2", bi(50)))
+
+	// ben3: txPending=10
+	require.NoError(t, p.Deposit("sponsorD", "ben3", bi(100)))
+	require.NoError(t, p.UseOnce("ben3", "pidY", bi(10)))
+
+	// Call AllPending
+	pending := p.AllPending()
+
+	// Validate ben1 -> 30+20=50
+	require.Contains(t, pending, "ben1")
+	assert.Equal(t, int64(50), pending["ben1"].Int64())
+
+	// Validate ben2 -> 50
+	require.Contains(t, pending, "ben2")
+	assert.Equal(t, int64(50), pending["ben2"].Int64())
+
+	// Validate ben3 -> 10
+	require.Contains(t, pending, "ben3")
+	assert.Equal(t, int64(10), pending["ben3"].Int64())
+
+	// A beneficiary without any pending should not appear
+	_, ok := pending["unknown"]
+	assert.False(t, ok)
+}

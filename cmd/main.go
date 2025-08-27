@@ -72,15 +72,6 @@ func run(c *cli.Context) (err error) {
 
 	s := server.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo, pay)
 
-	// add payment middleware
-	if pay != nil {
-		pay.LoadCheckpoint()
-		pay.Run()
-
-		s.AddResultHandler(pay.HymxDepositHandler)
-		s.AddItemHandler(pay.HymxFeeHandler)
-	}
-
 	// mount your vm here.....
 	// ex:
 	// s.Mount("<moduleFormat>", FuncForSpawn)
@@ -97,12 +88,6 @@ func run(c *cli.Context) (err error) {
 
 	<-signals
 	s.Close()
-
-	// close payment middleware
-	if pay != nil {
-		pay.Close()
-		pay.SaveCheckpoint()
-	}
 
 	return nil
 }
