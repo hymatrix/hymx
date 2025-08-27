@@ -89,6 +89,7 @@ func run(c *cli.Context) (err error) {
 	nodeInfo := &nodeSchema.Info{
 		Protocol:    schema.DataProtocol,
 		Variant:     schema.Variant,
+		NodeVersion: nodeSchema.NodeVersion,
 		JoinNetwork: viper.GetBool("joinNetwork"),
 		Node: registrySchema.Node{
 			AccId: bundler.Address,
