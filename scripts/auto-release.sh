@@ -122,33 +122,33 @@ check_admin_permissions() {
     exit 1
 }
 
-# Read version from schema.go
+# Read version from node/schema/default.go
 read_version() {
-    if [ ! -f "schema/schema.go" ]; then
-        print_error "schema/schema.go not found!"
+    if [ ! -f "node/schema/default.go" ]; then
+        print_error "node/schema/default.go not found!"
         exit 1
     fi
     
-    VERSION=$(grep 'Variant.*=' schema/schema.go | sed 's/.*"\(.*\)".*/\1/')
+    VERSION=$(grep 'NodeVersion.*=' node/schema/default.go | sed 's/.*"\(.*\)".*/\1/')
     
     if [ -z "$VERSION" ]; then
-        print_error "Could not extract version from schema/schema.go"
+        print_error "Could not extract version from node/schema/default.go"
         exit 1
     fi
     
     # Validate version format
     if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        print_error "Invalid version format in schema.go: $VERSION"
+        print_error "Invalid version format in node/schema/default.go: $VERSION"
         print_error "Expected format: vX.Y.Z (e.g., v0.1.3)"
         exit 1
     fi
     
-    print_info "Found version in schema.go: $VERSION"
+    print_info "Found version in node/schema/default.go: $VERSION"
 }
 
 # Check if we're in the right directory
 check_project_root() {
-    if [ ! -f "go.mod" ] || [ ! -f "Makefile" ] || [ ! -f "schema/schema.go" ]; then
+    if [ ! -f "go.mod" ] || [ ! -f "Makefile" ] || [ ! -f "node/schema/default.go" ]; then
         print_error "This script must be run from the project root directory."
         exit 1
     fi
