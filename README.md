@@ -48,7 +48,7 @@ Specific information can be viewed in the /info endpoint
 ```
 {
   "Protocol": "hymx",
-  "Variant": "v0.1.3", // Protocol Version
+  "Variant": "v0.1.0", // Protocol Version
   "NodeVersion": "v0.1.3",
   ......
 }
