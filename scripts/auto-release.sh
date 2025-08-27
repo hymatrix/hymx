@@ -239,11 +239,11 @@ create_github_release() {
     # Read release notes from file or use default
     read_release_notes
     
-    # Create release with GitHub CLI
+    # Create release with GitHub CLI - exclude hymx file without version suffix
     gh release create "$VERSION" \
         --title "$VERSION" \
         --notes "$RELEASE_NOTES" \
-        ./build/*
+        ./build/*-$VERSION*
     
     print_success "GitHub release $VERSION created successfully!"
     
