@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hymatrix/hymx/common"
+	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/server"
 	"github.com/inconshreveable/log15"
@@ -21,7 +22,7 @@ func main() {
 
 	app := &cli.App{
 		Name:     schema.DataProtocol,
-		Version:  schema.Variant,
+		Version:  nodeSchema.NodeVersion,
 		Flags:    flags,
 		Commands: cmds,
 		Action:   action,
@@ -84,7 +85,7 @@ func run(c *cli.Context) (err error) {
 
 	s.Run(port)
 
-	log.Info("server is running", "version", schema.Variant, "wallet", bundler.Address, "port", port)
+	log.Info("server is running", "protocol version", schema.Variant, "node version", nodeSchema.NodeVersion, "wallet", bundler.Address, "port", port)
 
 	<-signals
 	s.Close()

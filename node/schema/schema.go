@@ -10,6 +10,7 @@ import (
 type Info struct {
 	Protocol    string              `json:"Protocol"`
 	Variant     string              `json:"Variant"`
+	NodeVersion string              `json:"Node-Version"`
 	JoinNetwork bool                `json:"Join-Network"`
 	Token       string              `json:"Token"`
 	Registry    string              `json:"Registry"`

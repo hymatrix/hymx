@@ -12,6 +12,10 @@
 ## Table of Contents
 
 - [Overview](#overview)
+- [Version Information](#version-information)
+  - [Node Version](#node-version)
+  - [Protocol Version](#protocol-version)
+  - [Version Compatibility](#version-compatibility)
 - [Software Dependencies](#software-dependencies)
 - [Getting Started](#getting-started)
   - [Wallet Setup](#wallet-setup)
@@ -34,6 +38,22 @@ HyMatrix is a decentralized computing network where participants stake **AX** to
 * Facilitates inter-VM communication
 
 This architecture enables seamless service discovery and cross-VM operations while maintaining a trustless verification model through immutable execution logs.
+
+## Version Information
+
+HyMatrix uses two key version identifiers to ensure network compatibility and proper protocol handling:
+- Node Version: Core node version, used to identify node functionality and performance
+- Protocol Version: Protocol version, used to identify communication protocols between nodes
+Specific information can be viewed in the /info endpoint
+```
+{
+  "Protocol": "hymx",
+  "Variant": "v0.1.0", // Protocol Version
+  "NodeVersion": "v0.1.3",
+  ......
+}
+```
+
 
 ## Software Dependencies
 
