@@ -4,11 +4,11 @@ This directory contains scripts for automating the release process.
 
 ## auto-release.sh
 
-Automatic release script that creates GitHub Releases based on the `Variant` variable in `schema/schema.go`.
+Automatic release script that creates GitHub Releases based on the `NodeVersion` variable in `node/schema/default.go`.
 
 ### Features
 
-1. **Automatic Version Detection**: Reads the `Variant` variable from `schema/schema.go` as the version number
+1. **Automatic Version Detection**: Reads the `NodeVersion` variable from `node/schema/default.go` as the version number
 2. **Git Tag Management**: Automatically creates and pushes Git tags
 3. **Multi-platform Build**: Uses `make build-all` to build binaries for all platforms
 4. **GitHub Release**: Uses GitHub CLI to create releases and upload binary files
@@ -75,7 +75,7 @@ Automatic release script that creates GitHub Releases based on the `Variant` var
 
 1. **Environment Check**: Verify dependency tools (GitHub CLI, jq, make) and Git authentication status
 2. **Permission Verification**: Check if the current user has repository administrator permissions
-3. **Version Reading**: Extract the `Variant` value from `schema/schema.go`
+3. **Version Reading**: Extract the `NodeVersion`
 4. **Version Validation**: Ensure the version format follows `vX.Y.Z` specification
 5. **Git Status Check**: Ensure the working directory is clean
 6. **Tag Handling**: Check and handle existing tags
@@ -136,15 +136,5 @@ The script includes comprehensive error handling mechanisms:
 5. **Network Connection**: Requires stable network connection to push tags and upload files
 6. **Permission Requirements**: Requires repository write permissions and permission to create releases
 7. **File Management**: Release notes files (`release_notes_*.md`) are automatically ignored by Git
-
-## release.sh
-
-Manual release script that allows specifying a version number for release (via GitHub Actions).
-
-### Usage
-
-```bash
-./scripts/release.sh v0.1.3
-```
 
 This script will create the specified Git tag, triggering the GitHub Actions automatic build and release process.
