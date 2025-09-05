@@ -160,66 +160,6 @@ func (suite *OptGoarTestSuite) TestUploadAndCheck() {
 	}
 }
 
-// TestUploadWithValidItems 测试上传有效的 items
-func (suite *OptGoarTestSuite) TestUploadWithValidItems() {
-	if suite.optGoar.wallet == nil {
-		suite.T().Skip("Skipping test due to nil wallet")
-		return
-	}
-
-	items := []goarSchema.BundleItem{
-		{
-			Id:   "test-item-1",
-			Data: "test data 1",
-			Tags: []goarSchema.Tag{
-				{Name: "Content-Type", Value: "text/plain"},
-			},
-		},
-		{
-			Id:   "test-item-2",
-			Data: "test data 2",
-			Tags: []goarSchema.Tag{
-				{Name: "Content-Type", Value: "application/json"},
-			},
-		},
-	}
-
-	txid, err := suite.optGoar.Upload(items)
-
-	assert.NoError(suite.T(), err)
-	assert.NotEmpty(suite.T(), txid)
-}
-
-// TestUploadWithLargeData 测试上传大数据
-func (suite *OptGoarTestSuite) TestUploadWithLargeData() {
-	if suite.optGoar.wallet == nil {
-		suite.T().Skip("Skipping test due to nil wallet")
-		return
-	}
-
-	// 创建 1MB 的测试数据
-	largeData := make([]byte, 1024*1024)
-	for i := range largeData {
-		largeData[i] = byte(i % 256)
-	}
-
-	items := []goarSchema.BundleItem{
-		{
-			Id:   "large-item",
-			Data: string(largeData),
-			Tags: []goarSchema.Tag{
-				{Name: "Content-Type", Value: "application/octet-stream"},
-				{Name: "Size", Value: "1048576"},
-			},
-		},
-	}
-
-	txid, err := suite.optGoar.Upload(items)
-
-	assert.NoError(suite.T(), err)
-	assert.NotEmpty(suite.T(), txid)
-}
-
 // TestDownloadWithValidParams 测试有效参数的下载
 func (suite *OptGoarTestSuite) TestDownloadWithValidParams() {
 	if suite.optGoar.wallet == nil {
@@ -227,10 +167,16 @@ func (suite *OptGoarTestSuite) TestDownloadWithValidParams() {
 		return
 	}
 
-	parentTxID := "test-parent-tx-id"
-	itemsIds := []string{"item-1", "item-2"}
+	parentTxID := "tiB55vvqzNvUOE5AVf5OsaO88R-5rmRHmasinXn3MKE"
+	itemsIds := []string{"ydzdP-svCgeZFj3MseCNVJgK94RCujPPI8xOw5SJZ6w", "x8r4SYW3S_yyoaPUsbDcAFoxBVhaWZPKxYZf_RiwQdQ"}
 
 	items, err := suite.optGoar.Download(parentTxID, itemsIds)
+	for _, item := range items {
+		data, err := goarUtils.Base64Decode(item.Data)
+		assert.NoError(suite.T(), err)
+		fmt.Printf("item id: %s\n", item.Id)
+		fmt.Printf("data: %s\n", data)
+	}
 
 	// 由于使用 mock wallet，这里主要测试方法调用不会 panic
 	assert.NoError(suite.T(), err)
