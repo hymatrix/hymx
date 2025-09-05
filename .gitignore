@@ -9,3 +9,6 @@ go.sum
 
 build
 checkpoint
+
+# Release notes files
+release_notes_*.md
