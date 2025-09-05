@@ -143,11 +143,11 @@ func (n *Node) tryGetLocalAssign(item goarSchema.BundleItem) (assignItem goarSch
 	}
 
 	// Register handler
-	n.AddAssignmentHandler(handler)
+	n.AddAssignResHandler(handler)
 
 	// Ensure cleanup when function ends
 	defer func() {
-		n.RemoveAssignmentHandler(handler)
+		n.RemoveAssignResHandler(handler)
 		close(closed)
 		close(resultChan)
 	}()

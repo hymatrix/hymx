@@ -48,7 +48,7 @@ func (n *Node) handleMessage(
 		Timestamp:        timestamp,
 		Params:           params,
 		Data:             item.Data,
-		RecoveryDryRun:   dryRun,
+		DryRun:           dryRun,
 		RecoveryMaxNonce: maxNonce,
 	})
 	return

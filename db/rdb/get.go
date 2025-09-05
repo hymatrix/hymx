@@ -33,7 +33,7 @@ func (r *RDB) GetMessage(msgid string) (msg *goarSchema.BundleItem, err error) {
 	res, err := r.rdb.HGet(r.ctx, schema.RdbMsgIndex, msgid).Result()
 	if err != nil {
 		if err == redis.Nil {
-			log.Warn("can not get msg", "msgid", msgid, "err", err)
+			log.Debug("can not get msg", "msgid", msgid, "err", err)
 			err = nil
 		}
 		return
@@ -54,7 +54,7 @@ func (r *RDB) GetMessageByNonce(pid string, nonce int64) (msg *goarSchema.Bundle
 	msgStr, err := r.rdb.LIndex(r.ctx, schema.RdbProcessMsgsPrefix+pid, nonce).Result()
 	if err != nil {
 		if err == redis.Nil {
-			log.Warn("can not get msg by nonce", "pid", pid, "nonce", nonce, "err", err)
+			log.Debug("can not get msg by nonce", "pid", pid, "nonce", nonce, "err", err)
 			err = nil
 		}
 		return
@@ -70,7 +70,7 @@ func (r *RDB) GetAssignByNonce(pid string, nonce int64) (assign *goarSchema.Bund
 	assignStr, err := r.rdb.LIndex(r.ctx, schema.RdbProcessAssignmentPrefix+pid, nonce).Result()
 	if err != nil {
 		if err == redis.Nil {
-			log.Warn("can not get assign", "pid", pid, "nonce", nonce, "err", err)
+			log.Debug("can not get assign", "pid", pid, "nonce", nonce, "err", err)
 			err = nil
 		}
 		return
@@ -132,7 +132,7 @@ func (r *RDB) GetResult(msgid string) (result *vmmSchema.Result, err error) {
 	resultBytes, err := r.rdb.HGet(r.ctx, schema.RdbMsgResult, msgid).Bytes()
 	if err != nil {
 		if err == redis.Nil {
-			log.Warn("can not get result", "msgid", msgid, "err", err)
+			log.Debug("can not get result", "msgid", msgid, "err", err)
 			err = nil
 		}
 		return
@@ -146,7 +146,7 @@ func (r *RDB) GetResults(pid string, limit int64) (results []vmmSchema.Result, e
 	msgids, err := r.rdb.LRange(r.ctx, schema.RdbMsgResultsPrefix+pid, -limit, -1).Result()
 	if err != nil {
 		if err == redis.Nil {
-			log.Warn("can not get results", "pid", pid, "err", err)
+			log.Debug("can not get results", "pid", pid, "err", err)
 			err = nil
 		}
 		return
@@ -165,7 +165,7 @@ func (r *RDB) GetCheckpointIndex(pid string) (id string, err error) {
 	id, err = r.rdb.Get(r.ctx, schema.RdbCheckpointIndexPrefix+pid).Result()
 	if err != nil {
 		if err == redis.Nil {
-			log.Warn("can not get checkpoint index", "pid", pid, "err", err)
+			log.Debug("can not get checkpoint index", "pid", pid, "err", err)
 			err = nil
 		}
 	}
@@ -176,7 +176,7 @@ func (r *RDB) GetCache(pid, key string) (value string, err error) {
 	value, err = r.rdb.Get(r.ctx, schema.RdbCachePrefix+pid+":"+key).Result()
 	if err != nil {
 		if err == redis.Nil {
-			log.Warn("can not get cache", "pid", pid, "key", key, "err", err)
+			log.Debug("can not get cache", "pid", pid, "key", key, "err", err)
 			err = nil
 		}
 	}

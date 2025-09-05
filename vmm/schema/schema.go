@@ -39,7 +39,7 @@ type Meta struct {
 	Params map[string]string `json:"Params"`
 	Data   string            `json:"Data"`
 
-	RecoveryDryRun   bool  `json:"-"`
+	DryRun           bool  `json:"-"`
 	RecoveryMaxNonce int64 `json:"-"`
 }
 
@@ -55,6 +55,7 @@ type Result struct {
 	Output       interface{}       `json:"Output"`
 	Data         string            `json:"Data"`
 	Cache        map[string]string `json:"Cache,omitempty"` // Cache contains the generated cache entries for users to read and query latest state
+	DryRun       bool              `json:"-"`
 	Error        string            `json:"Error"`
 }
 

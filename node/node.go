@@ -36,14 +36,16 @@ type Node struct {
 
 	assignMesChan  chan schema.AssignMessage
 	assignProcChan chan schema.AssignProcess
+	assignResChan  chan schema.AssignmentResult
+	resultChan     <-chan vmmSchema.Result
 
-	resultChan          <-chan vmmSchema.Result
-	resultHandlers      []schema.ResultHandler
-	resultHandlerLockMu sync.RWMutex
-
-	assignmentChan          chan schema.AssignmentResult
-	assignmentHandlers      []schema.AssignmentHandler
-	assignmentHandlerLockMu sync.RWMutex
+	// handler
+	itemHandlers           []schema.ItemHandler
+	itemHandlerLockMu      sync.RWMutex
+	assignResHandlers      []schema.AssignResHandler
+	assignResHandlerLockMu sync.RWMutex
+	resultHandlers         []schema.ResultHandler
+	resultHandlerLockMu    sync.RWMutex
 
 	outboxChan        <-chan vmmSchema.Outbox
 	outboxSendingLock map[string]bool
@@ -82,12 +84,12 @@ func New(
 
 		assignMesChan:  make(chan schema.AssignMessage, 1000),
 		assignProcChan: make(chan schema.AssignProcess, 10),
-
+		assignResChan:  make(chan schema.AssignmentResult, 1000),
 		resultChan:     resultChan,
-		resultHandlers: []schema.ResultHandler{},
 
-		assignmentChan:     make(chan schema.AssignmentResult, 1000),
-		assignmentHandlers: []schema.AssignmentHandler{},
+		itemHandlers:      []schema.ItemHandler{},
+		assignResHandlers: []schema.AssignResHandler{},
+		resultHandlers:    []schema.ResultHandler{},
 
 		outboxChan:        outboxChan,
 		outboxSendingLock: map[string]bool{},
@@ -208,6 +210,13 @@ func (n *Node) Mount(moduleFormat string, spawner vmmSchema.VmSpawnFunc) error {
 	return n.vmm.Mount(moduleFormat, spawner)
 }
 
+func (n *Node) AddItemHandler(handler ...schema.ItemHandler) {
+	n.itemHandlerLockMu.Lock()
+	defer n.itemHandlerLockMu.Unlock()
+
+	n.itemHandlers = append(n.itemHandlers, handler...)
+}
+
 func (n *Node) AddResultHandler(handler ...schema.ResultHandler) {
 	n.resultHandlerLockMu.Lock()
 	defer n.resultHandlerLockMu.Unlock()
@@ -215,20 +224,20 @@ func (n *Node) AddResultHandler(handler ...schema.ResultHandler) {
 	n.resultHandlers = append(n.resultHandlers, handler...)
 }
 
-func (n *Node) AddAssignmentHandler(handler ...schema.AssignmentHandler) {
-	n.assignmentHandlerLockMu.Lock()
-	defer n.assignmentHandlerLockMu.Unlock()
+func (n *Node) AddAssignResHandler(handler ...schema.AssignResHandler) {
+	n.assignResHandlerLockMu.Lock()
+	defer n.assignResHandlerLockMu.Unlock()
 
-	n.assignmentHandlers = append(n.assignmentHandlers, handler...)
+	n.assignResHandlers = append(n.assignResHandlers, handler...)
 }
 
-func (n *Node) RemoveAssignmentHandler(handler schema.AssignmentHandler) {
-	n.assignmentHandlerLockMu.Lock()
-	defer n.assignmentHandlerLockMu.Unlock()
+func (n *Node) RemoveAssignResHandler(handler schema.AssignResHandler) {
+	n.assignResHandlerLockMu.Lock()
+	defer n.assignResHandlerLockMu.Unlock()
 
-	for i, h := range n.assignmentHandlers {
+	for i, h := range n.assignResHandlers {
 		if &h == &handler {
-			n.assignmentHandlers = append(n.assignmentHandlers[:i], n.assignmentHandlers[i+1:]...)
+			n.assignResHandlers = append(n.assignResHandlers[:i], n.assignResHandlers[i+1:]...)
 			break
 		}
 	}

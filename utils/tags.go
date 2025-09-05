@@ -3,10 +3,31 @@ package utils
 import (
 	"errors"
 
-	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/schema"
 	goarSchema "github.com/permadao/goar/schema"
 )
+
+var (
+	NonExtractableTags = map[string]string{
+		"Data-Protocol": "Data-Protocol",
+		"Variant":       "Variant",
+		"From-Process":  "From-Process",
+		"From-Module":   "From-Module",
+		"Type":          "Type",
+		"From":          "From",
+		"Owner":         "Owner",
+		"Anchor":        "Anchor",
+		"Target":        "Target",
+		"Data":          "Data",
+		"Tags":          "Tags",
+		"Read-Only":     "Read-Only",
+	}
+)
+
+func isNonExtractableTag(tag string) bool {
+	_, ok := NonExtractableTags[tag]
+	return ok
+}
 
 func GetTagsValue(key string, tags []goarSchema.Tag) (t string) {
 	for _, v := range tags {
@@ -304,9 +325,4 @@ func MergeTags(tags1, tags2 []goarSchema.Tag) []goarSchema.Tag {
 		}
 	}
 	return tags1
-}
-
-func isNonExtractableTag(tag string) bool {
-	_, ok := nodeSchema.NonExtractableTags[tag]
-	return ok
 }
