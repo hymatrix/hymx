@@ -71,7 +71,7 @@ func (c *Chainkit) Upload(tx goarSchema.BundleItem) error {
 	}
 
 	// 使用 Redis Set 去重并记录待上传的 txid
-	if err := c.AddToUploads(tx.Id); err != nil {
+	if err := c.addToUploads(tx.Id); err != nil {
 		return err
 	}
 
@@ -85,15 +85,28 @@ func (c *Chainkit) Upload(tx goarSchema.BundleItem) error {
 // 3. 验证子交易
 // 4. 返回交易
 func (c *Chainkit) DownloadByTxid(txid string) (goarSchema.BundleItem, error) {
-	panic("unimplemented")
+	parentTxID, err := c.getParentTxid(txid)
+	if err != nil {
+		return goarSchema.BundleItem{}, err
+	}
+	items, err := c.download(parentTxID, []string{txid})
+	if err != nil {
+		return goarSchema.BundleItem{}, err
+	}
+	if len(items) == 0 {
+		return goarSchema.BundleItem{}, errors.New("download failed")
+	}
+	return *items[0], nil
 }
 
 // 下载一个 process 的所有交易, 从指定的 Nonce 开始到最新交易
+// todo: begin and end nonce
+// signer 参数（拿 txid=pid 的交易）
 func (c *Chainkit) DownloadByPid(pid string, nonce int64) ([]goarSchema.BundleItem, error) {
 	panic("unimplemented")
 }
 
 // 执行一个 GraphQL 查询
 func (c *Chainkit) Query(query string) ([]byte, error) {
-	panic("unimplemented")
+	return c.operator.GraphQL(query)
 }

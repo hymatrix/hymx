@@ -8,29 +8,31 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hymatrix/hymx/chainkit/optgoar"
 	"github.com/hymatrix/hymx/chainkit/schema"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
+	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
-// MockNodeDB 是 INodeDB 接口的 mock 实现
+// MockNodeDB is a mock implementation of INodeDB interface
 type MockNodeDB struct{}
 
-// NewMockNodeDB 创建一个新的 MockNodeDB 实例
+// NewMockNodeDB creates a new MockNodeDB instance
 func NewMockNodeDB() *MockNodeDB {
 	return &MockNodeDB{}
 }
 
-// GetIDB 返回一个 mock IDB
+// GetIDB returns a mock IDB
 func (m *MockNodeDB) GetIDB() nodeSchema.IDB {
-	return nil // 简单返回 nil，实际测试中可以根据需要实现
+	return nil // Simply return nil, can be implemented as needed in actual tests
 }
 
-// GetMessage 返回一个 mock BundleItem
+// GetMessage returns a mock BundleItem
 func (m *MockNodeDB) GetMessage(msgid string) (msg *goarSchema.BundleItem, err error) {
 	return &goarSchema.BundleItem{
 		Id:   msgid,
@@ -38,7 +40,7 @@ func (m *MockNodeDB) GetMessage(msgid string) (msg *goarSchema.BundleItem, err e
 	}, nil
 }
 
-// GetMessageByNonce 根据 nonce 返回 mock BundleItem
+// GetMessageByNonce returns mock BundleItem by nonce
 func (m *MockNodeDB) GetMessageByNonce(pid string, nonce int64) (msg *goarSchema.BundleItem, err error) {
 	return &goarSchema.BundleItem{
 		Id:   pid + "_" + fmt.Sprintf("%d", nonce),
@@ -46,7 +48,7 @@ func (m *MockNodeDB) GetMessageByNonce(pid string, nonce int64) (msg *goarSchema
 	}, nil
 }
 
-// GetAssignByMessage 返回 mock assignment
+// GetAssignByMessage returns mock assignment
 func (m *MockNodeDB) GetAssignByMessage(msgid string) (assign *goarSchema.BundleItem, err error) {
 	return &goarSchema.BundleItem{
 		Id:   msgid + "_assign",
@@ -54,7 +56,7 @@ func (m *MockNodeDB) GetAssignByMessage(msgid string) (assign *goarSchema.Bundle
 	}, nil
 }
 
-// GetAssignByNonce 根据 nonce 返回 mock assignment
+// GetAssignByNonce returns mock assignment by nonce
 func (m *MockNodeDB) GetAssignByNonce(pid string, nonce int64) (assign *goarSchema.BundleItem, err error) {
 	return &goarSchema.BundleItem{
 		Id:   pid + "_" + fmt.Sprintf("%d", nonce) + "_assign",
@@ -62,7 +64,7 @@ func (m *MockNodeDB) GetAssignByNonce(pid string, nonce int64) (assign *goarSche
 	}, nil
 }
 
-// GetResult 返回 mock result
+// GetResult returns mock result
 func (m *MockNodeDB) GetResult(msgid string) (result *vmmSchema.Result, err error) {
 	return &vmmSchema.Result{
 		ItemId: msgid,
@@ -70,56 +72,64 @@ func (m *MockNodeDB) GetResult(msgid string) (result *vmmSchema.Result, err erro
 	}, nil
 }
 
-// ChainkitTestSuite 测试套件
+// ChainkitTestSuite test suite
 type ChainkitTestSuite struct {
 	suite.Suite
-	chainkit *Chainkit
-	mockOperator *schema.MockOperator
+	chainkit   *Chainkit
+	optGoar    *optgoar.OptGoar
 	mockNodeDB *MockNodeDB
-	rdb *redis.Client
+	rdb        *redis.Client
 }
 
-// SetupSuite 在整个测试套件开始前执行一次
+// SetupSuite executes once before the entire test suite starts
 func (suite *ChainkitTestSuite) SetupSuite() {
-	// 创建 Redis 客户端（使用测试数据库）
+	// Create Redis client (using test database)
 	suite.rdb = redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
-		DB:   15, // 使用测试专用数据库
+		DB:   15, // Use dedicated test database
 	})
 
-	// 检查 Redis 连接
+	// Check Redis connection
 	ctx := context.Background()
 	if err := suite.rdb.Ping(ctx).Err(); err != nil {
 		suite.T().Skip("Redis server is not available, skipping tests")
 		return
 	}
 
-	// 创建 mock 对象
-	suite.mockOperator = schema.NewMockOperator()
+	// Create OptGoar instance
+	// Try to use real wallet file, use nil wallet if failed
+	path := "./optgoar/arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json"
+	wallet, err := goar.NewWalletFromPath(path, "https://arweave.net")
+	if err != nil {
+		// If unable to load wallet file, use nil wallet
+		suite.optGoar = optgoar.New(nil, ctx)
+	} else {
+		suite.optGoar = optgoar.New(wallet, ctx)
+	}
 	suite.mockNodeDB = NewMockNodeDB()
 }
 
-// TearDownSuite 在整个测试套件结束后执行一次
+// TearDownSuite executes once after the entire test suite ends
 func (suite *ChainkitTestSuite) TearDownSuite() {
 	if suite.rdb != nil {
 		suite.rdb.Close()
 	}
 }
 
-// SetupTest 在每个测试方法执行前执行
+// SetupTest executes before each test method
 func (suite *ChainkitTestSuite) SetupTest() {
 	if suite.rdb == nil {
 		return
 	}
 
-	// 清理测试数据
+	// Clean up test data
 	ctx := context.Background()
 	suite.rdb.FlushDB(ctx)
 
-	// 创建 Chainkit 实例
+	// Create Chainkit instance
 	suite.chainkit = &Chainkit{
 		node:     suite.mockNodeDB,
-		operator: suite.mockOperator,
+		operator: suite.optGoar,
 		aggregationPolicy: schema.AggregationPolicy{
 			MaxItems: 1000,
 			MaxDelay: 5 * time.Minute,
@@ -129,22 +139,22 @@ func (suite *ChainkitTestSuite) SetupTest() {
 	}
 }
 
-// TearDownTest 在每个测试方法执行后执行
+// TearDownTest executes after each test method
 func (suite *ChainkitTestSuite) TearDownTest() {
 	if suite.chainkit != nil && suite.chainkit.cancel != nil {
 		suite.chainkit.cancel()
 	}
 }
 
-// TestNew 测试 New 函数
+// TestNew test New function
 func (suite *ChainkitTestSuite) TestNew() {
 	if suite.rdb == nil {
 		suite.T().Skip("Redis not available")
 		return
 	}
 
-	// 测试正常创建
-	chainkit := New(suite.mockOperator, suite.mockNodeDB, "redis://@localhost:6379/15")
+	// Test normal creation
+	chainkit := New(suite.optGoar, suite.mockNodeDB, "redis://@localhost:6379/15")
 	assert.NotNil(suite.T(), chainkit)
 	assert.NotNil(suite.T(), chainkit.node)
 	assert.NotNil(suite.T(), chainkit.operator)
@@ -154,32 +164,32 @@ func (suite *ChainkitTestSuite) TestNew() {
 	assert.Equal(suite.T(), int64(1000), chainkit.aggregationPolicy.MaxItems)
 	assert.Equal(suite.T(), 5*time.Minute, chainkit.aggregationPolicy.MaxDelay)
 
-	// 清理
+	// Cleanup
 	chainkit.Close()
 }
 
-// TestNewWithNilParameters 测试 New 函数的 nil 参数处理
+// TestNewWithNilParameters test New function's nil parameter handling
 func (suite *ChainkitTestSuite) TestNewWithNilParameters() {
 	if suite.rdb == nil {
 		suite.T().Skip("Redis not available")
 		return
 	}
 
-	// 测试 nil operator
+	// Test nil operator
 	chainkit1 := New(nil, suite.mockNodeDB, "redis://@localhost:6379/15")
 	assert.NotNil(suite.T(), chainkit1)
 	assert.Nil(suite.T(), chainkit1.operator)
 	assert.NotNil(suite.T(), chainkit1.node)
 	chainkit1.Close()
 
-	// 测试 nil nodeDB
-	chainkit2 := New(suite.mockOperator, nil, "redis://@localhost:6379/15")
+	// Test nil nodeDB
+	chainkit2 := New(suite.optGoar, nil, "redis://@localhost:6379/15")
 	assert.NotNil(suite.T(), chainkit2)
 	assert.NotNil(suite.T(), chainkit2.operator)
 	assert.Nil(suite.T(), chainkit2.node)
 	chainkit2.Close()
 
-	// 测试两个都为 nil
+	// Test both nil
 	chainkit3 := New(nil, nil, "redis://@localhost:6379/15")
 	assert.NotNil(suite.T(), chainkit3)
 	assert.Nil(suite.T(), chainkit3.operator)
@@ -187,14 +197,14 @@ func (suite *ChainkitTestSuite) TestNewWithNilParameters() {
 	chainkit3.Close()
 }
 
-// TestNewWithDifferentRedisURLs 测试不同 Redis URL 格式
+// TestNewWithDifferentRedisURLs test different Redis URL formats
 func (suite *ChainkitTestSuite) TestNewWithDifferentRedisURLs() {
 	if suite.rdb == nil {
 		suite.T().Skip("Redis not available")
 		return
 	}
 
-	// 测试不同的 Redis URL 格式
+	// Test different Redis URL formats
 	validURLs := []string{
 		"redis://localhost:6379/15",
 		"redis://@localhost:6379/15",
@@ -202,40 +212,40 @@ func (suite *ChainkitTestSuite) TestNewWithDifferentRedisURLs() {
 	}
 
 	for _, url := range validURLs {
-		chainkit := New(suite.mockOperator, suite.mockNodeDB, url)
+		chainkit := New(suite.optGoar, suite.mockNodeDB, url)
 		assert.NotNil(suite.T(), chainkit, "Failed to create chainkit with URL: %s", url)
 		assert.NotNil(suite.T(), chainkit.redis, "Redis client should not be nil for URL: %s", url)
 		chainkit.Close()
 	}
 }
 
-// TestNewContextAndCancel 测试 context 和 cancel 函数的正确性
+// TestNewContextAndCancel test correctness of context and cancel functions
 func (suite *ChainkitTestSuite) TestNewContextAndCancel() {
 	if suite.rdb == nil {
 		suite.T().Skip("Redis not available")
 		return
 	}
 
-	chainkit := New(suite.mockOperator, suite.mockNodeDB, "redis://@localhost:6379/15")
+	chainkit := New(suite.optGoar, suite.mockNodeDB, "redis://@localhost:6379/15")
 	assert.NotNil(suite.T(), chainkit)
 	assert.NotNil(suite.T(), chainkit.ctx)
 	assert.NotNil(suite.T(), chainkit.cancel)
 
-	// 验证 context 初始状态
+	// Verify initial context state
 	select {
 	case <-chainkit.ctx.Done():
 		suite.T().Error("Context should not be cancelled initially")
 	default:
-		// Context 未取消，正确
+		// Context not cancelled, correct
 	}
 
-	// 测试 cancel 函数
+	// Test cancel function
 	chainkit.cancel()
 
-	// 验证 context 已被取消
+	// Verify context has been cancelled
 	select {
 	case <-chainkit.ctx.Done():
-		// Context 已取消，正确
+		// Context cancelled, correct
 	case <-time.After(100 * time.Millisecond):
 		suite.T().Error("Context should be cancelled after calling cancel()")
 	}
@@ -243,22 +253,22 @@ func (suite *ChainkitTestSuite) TestNewContextAndCancel() {
 	chainkit.Close()
 }
 
-// TestNewWithInvalidRedisURL 测试使用无效 Redis URL 创建
+// TestNewWithInvalidRedisURL test creating with invalid Redis URL
 func (suite *ChainkitTestSuite) TestNewWithInvalidRedisURL() {
-	// 测试无效的 Redis URL 应该 panic
+	// Test invalid Redis URL should panic
 	assert.Panics(suite.T(), func() {
-		New(suite.mockOperator, suite.mockNodeDB, "invalid-redis-url")
+		New(suite.optGoar, suite.mockNodeDB, "invalid-redis-url")
 	})
 }
 
-// TestUpload 测试 Upload 方法
+// TestUpload test Upload method
 func (suite *ChainkitTestSuite) TestUpload() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
 		return
 	}
 
-	// 测试正常上传
+	// Test normal upload
 	testTx := goarSchema.BundleItem{
 		Id:   "test_tx_123",
 		Data: "test data",
@@ -267,20 +277,20 @@ func (suite *ChainkitTestSuite) TestUpload() {
 	err := suite.chainkit.Upload(testTx)
 	assert.NoError(suite.T(), err)
 
-	// 验证交易ID已添加到待上传集合
-	members, err := suite.chainkit.GetUploads()
+	// Verify transaction ID has been added to upload set
+	members, err := suite.chainkit.getUploads()
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), members, testTx.Id)
 }
 
-// TestUploadConcurrency 测试 Upload 方法的并发安全性
+// TestUploadConcurrency test concurrency safety of Upload method
 func (suite *ChainkitTestSuite) TestUploadConcurrency() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
 		return
 	}
 
-	// 并发上传多个交易
+	// Concurrently upload multiple transactions
 	const numGoroutines = 10
 	const numTxPerGoroutine = 5
 
@@ -306,18 +316,18 @@ func (suite *ChainkitTestSuite) TestUploadConcurrency() {
 	wg.Wait()
 	close(errorChan)
 
-	// 检查是否有错误
+	// Check for errors
 	for err := range errorChan {
 		suite.T().Errorf("Concurrent upload error: %v", err)
 	}
 
-	// 验证所有交易都已添加
-	txids, err := suite.chainkit.GetUploads()
+	// Verify all transactions have been added
+	txids, err := suite.chainkit.getUploads()
 	assert.NoError(suite.T(), err)
 	assert.GreaterOrEqual(suite.T(), len(txids), numGoroutines*numTxPerGoroutine)
 }
 
-// TestUploadWithSpecialCharacters 测试包含特殊字符的交易上传
+// TestUploadWithSpecialCharacters test uploading transactions with special characters
 func (suite *ChainkitTestSuite) TestUploadWithSpecialCharacters() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
@@ -336,22 +346,22 @@ func (suite *ChainkitTestSuite) TestUploadWithSpecialCharacters() {
 		assert.NoError(suite.T(), err, "Failed to upload tx with ID: %s", tx.Id)
 	}
 
-	// 验证所有特殊字符交易都已添加
-	txids, err := suite.chainkit.GetUploads()
+	// Verify all special character transactions have been added
+	txids, err := suite.chainkit.getUploads()
 	assert.NoError(suite.T(), err)
 	for _, tx := range specialTxs {
 		assert.Contains(suite.T(), txids, tx.Id)
 	}
 }
 
-// TestUploadLargeData 测试上传大数据交易
+// TestUploadLargeData test uploading large data transactions
 func (suite *ChainkitTestSuite) TestUploadLargeData() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
 		return
 	}
 
-	// 创建大数据交易（1MB 数据）
+	// Create large data transaction (1MB data)
 	largeData := strings.Repeat("a", 1024*1024)
 	largeTx := goarSchema.BundleItem{
 		Id:   "large_tx_1mb",
@@ -361,20 +371,20 @@ func (suite *ChainkitTestSuite) TestUploadLargeData() {
 	err := suite.chainkit.Upload(largeTx)
 	assert.NoError(suite.T(), err)
 
-	// 验证大数据交易已添加
-	txids, err := suite.chainkit.GetUploads()
+	// Verify large data transaction has been added
+	txids, err := suite.chainkit.getUploads()
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), txids, "large_tx_1mb")
 }
 
-// TestUploadWithEmptyId 测试上传空ID的交易
+// TestUploadWithEmptyId test uploading transaction with empty ID
 func (suite *ChainkitTestSuite) TestUploadWithEmptyId() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
 		return
 	}
 
-	// 测试空ID应该返回错误
+	// Test empty ID should return error
 	testTx := goarSchema.BundleItem{
 		Id:   "",
 		Data: "test data",
@@ -385,14 +395,14 @@ func (suite *ChainkitTestSuite) TestUploadWithEmptyId() {
 	assert.Contains(suite.T(), err.Error(), "invalid bundle item: empty id")
 }
 
-// TestUploadWithWhitespaceId 测试上传只包含空白字符ID的交易
+// TestUploadWithWhitespaceId test uploading transaction with whitespace-only ID
 func (suite *ChainkitTestSuite) TestUploadWithWhitespaceId() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
 		return
 	}
 
-	// 测试只包含空白字符的ID - Upload方法只检查空字符串，不检查空白字符，所以这些应该被接受
+	// Test IDs containing only whitespace - Upload method only checks empty strings, not whitespace, so these should be accepted
 	whitespaceIds := []string{" ", "\t", "\n", "\r", "   ", "\t\n\r "}
 
 	for _, id := range whitespaceIds {
@@ -406,7 +416,7 @@ func (suite *ChainkitTestSuite) TestUploadWithWhitespaceId() {
 	}
 }
 
-// TestUploadDuplicate 测试重复上传相同交易
+// TestUploadDuplicate test uploading duplicate transactions
 func (suite *ChainkitTestSuite) TestUploadDuplicate() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
@@ -418,153 +428,153 @@ func (suite *ChainkitTestSuite) TestUploadDuplicate() {
 		Data: "test data",
 	}
 
-	// 第一次上传
+	// First upload
 	err := suite.chainkit.Upload(testTx)
 	assert.NoError(suite.T(), err)
 
-	// 第二次上传相同交易（应该被去重）
+	// Second upload of same transaction (should be deduplicated)
 	err = suite.chainkit.Upload(testTx)
 	assert.NoError(suite.T(), err)
 
-	// 验证只有一个交易ID
-	count, err := suite.chainkit.GetUploadsCount()
+	// Verify only one transaction ID
+	count, err := suite.chainkit.getUploadsCount()
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(1), count)
 }
 
-// TestClose 测试 Close 方法
+// TestClose test Close method
 func (suite *ChainkitTestSuite) TestClose() {
 	if suite.rdb == nil {
 		suite.T().Skip("Redis not available")
 		return
 	}
 
-	// 创建一个新的 Chainkit 实例用于测试关闭
-	chainkit := New(suite.mockOperator, suite.mockNodeDB, "redis://@localhost:6379/15")
+	// Create a new Chainkit instance for testing close
+	chainkit := New(suite.optGoar, suite.mockNodeDB, "redis://@localhost:6379/15")
 	assert.NotNil(suite.T(), chainkit)
 
-	// 测试关闭
+	// Test close
 	chainkit.Close()
 
-	// 验证 context 已被取消
+	// Verify context has been cancelled
 	select {
 	case <-chainkit.ctx.Done():
-		// Context 已取消，测试通过
+		// Context cancelled, test passed
 	case <-time.After(100 * time.Millisecond):
 		suite.T().Error("Context should be cancelled after Close()")
 	}
 }
 
-// TestRunAndClose 测试 Run 和 Close 方法的组合
+// TestRunAndClose test combination of Run and Close methods
 func (suite *ChainkitTestSuite) TestRunAndClose() {
 	if suite.rdb == nil {
 		suite.T().Skip("Redis not available")
 		return
 	}
 
-	// 创建一个新的 Chainkit 实例
-	chainkit := New(suite.mockOperator, suite.mockNodeDB, "redis://@localhost:6379/15")
+	// Create a new Chainkit instance
+	chainkit := New(suite.optGoar, suite.mockNodeDB, "redis://@localhost:6379/15")
 	assert.NotNil(suite.T(), chainkit)
 
-	// 启动 Chainkit
+	// Start Chainkit
 	chainkit.Run()
 
-	// 等待一小段时间让 goroutines 启动
+	// Wait a short time for goroutines to start
 	time.Sleep(50 * time.Millisecond)
 
-	// 关闭 Chainkit
+	// Close Chainkit
 	chainkit.Close()
 
-	// 验证 context 已被取消
+	// Verify context has been cancelled
 	select {
 	case <-chainkit.ctx.Done():
-		// Context 已取消，测试通过
+		// Context cancelled, test passed
 	case <-time.After(100 * time.Millisecond):
 		suite.T().Error("Context should be cancelled after Close()")
 	}
 }
 
-// TestRunMultipleTimes 测试多次调用 Run 方法
+// TestRunMultipleTimes test calling Run method multiple times
 func (suite *ChainkitTestSuite) TestRunMultipleTimes() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
 		return
 	}
 
-	// 多次调用 Run 应该是安全的
+	// Multiple calls to Run should be safe
 	for i := 0; i < 3; i++ {
 		suite.chainkit.Run()
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	// 验证 context 仍然有效
+	// Verify context is still valid
 	select {
 	case <-suite.chainkit.ctx.Done():
 		suite.T().Error("Context should not be cancelled after multiple Run() calls")
 	default:
-		// Context 未取消，正确
+		// Context not cancelled, correct
 	}
 
 	suite.chainkit.Close()
 }
 
-// TestCloseMultipleTimes 测试多次调用 Close 方法
+// TestCloseMultipleTimes test calling Close method multiple times
 func (suite *ChainkitTestSuite) TestCloseMultipleTimes() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
 		return
 	}
 
-	// 先运行以初始化
+	// Run first to initialize
 	suite.chainkit.Run()
 	time.Sleep(10 * time.Millisecond)
 
-	// 多次调用 Close 应该是安全的
+	// Multiple calls to Close should be safe
 	for i := 0; i < 3; i++ {
 		suite.chainkit.Close()
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	// 验证 Close 方法被调用（通过日志可以看到）
-	// 不验证 context 状态，因为实现可能不会立即取消 context
+	// Verify Close method was called (can be seen through logs)
+	// Don't verify context state, as implementation may not immediately cancel context
 	suite.True(true, "Multiple Close calls should be safe")
 }
 
-// TestCloseWithoutRun 测试在没有调用 Run 的情况下调用 Close
+// TestCloseWithoutRun test calling Close without calling Run
 func (suite *ChainkitTestSuite) TestCloseWithoutRun() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
 		return
 	}
 
-	// 直接调用 Close 而不先调用 Run
+	// Call Close directly without calling Run first
 	suite.chainkit.Close()
 
-	// 验证 Close 方法可以安全调用（通过日志可以看到）
+	// Verify Close method can be safely called (can be seen through logs)
 	suite.True(true, "Close should be safe to call without Run")
 }
 
-// TestRunAfterClose 测试在 Close 后调用 Run
+// TestRunAfterClose test calling Run after Close
 func (suite *ChainkitTestSuite) TestRunAfterClose() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
 		return
 	}
 
-	// 先运行然后关闭
+	// Run first then close
 	suite.chainkit.Run()
 	time.Sleep(50 * time.Millisecond)
 	suite.chainkit.Close()
 
-	// 在 Close 后调用 Run 应该是安全的
+	// Calling Run after Close should be safe
 	suite.chainkit.Run()
 	time.Sleep(50 * time.Millisecond)
 
-	// 验证方法调用是安全的（通过日志可以看到）
+	// Verify method calls are safe (can be seen through logs)
 	suite.True(true, "Run after Close should be safe")
 }
 
-// TestConcurrentRunAndClose 测试并发调用 Run 和 Close
+// TestConcurrentRunAndClose test concurrent calls to Run and Close
 func (suite *ChainkitTestSuite) TestConcurrentRunAndClose() {
 	if suite.chainkit == nil {
 		suite.T().Skip("Chainkit not initialized")
@@ -574,7 +584,7 @@ func (suite *ChainkitTestSuite) TestConcurrentRunAndClose() {
 	var wg sync.WaitGroup
 	const numGoroutines = 10
 
-	// 并发调用 Run
+	// Concurrent calls to Run
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func() {
@@ -583,10 +593,10 @@ func (suite *ChainkitTestSuite) TestConcurrentRunAndClose() {
 		}()
 	}
 
-	// 等待一段时间
+	// Wait for a while
 	time.Sleep(100 * time.Millisecond)
 
-	// 并发调用 Close
+	// Concurrent calls to Close
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func() {
@@ -597,18 +607,83 @@ func (suite *ChainkitTestSuite) TestConcurrentRunAndClose() {
 
 	wg.Wait()
 
-	// 验证并发调用是安全的（通过日志可以看到）
+	// Verify concurrent calls are safe (can be seen through logs)
 	suite.True(true, "Concurrent Run and Close calls should be safe")
 }
 
-// TestChainkitTestSuite 运行测试套件
+func (suite *ChainkitTestSuite) TestGetParentTxid() {
+	expectedID := "tiB55vvqzNvUOE5AVf5OsaO88R-5rmRHmasinXn3MKE"
+	txid := "ydzdP-svCgeZFj3MseCNVJgK94RCujPPI8xOw5SJZ6w"
+
+	parentTxid, err := suite.chainkit.getParentTxid(txid)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expectedID, parentTxid)
+}
+
+// TestParseBundledInID test parseBundledInID function
+func (suite *ChainkitTestSuite) TestParseBundledInID() {
+	// Test successful parsing
+	expectedID := "tiB55vvqzNvUOE5AVf5OsaO88R-5rmRHmasinXn3MKE"
+	validJSON := fmt.Sprintf(`{
+		"transaction": {
+			"bundledIn": {
+				"id": "%s"
+			}
+		}
+	}`, expectedID)
+
+	id, err := suite.chainkit.parseBundledInID(validJSON)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), expectedID, id)
+
+	// Test invalid JSON
+	invalidJSON := "invalid json"
+	id, err = suite.chainkit.parseBundledInID(invalidJSON)
+	assert.Error(suite.T(), err)
+	assert.Empty(suite.T(), id)
+
+	// Test empty ID
+	emptyIDJSON := `{
+		"transaction": {
+			"bundledIn": {
+				"id": ""
+			}
+		}
+	}`
+	id, err = suite.chainkit.parseBundledInID(emptyIDJSON)
+	assert.Error(suite.T(), err)
+	assert.Empty(suite.T(), id)
+	assert.Contains(suite.T(), err.Error(), "bundledIn.id not found or empty")
+
+	// Test missing bundledIn field
+	missingBundledInJSON := `{
+		"transaction": {}
+	}`
+	id, err = suite.chainkit.parseBundledInID(missingBundledInJSON)
+	assert.Error(suite.T(), err)
+	assert.Empty(suite.T(), id)
+	assert.Contains(suite.T(), err.Error(), "bundledIn.id not found or empty")
+
+	// Test null bundledIn
+	nullBundledInJSON := `{
+		"transaction": {
+			"bundledIn": null
+		}
+	}`
+	id, err = suite.chainkit.parseBundledInID(nullBundledInJSON)
+	assert.Error(suite.T(), err)
+	assert.Empty(suite.T(), id)
+	assert.Contains(suite.T(), err.Error(), "bundledIn.id not found or empty")
+}
+
+// TestChainkitTestSuite run test suite
 func TestChainkitTestSuite(t *testing.T) {
 	suite.Run(t, new(ChainkitTestSuite))
 }
 
-// 基准测试
+// Benchmark tests
 
-// BenchmarkUpload 上传操作的基准测试
+// BenchmarkUpload benchmark test for upload operations
 func BenchmarkUpload(b *testing.B) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
@@ -616,22 +691,30 @@ func BenchmarkUpload(b *testing.B) {
 	})
 	defer rdb.Close()
 
-	// 检查 Redis 连接
+	// Check Redis connection
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		b.Skip("Redis server is not available, skipping benchmark")
 		return
 	}
 
-	// 清理测试数据
+	// Clean up test data
 	rdb.FlushDB(ctx)
 
-	mockOperator := schema.NewMockOperator()
+	// Create OptGoar instance
+	path := "./optgoar/arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json"
+	wallet, err := goar.NewWalletFromPath(path, "https://arweave.net")
+	var optGoarInstance *optgoar.OptGoar
+	if err != nil {
+		optGoarInstance = optgoar.New(nil, ctx)
+	} else {
+		optGoarInstance = optgoar.New(wallet, ctx)
+	}
 	mockNodeDB := NewMockNodeDB()
 
 	chainkit := &Chainkit{
 		node:     mockNodeDB,
-		operator: mockOperator,
+		operator: optGoarInstance,
 		aggregationPolicy: schema.AggregationPolicy{
 			MaxItems: 1000,
 			MaxDelay: 5 * time.Minute,
@@ -650,14 +733,34 @@ func BenchmarkUpload(b *testing.B) {
 	}
 }
 
-// BenchmarkNew 创建 Chainkit 实例的基准测试
+// BenchmarkNew benchmark test for creating Chainkit instances
 func BenchmarkNew(b *testing.B) {
-	mockOperator := schema.NewMockOperator()
+	// Check Redis connection
+	rdb := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		DB:   15,
+	})
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		b.Skip("Redis server is not available, skipping benchmark")
+		return
+	}
+	rdb.Close()
+
+	// Create OptGoar instance
+	path := "./optgoar/arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json"
+	wallet, err := goar.NewWalletFromPath(path, "https://arweave.net")
+	var optGoarInstance *optgoar.OptGoar
+	if err != nil {
+		optGoarInstance = optgoar.New(nil, ctx)
+	} else {
+		optGoarInstance = optgoar.New(wallet, ctx)
+	}
 	mockNodeDB := NewMockNodeDB()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		chainkit := New(mockOperator, mockNodeDB, "redis://@localhost:6379/15")
+		chainkit := New(optGoarInstance, mockNodeDB, "redis://@localhost:6379/15")
 		chainkit.Close()
 	}
 }

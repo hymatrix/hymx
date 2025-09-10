@@ -1,3 +1,7 @@
 package chainkit
 
-// 实现 Chainkit 下载功能
+import goarSchema "github.com/permadao/goar/schema"
+
+func (c *Chainkit) download(parentTxID string, itemsIds []string) (items []*goarSchema.BundleItem, err error) {
+	return c.operator.Download(parentTxID, itemsIds)
+}

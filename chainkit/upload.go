@@ -8,25 +8,25 @@ import (
 	goarSchema "github.com/permadao/goar/schema"
 )
 
-// uploadToChain 实现 Chainkit 上传功能
-// 将多个 BundleItem 打包上传到区块链网络
-// 返回父交易ID，用于后续状态跟踪
+// uploadToChain implements Chainkit upload functionality
+// Packages multiple BundleItems and uploads to blockchain network
+// Returns parent transaction ID for subsequent status tracking
 func (c *Chainkit) uploadToChain(items []goarSchema.BundleItem) (parentTxID string, err error) {
 	log.Info("uploading bundle items", "count", len(items))
 	return c.operator.Upload(items)
 }
 
-// 实现 Chainkit 交易聚合功能
-// 从 uploadSet 获取所有待上传txid
-// 从 idb 获取所有交易
-// 使用 goar
-// 使用 operator.Upload上传
-// 如果成功，从 uploadSet 中移除，加入 uploadingSet（记录父交易ID）
-// 如果失败，等待下一次聚合
+// Implements Chainkit transaction aggregation functionality
+// Gets all pending upload txids from uploadSet
+// Gets all transactions from idb
+// Uses goar
+// Uses operator.Upload for uploading
+// If successful, removes from uploadSet and adds to uploadingSet (records parent transaction ID)
+// If failed, waits for next aggregation
 func (c *Chainkit) aggregate() (string, error) {
-	// 收集当前所有待上传的子交易
+	// Collect all currently pending sub transactions
 	c.mu.Lock()
-	txids, err := c.GetUploads()
+	txids, err := c.getUploads()
 	if err != nil {
 		c.mu.Unlock()
 		return "", err
@@ -42,26 +42,26 @@ func (c *Chainkit) aggregate() (string, error) {
 		return "", nil
 	}
 
-	// 调用 operator.Upload 进行聚合上传（由 operator 实现具体打包逻辑）
+	// Call operator.Upload for aggregated upload (operator implements specific packaging logic)
 	parentTxID, err := c.uploadToChain(items)
 	if err != nil {
 		return "", err
 	}
 
-	// 成功：从待上传移除，加入 uploading 集合
+	// Success: remove from pending upload, add to uploading set
 	uploaded := make([]string, len(items))
 	for _, item := range items {
 		uploaded = append(uploaded, item.Id)
 	}
-	if err = c.MoveToPending(parentTxID, uploaded); err != nil {
+	if err = c.moveToPending(parentTxID, uploaded); err != nil {
 		return "", err
 	}
 
 	return parentTxID, nil
 }
 
-// 在一个 goroutine 中执行聚合任务
-// 按照 aggregationPolicy 进行聚合（仅时间条件）
+// Execute aggregation tasks in a goroutine
+// Aggregate according to aggregationPolicy (time condition only)
 func (c *Chainkit) tryByTime() {
 	interval := c.aggregationPolicy.MaxDelay // second
 	ticker := time.NewTicker(interval * time.Second)
@@ -78,7 +78,7 @@ func (c *Chainkit) tryByTime() {
 }
 
 func (c *Chainkit) tryByCount() {
-	n, err := c.GetUploadsCount()
+	n, err := c.getUploadsCount()
 	if err != nil {
 		return
 	}
@@ -87,12 +87,12 @@ func (c *Chainkit) tryByCount() {
 	}
 }
 
-// checkTimeout 检查父交易是否超时（超过1小时未确认）
+// checkTimeout checks if parent transaction has timed out (over 1 hour unconfirmed)
 func (c *Chainkit) checkTimeout(parentTxID string) bool {
-	// 从 Redis 获取父交易的上传时间戳
+	// Get parent transaction upload timestamp from Redis
 	uploadTimeStr, err := c.redis.HGet(c.ctx, RedisKeyUploadTimestamp, parentTxID).Result()
 	if err != nil {
-		// 没有记录或获取失败，可能是旧交易，不处理
+		// No record or retrieval failed, possibly old transaction, do not process
 		return false
 	}
 
@@ -101,44 +101,44 @@ func (c *Chainkit) checkTimeout(parentTxID string) bool {
 		return false
 	}
 
-	// 检查是否超过1小时
+	// Check if over 1 hour has passed
 	return time.Now().Unix()-uploadTime > 3600
 }
 
-// reupload 重新上传超时的父交易
+// reupload re-uploads timed out parent transactions
 func (c *Chainkit) reupload(parentTxID string) (string, error) {
 	log.Debug("reupload parent transaction", "txid", parentTxID)
 
-	// 获取该父交易下的所有子交易ID
-	subTxIDs, err := c.GetPendingSub(parentTxID)
+	// Get all sub transaction IDs under this parent transaction
+	subTxIDs, err := c.getPendingSub(parentTxID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get pending sub transactions: %w", err)
 	}
 
-	// 重新聚合这些子交易
+	// Re-aggregate these sub transactions
 	items := c.getBundleItems(subTxIDs)
 	if len(items) == 0 {
 		return "", fmt.Errorf("no valid items to reupload")
 	}
 
-	// 重新上传
+	// Re-upload
 	newParentTxID, err := c.uploadToChain(items)
 	if err != nil {
 		log.Error("Failed to reupload parent transaction", "txid", parentTxID, "err", err)
 		return "", fmt.Errorf("failed to upload to chain: %w", err)
 	}
 
-	// 更新 Redis 记录：移除旧的父交易记录，添加新的
-	// 移除旧记录
-	if err := c.RemovePending(parentTxID); err != nil {
+	// Update Redis records: remove old parent transaction record, add new one
+	// Remove old record
+	if err := c.removePending(parentTxID); err != nil {
 		return "", fmt.Errorf("failed to remove pending record: %w", err)
 	}
-	// 添加新记录
+	// Add new record
 	uploaded := make([]string, len(items))
 	for _, item := range items {
 		uploaded = append(uploaded, item.Id)
 	}
-	if err := c.MoveToPending(newParentTxID, uploaded); err != nil {
+	if err := c.moveToPending(newParentTxID, uploaded); err != nil {
 		return "", fmt.Errorf("failed to move to pending: %w", err)
 	}
 
@@ -146,7 +146,7 @@ func (c *Chainkit) reupload(parentTxID string) (string, error) {
 	return newParentTxID, nil
 }
 
-// getBundleItems 从给定的交易ID列表中收集BundleItem数据
+// getBundleItems collects BundleItem data from given transaction ID list
 func (c *Chainkit) getBundleItems(txids []string) []goarSchema.BundleItem {
 	items := make([]goarSchema.BundleItem, 0, len(txids)*2)
 	for _, txid := range txids {
@@ -160,7 +160,7 @@ func (c *Chainkit) getBundleItems(txids []string) []goarSchema.BundleItem {
 	return items
 }
 
-// 每隔 5 分钟检查交易状态（检查父交易是否确认）
+// Check transaction status every 5 minutes (check if parent transaction is confirmed)
 func (c *Chainkit) check() {
 	interval := 5 * time.Minute
 	ticker := time.NewTicker(interval)
@@ -171,22 +171,22 @@ func (c *Chainkit) check() {
 		case <-c.ctx.Done():
 			return
 		case <-ticker.C:
-			// 获取所有待确认的父交易ID
-			parentIDs, err := c.GetPendings()
+			// Get all pending parent transaction IDs
+			parentIDs, err := c.getPendings()
 			if err != nil {
 				continue
 			}
 			for _, txid := range parentIDs {
-				// 检查是否超时（超过1小时未确认）
+				// Check if timed out (over 1 hour unconfirmed)
 				if c.checkTimeout(txid) {
 					if _, err := c.reupload(txid); err == nil {
-						continue // 已重新上传，跳过当前检查
+						continue // Already re-uploaded, skip current check
 					}
 				}
 
 				ok, err := c.operator.CheckTransaction(txid)
 				if err == nil && ok {
-					c.RemovePending(txid)
+					c.removePending(txid)
 				}
 			}
 		}
