@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/go-co-op/gocron"
 	"github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/common"
 	goarSchema "github.com/permadao/goar/schema"
@@ -17,6 +18,7 @@ type Chainkit struct {
 	node              schema.INodeDB
 	operator          schema.IOperator
 	aggregationPolicy schema.AggregationPolicy
+	scheduler         *gocron.Scheduler
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -41,21 +43,23 @@ func New(op schema.IOperator, node schema.INodeDB, redisUrl string) *Chainkit {
 			MaxItems: 1000,
 			MaxDelay: 5 * time.Minute,
 		},
-		ctx:    ctx,
-		cancel: cancel,
-		redis:  redis.NewClient(redisOpt),
+		scheduler: gocron.NewScheduler(time.UTC),
+		ctx:       ctx,
+		cancel:    cancel,
+		redis:     redis.NewClient(redisOpt),
 	}
 }
 
 func (c *Chainkit) Run() {
 	log.Info("chainkit run")
-	go c.checkTask()
+	c.runJobs()
 }
 
 func (c *Chainkit) Close() {
 	if c.cancel != nil {
 		c.cancel()
 	}
+	c.scheduler.Stop()
 	log.Info("chainkit closed")
 }
 

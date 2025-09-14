@@ -99,19 +99,3 @@ func (c *Chainkit) checkTimeout(parentTxID string) bool {
 	// Check if over 1 hour has passed
 	return time.Now().Unix()-uploadTime > 3600
 }
-
-// Check transaction status every 5 minutes (check if parent transaction is confirmed)
-func (c *Chainkit) checkTask() {
-	interval := 5 * time.Minute
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case <-ticker.C:
-			c.check()
-		}
-	}
-}
