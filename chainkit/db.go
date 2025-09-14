@@ -11,8 +11,7 @@ const (
 	RedisKeyUploads         = "chainkit:uploads"
 	RedisKeyPendingPrefix   = "chainkit:pending:"          // Hash key prefix: chainkit:pending:{parentTxID}
 	RedisKeyUploadTimestamp = "chainkit:upload_timestamps" // Hash key for storing upload timestamps
-
-	// todo: record uploaded txid
+	RedisKeyUploadedTxids   = "chainkit:uploaded_txids"    // Set key for storing uploaded transaction IDs
 )
 
 // Redis operation wrapper functions
@@ -132,4 +131,13 @@ func (c *Chainkit) removePending(parentTxID string) error {
 	pipe.HDel(c.ctx, RedisKeyUploadTimestamp, parentTxID)
 	_, err := pipe.Exec(c.ctx)
 	return err
+}
+
+// isUploadedTxid checks if a transaction ID has already been uploaded
+func (c *Chainkit) isUploaded(txid string) (bool, error) {
+	return c.redis.SIsMember(c.ctx, RedisKeyUploadedTxids, txid).Result()
+}
+
+func (c *Chainkit) addUploaded(txids []string) error {
+	return c.redis.SAdd(c.ctx, RedisKeyUploadedTxids, txids).Err()
 }

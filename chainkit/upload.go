@@ -12,7 +12,14 @@ import (
 // Packages multiple BundleItems and uploads to blockchain network
 // Returns parent transaction ID for subsequent status tracking
 func (c *Chainkit) uploadToChain(txids []string) (parentTxID string, err error) {
-	items := c.getBundleItems(txids)
+	// Filter out already uploaded txids to avoid duplicates
+	filteredTxids := c.filterUnuploadedTxids(txids)
+	if len(filteredTxids) == 0 {
+		log.Info("All txids already uploaded, skipping")
+		return "", nil
+	}
+
+	items := c.getBundleItems(filteredTxids)
 	if len(items) == 0 {
 		return "", nil
 	}
@@ -23,11 +30,29 @@ func (c *Chainkit) uploadToChain(txids []string) (parentTxID string, err error) 
 	}
 
 	// Add transactions to new parent
-	if err = c.updateParentId(parentTxID, txids); err != nil {
+	if err = c.updateParentId(parentTxID, filteredTxids); err != nil {
 		return "", err
 	}
 
 	return parentTxID, nil
+}
+
+// filterUnuploadedTxids filters out txids that have already been uploaded
+func (c *Chainkit) filterUnuploadedTxids(txids []string) []string {
+	var filteredTxids []string
+	for _, txid := range txids {
+		uploaded, err := c.isUploaded(txid)
+		if err != nil {
+			log.Error("Failed to check uploaded txid", "txid", txid, "err", err)
+			continue
+		}
+		if !uploaded {
+			filteredTxids = append(filteredTxids, txid)
+		} else {
+			log.Info("Skipping already uploaded txid", "txid", txid)
+		}
+	}
+	return filteredTxids
 }
 
 // getBundleItems collects BundleItem data from given transaction ID list
@@ -76,9 +101,17 @@ func (c *Chainkit) check() {
 		}
 		ok, err := c.operator.CheckTransaction(parentID)
 		if err == nil && ok {
+			// Get all txids under this parent before removing
+
+			txids, err := c.getPendingsByParentID(parentID)
+			if err == nil {
+				if err := c.addUploaded(txids); err != nil {
+					log.Error("Failed to record uploaded txids", "txids", txids, "err", err)
+				}
+			}
+
 			c.removePending(parentID)
 		}
-		// TODO: record txid
 	}
 }
 

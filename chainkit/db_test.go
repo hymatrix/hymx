@@ -444,6 +444,46 @@ func (suite *DBTestSuite) TestEdgeCases() {
 	assert.NoError(suite.T(), err)
 }
 
+// TestUploadedTxids tests uploaded txid tracking functionality
+func (suite *DBTestSuite) TestUploadedTxids() {
+	// Test adding uploaded txids
+	txid1 := "uploaded-txid-1"
+	txid2 := "uploaded-txid-2"
+
+	// Initially should not be uploaded
+	uploaded, err := suite.chainkit.isUploaded(txid1)
+	assert.NoError(suite.T(), err)
+	assert.False(suite.T(), uploaded)
+
+	// Add to uploaded set
+	err = suite.chainkit.addUploaded([]string{txid1})
+	assert.NoError(suite.T(), err)
+	err = suite.chainkit.addUploaded([]string{txid2})
+	assert.NoError(suite.T(), err)
+
+	// Check if uploaded
+	uploaded, err = suite.chainkit.isUploaded(txid1)
+	assert.NoError(suite.T(), err)
+	assert.True(suite.T(), uploaded)
+
+	uploaded, err = suite.chainkit.isUploaded(txid2)
+	assert.NoError(suite.T(), err)
+	assert.True(suite.T(), uploaded)
+
+	// Test duplicate addition (should not increase count)
+	err = suite.chainkit.addUploaded([]string{txid1})
+	assert.NoError(suite.T(), err)
+
+	// Since we only have isUploaded and addUploaded methods, we'll test basic functionality
+	uploaded, err = suite.chainkit.isUploaded(txid1)
+	assert.NoError(suite.T(), err)
+	assert.True(suite.T(), uploaded)
+
+	uploaded, err = suite.chainkit.isUploaded(txid2)
+	assert.NoError(suite.T(), err)
+	assert.True(suite.T(), uploaded)
+}
+
 // TestDBTestSuite run test suite
 func TestDBTestSuite(t *testing.T) {
 	suite.Run(t, new(DBTestSuite))
