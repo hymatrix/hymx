@@ -1,4 +1,4 @@
-package chainkit
+package optgoar
 
 import (
 	"encoding/json"
@@ -24,14 +24,14 @@ type BundledInResponse struct {
 	} `json:"transaction"`
 }
 
-func (c *Chainkit) getParentTxid(txid string) (parentTxid string, err error) {
+func (o *OptGoar) GetParentTxid(txid string) (parentTxid string, err error) {
 	query := fmt.Sprintf(BundledInQueryTemplate, txid)
-	result, err := c.operator.GraphQL(query)
+	result, err := o.GraphQL(query)
 	if err != nil {
 		return
 	}
 
-	parentTxid, err = c.parseBundledInID(string(result))
+	parentTxid, err = o.parseBundledInID(string(result))
 	if err != nil {
 		return "", fmt.Errorf("failed to parse parent txid: %w", err)
 	}
@@ -39,7 +39,7 @@ func (c *Chainkit) getParentTxid(txid string) (parentTxid string, err error) {
 	return parentTxid, nil
 }
 
-func (c *Chainkit) parseBundledInID(jsonStr string) (string, error) {
+func (o *OptGoar) parseBundledInID(jsonStr string) (string, error) {
 	var response BundledInResponse
 	fmt.Println(jsonStr)
 	err := json.Unmarshal([]byte(jsonStr), &response)

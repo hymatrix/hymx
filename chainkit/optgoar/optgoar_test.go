@@ -167,10 +167,10 @@ func (suite *OptGoarTestSuite) TestDownloadWithValidParams() {
 		return
 	}
 
-	parentTxID := "tiB55vvqzNvUOE5AVf5OsaO88R-5rmRHmasinXn3MKE"
-	itemsIds := []string{"ydzdP-svCgeZFj3MseCNVJgK94RCujPPI8xOw5SJZ6w", "x8r4SYW3S_yyoaPUsbDcAFoxBVhaWZPKxYZf_RiwQdQ"}
+	// parentTxID := "tiB55vvqzNvUOE5AVf5OsaO88R-5rmRHmasinXn3MKE"
+	itemsIds := []string{"ydzdP-svCgeZFj3MseCNVJgK94RCujPII8xOw5SJZ6w", "x8r4SYW3S_yyoaPUsbDcAFoxBVhaWZPKxYZf_RiwQdQ"}
 
-	items, err := suite.optGoar.Download(parentTxID, itemsIds)
+	items, err := suite.optGoar.Downloads(itemsIds)
 	for _, item := range items {
 		data, err := goarUtils.Base64Decode(item.Data)
 		assert.NoError(suite.T(), err)
@@ -190,10 +190,9 @@ func (suite *OptGoarTestSuite) TestDownloadWithEmptyParams() {
 		return
 	}
 
-	parentTxID := ""
 	itemsIds := []string{}
 
-	items, err := suite.optGoar.Download(parentTxID, itemsIds)
+	items, err := suite.optGoar.Downloads(itemsIds)
 
 	// Empty parameters may cause errors or return empty results
 	if err != nil {
@@ -297,7 +296,8 @@ func (suite *OptGoarTestSuite) TestCheckTransactionWithValidTxid() {
 		return
 	}
 
-	txid := "valid-transaction-id-123456789abcdef"
+	//txid := "valid-transaction-id-123456789abcdef"
+	txid := "tiB55vvqzNvUOE5AVf5OsaO88R-5rmRHmasinXn3MKE"
 
 	isValid, err := suite.optGoar.CheckTransaction(txid)
 

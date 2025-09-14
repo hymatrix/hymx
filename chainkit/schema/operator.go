@@ -10,11 +10,12 @@ type IOperator interface {
 	// The outermost BundleItem's txID is used as parentTxID when downloading.
 	Upload(items []goarSchema.BundleItem) (txid string, err error)
 
-	// Download a transaction in BundleItem form.
-	// parentTxID is the txID of the outermost BundleItem.
-	// childTxID is the txID of the innermost BundleItem that points to the original transaction.
-	// todo: remove parentTxID param
-	Download(parentTxID string, itemsIds []string) (items []*goarSchema.BundleItem, err error)
+	// Download a transaction
+	// return BundleItem format
+	Download(itemID string) (*goarSchema.BundleItem, error)
+
+	// Download multiple transactions
+	Downloads(itemIDs []string) ([]*goarSchema.BundleItem, error)
 
 	// Execute a GraphQL query.
 	GraphQL(query string) ([]byte, error)

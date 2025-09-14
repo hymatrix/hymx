@@ -42,8 +42,53 @@ func (o *OptGoar) Upload(items []goarSchema.BundleItem) (txid string, err error)
 	return tx.ID, nil
 }
 
-func (o *OptGoar) Download(parentTxID string, itemsIds []string) (items []*goarSchema.BundleItem, err error) {
-	return o.wallet.Client.GetBundleItems(parentTxID, itemsIds)
+// func (o *OptGoar) Download(parentTxID string, itemsIds []string) (items []*goarSchema.BundleItem, err error) {
+// 	return o.wallet.Client.GetBundleItems(parentTxID, itemsIds)
+// }
+
+func (o *OptGoar) Download(itemID string) (*goarSchema.BundleItem, error) {
+	parentTxID, err := o.GetParentTxid(itemID)
+	if err != nil {
+		return nil, err
+	}
+	item, err := o.wallet.Client.GetBundleItems(parentTxID, []string{itemID})
+	if err != nil {
+		return nil, err
+	}
+	if len(item) == 0 {
+		return nil, fmt.Errorf("download failed")
+	}
+	return item[0], nil
+}
+
+func (o *OptGoar) Downloads(itemsIds []string) (items []*goarSchema.BundleItem, err error) {
+	if len(itemsIds) == 0 {
+		return []*goarSchema.BundleItem{}, nil
+	}
+
+	// Map to group itemIDs by their parentTxid
+	parentToItems := make(map[string][]string)
+
+	// Get parentTxid for each itemID
+	for _, itemID := range itemsIds {
+		parentTxID, err := o.GetParentTxid(itemID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get parent txid for item %s: %w", itemID, err)
+		}
+		parentToItems[parentTxID] = append(parentToItems[parentTxID], itemID)
+	}
+
+	// Download items grouped by parentTxid
+	var allItems []*goarSchema.BundleItem
+	for parentTxID, itemIDs := range parentToItems {
+		bundleItems, err := o.wallet.Client.GetBundleItems(parentTxID, itemIDs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get bundle items for parent %s: %w", parentTxID, err)
+		}
+		allItems = append(allItems, bundleItems...)
+	}
+
+	return allItems, nil
 }
 
 func (o *OptGoar) GraphQL(query string) ([]byte, error) {
@@ -66,9 +111,12 @@ func (o *OptGoar) CheckTransaction(txid string) (bool, error) {
 		return false, err
 	}
 
-	_, err = goarUtils.DecodeBundle(itemBytes)
+	items, err := goarUtils.DecodeBundle(itemBytes)
 	if err != nil {
 		return false, err
+	}
+	for _, item := range items.Items {
+		fmt.Println("====>", item.Id)
 	}
 
 	return true, nil

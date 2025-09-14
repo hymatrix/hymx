@@ -2,7 +2,9 @@ package chainkit
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/go-co-op/gocron"
@@ -59,7 +61,9 @@ func (c *Chainkit) Close() {
 	if c.cancel != nil {
 		c.cancel()
 	}
-	c.scheduler.Stop()
+	if c.scheduler != nil {
+		c.scheduler.Stop()
+	}
 	log.Info("chainkit closed")
 }
 
@@ -83,18 +87,11 @@ func (c *Chainkit) Upload(tx goarSchema.BundleItem) error {
 // 3. Verify child transactions
 // 4. Return transaction
 func (c *Chainkit) DownloadByTxid(txid string) (goarSchema.BundleItem, error) {
-	parentTxID, err := c.getParentTxid(txid)
+	item, err := c.operator.Download(txid)
 	if err != nil {
 		return goarSchema.BundleItem{}, err
 	}
-	items, err := c.download(parentTxID, []string{txid})
-	if err != nil {
-		return goarSchema.BundleItem{}, err
-	}
-	if len(items) == 0 {
-		return goarSchema.BundleItem{}, errors.New("download failed")
-	}
-	return *items[0], nil
+	return *item, nil
 }
 
 // Download all transactions of a process, from specified Nonce to latest transaction
@@ -107,4 +104,48 @@ func (c *Chainkit) DownloadByPid(pid string, nonce int64) ([]goarSchema.BundleIt
 // Execute a GraphQL query
 func (c *Chainkit) Query(query string) ([]byte, error) {
 	return c.operator.GraphQL(query)
+}
+
+// getParentTxid gets the parent transaction ID for a given transaction ID
+func (c *Chainkit) getParentTxid(txid string) (string, error) {
+	query := fmt.Sprintf(`{
+		transaction(id: "%s") {
+			bundledIn {
+				id
+			}
+		}
+	}`, txid)
+	result, err := c.operator.GraphQL(query)
+	if err != nil {
+		return "", err
+	}
+
+	parentTxid, err := c.parseBundledInID(string(result))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse parent txid: %w", err)
+	}
+
+	return parentTxid, nil
+}
+
+// parseBundledInID parses the bundledIn ID from GraphQL response JSON
+func (c *Chainkit) parseBundledInID(jsonStr string) (string, error) {
+	var response struct {
+		Transaction struct {
+			BundledIn struct {
+				ID string `json:"id"`
+			} `json:"bundledIn"`
+		} `json:"transaction"`
+	}
+
+	err := json.Unmarshal([]byte(jsonStr), &response)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	if response.Transaction.BundledIn.ID == "" {
+		return "", fmt.Errorf("bundledIn.id not found or empty")
+	}
+
+	return response.Transaction.BundledIn.ID, nil
 }
