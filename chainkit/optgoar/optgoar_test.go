@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// OptGoarTestSuite 测试套件
+// OptGoarTestSuite test suite
 type OptGoarTestSuite struct {
 	suite.Suite
 	optGoar *OptGoar
@@ -21,32 +21,32 @@ type OptGoarTestSuite struct {
 	cancel  context.CancelFunc
 }
 
-// SetupSuite 在所有测试开始前运行
+// SetupSuite runs before all tests
 func (suite *OptGoarTestSuite) SetupSuite() {
 	suite.ctx, suite.cancel = context.WithCancel(context.Background())
 }
 
-// TearDownSuite 在所有测试结束后运行
+// TearDownSuite runs after all tests
 func (suite *OptGoarTestSuite) TearDownSuite() {
 	if suite.cancel != nil {
 		suite.cancel()
 	}
 }
 
-// SetupTest 在每个测试开始前运行
+// SetupTest runs before each test
 func (suite *OptGoarTestSuite) SetupTest() {
-	// 使用真实的 wallet 文件进行测试
+	// Use real wallet file for testing
 	path := "./arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json"
 	wallet, err := goar.NewWalletFromPath(path, "https://arweave.net")
 	if err != nil {
-		// 如果无法加载 wallet 文件，使用 nil（测试会被跳过）
+		// If wallet file cannot be loaded, use nil (tests will be skipped)
 		suite.optGoar = New(nil, suite.ctx)
 		return
 	}
 	suite.optGoar = New(wallet, suite.ctx)
 }
 
-// TestNew 测试 New 函数
+// TestNew tests the New function
 func (suite *OptGoarTestSuite) TestNew() {
 	path := "./arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json"
 	wallet, err := goar.NewWalletFromPath(path, "https://arweave.net")
@@ -73,7 +73,7 @@ func (suite *OptGoarTestSuite) TestNew() {
 	assert.Equal(suite.T(), ctx, optGoar.ctx)
 }
 
-// TestNewWithNilWallet 测试使用 nil wallet 创建 OptGoar
+// TestNewWithNilWallet tests creating OptGoar with nil wallet
 func (suite *OptGoarTestSuite) TestNewWithNilWallet() {
 	ctx := context.Background()
 
@@ -84,7 +84,7 @@ func (suite *OptGoarTestSuite) TestNewWithNilWallet() {
 	assert.Equal(suite.T(), ctx, optGoar.ctx)
 }
 
-// TestNewWithNilContext 测试使用 nil context 创建 OptGoar
+// TestNewWithNilContext tests creating OptGoar with nil context
 func (suite *OptGoarTestSuite) TestNewWithNilContext() {
 	wallet := &goar.Wallet{}
 
@@ -95,7 +95,7 @@ func (suite *OptGoarTestSuite) TestNewWithNilContext() {
 	assert.Nil(suite.T(), optGoar.ctx)
 }
 
-// TestUploadWithEmptyItems 测试上传空的 items
+// TestUploadWithEmptyItems tests uploading empty items
 func (suite *OptGoarTestSuite) TestUploadWithEmptyItems() {
 	if suite.optGoar.wallet == nil {
 		suite.T().Skip("Skipping test due to nil wallet")
@@ -106,7 +106,7 @@ func (suite *OptGoarTestSuite) TestUploadWithEmptyItems() {
 
 	txid, err := suite.optGoar.Upload(emptyItems)
 
-	// 空的 items 应该能够创建 bundle，但可能返回空的 txid
+	// Empty items should be able to create bundle, but may return empty txid
 	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), txid)
 }
@@ -128,7 +128,7 @@ func (suite *OptGoarTestSuite) TestUploadAndCheck() {
 	assert.NotEmpty(suite.T(), txid)
 	fmt.Println("txid: ", txid)
 
-	// 每隔 10秒检查交易是否存在
+	// Check if transaction exists every 10 seconds
 	interval := 10 * time.Second
 	ticker := time.NewTicker(interval)
 	tickTime := 0
@@ -160,7 +160,7 @@ func (suite *OptGoarTestSuite) TestUploadAndCheck() {
 	}
 }
 
-// TestDownloadWithValidParams 测试有效参数的下载
+// TestDownloadWithValidParams tests download with valid parameters
 func (suite *OptGoarTestSuite) TestDownloadWithValidParams() {
 	if suite.optGoar.wallet == nil {
 		suite.T().Skip("Skipping test due to nil wallet")
@@ -178,12 +178,12 @@ func (suite *OptGoarTestSuite) TestDownloadWithValidParams() {
 		fmt.Printf("data: %s\n", data)
 	}
 
-	// 由于使用 mock wallet，这里主要测试方法调用不会 panic
+	// Since using mock wallet, mainly test that method calls don't panic
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), items)
 }
 
-// TestDownloadWithEmptyParams 测试空参数的下载
+// TestDownloadWithEmptyParams tests download with empty parameters
 func (suite *OptGoarTestSuite) TestDownloadWithEmptyParams() {
 	if suite.optGoar.wallet == nil {
 		suite.T().Skip("Skipping test due to nil wallet")
@@ -195,7 +195,7 @@ func (suite *OptGoarTestSuite) TestDownloadWithEmptyParams() {
 
 	items, err := suite.optGoar.Download(parentTxID, itemsIds)
 
-	// 空参数可能导致错误或返回空结果
+	// Empty parameters may cause errors or return empty results
 	if err != nil {
 		assert.Error(suite.T(), err)
 	} else {
@@ -203,7 +203,7 @@ func (suite *OptGoarTestSuite) TestDownloadWithEmptyParams() {
 	}
 }
 
-// TestGraphQLWithValidQuery 测试有效的 GraphQL 查询
+// TestGraphQLWithValidQuery tests valid GraphQL query
 func (suite *OptGoarTestSuite) TestGraphQLWithValidQuery() {
 	if suite.optGoar.wallet == nil {
 		suite.T().Skip("Skipping test due to nil wallet")
@@ -230,7 +230,7 @@ func (suite *OptGoarTestSuite) TestGraphQLWithValidQuery() {
 	assert.NotNil(suite.T(), result)
 }
 
-// TestGraphQLWithEmptyQuery 测试空的 GraphQL 查询
+// TestGraphQLWithEmptyQuery tests empty GraphQL query
 func (suite *OptGoarTestSuite) TestGraphQLWithEmptyQuery() {
 	if suite.optGoar.wallet == nil {
 		suite.T().Skip("Skipping test due to nil wallet")
@@ -241,7 +241,7 @@ func (suite *OptGoarTestSuite) TestGraphQLWithEmptyQuery() {
 
 	result, err := suite.optGoar.GraphQL(query)
 
-	// 空查询可能导致错误
+	// Empty query may cause errors
 	if err != nil {
 		assert.Error(suite.T(), err)
 	} else {
@@ -249,7 +249,29 @@ func (suite *OptGoarTestSuite) TestGraphQLWithEmptyQuery() {
 	}
 }
 
-// TestGraphQLWithInvalidQuery 测试无效的 GraphQL 查询
+func (suite *OptGoarTestSuite) TestGraphQLWithItemId() {
+	if suite.optGoar.wallet == nil {
+		suite.T().Skip("Skipping test due to nil wallet")
+		return
+	}
+
+	// Use placeholder ID to test querying parent transaction ID functionality
+	txid := "ydzdP-svCgeZFj3MseCNVJgK94RCujPPI8xOw5SJZ6w"
+	const GraphQLBundledInQueryTemplate = `{
+		transaction(id: "%s") {
+			bundledIn {
+				id
+			}
+		}
+	}`
+
+	query := fmt.Sprintf(GraphQLBundledInQueryTemplate, txid)
+	result, err := suite.optGoar.GraphQL(query)
+	fmt.Printf("%s\n", string(result))
+	assert.NoError(suite.T(), err)
+}
+
+// TestGraphQLWithInvalidQuery tests invalid GraphQL query
 func (suite *OptGoarTestSuite) TestGraphQLWithInvalidQuery() {
 	if suite.optGoar.wallet == nil {
 		suite.T().Skip("Skipping test due to nil wallet")
@@ -260,7 +282,7 @@ func (suite *OptGoarTestSuite) TestGraphQLWithInvalidQuery() {
 
 	result, err := suite.optGoar.GraphQL(query)
 
-	// 无效查询应该返回错误
+	// Invalid query should return error
 	if err != nil {
 		assert.Error(suite.T(), err)
 	} else {
@@ -268,7 +290,7 @@ func (suite *OptGoarTestSuite) TestGraphQLWithInvalidQuery() {
 	}
 }
 
-// TestCheckTransactionWithValidTxid 测试有效交易ID的检查
+// TestCheckTransactionWithValidTxid tests checking valid transaction ID
 func (suite *OptGoarTestSuite) TestCheckTransactionWithValidTxid() {
 	if suite.optGoar.wallet == nil {
 		suite.T().Skip("Skipping test due to nil wallet")
@@ -279,7 +301,7 @@ func (suite *OptGoarTestSuite) TestCheckTransactionWithValidTxid() {
 
 	isValid, err := suite.optGoar.CheckTransaction(txid)
 
-	// 由于使用 mock wallet，这里主要测试方法调用
+	// Since using mock wallet, mainly test method calls
 	if err != nil {
 		assert.Error(suite.T(), err)
 	} else {
@@ -287,7 +309,7 @@ func (suite *OptGoarTestSuite) TestCheckTransactionWithValidTxid() {
 	}
 }
 
-// TestCheckTransactionWithEmptyTxid 测试空交易ID的检查
+// TestCheckTransactionWithEmptyTxid tests checking empty transaction ID
 func (suite *OptGoarTestSuite) TestCheckTransactionWithEmptyTxid() {
 	if suite.optGoar.wallet == nil {
 		suite.T().Skip("Skipping test due to nil wallet")
@@ -298,7 +320,7 @@ func (suite *OptGoarTestSuite) TestCheckTransactionWithEmptyTxid() {
 
 	isValid, err := suite.optGoar.CheckTransaction(txid)
 
-	// 空交易ID应该返回错误或 false
+	// Empty transaction ID should return error or false
 	if err != nil {
 		assert.Error(suite.T(), err)
 	} else {
@@ -306,7 +328,7 @@ func (suite *OptGoarTestSuite) TestCheckTransactionWithEmptyTxid() {
 	}
 }
 
-// TestCheckTransactionWithInvalidTxid 测试无效交易ID的检查
+// TestCheckTransactionWithInvalidTxid tests checking invalid transaction ID
 func (suite *OptGoarTestSuite) TestCheckTransactionWithInvalidTxid() {
 	if suite.optGoar.wallet == nil {
 		suite.T().Skip("Skipping test due to nil wallet")
@@ -317,7 +339,7 @@ func (suite *OptGoarTestSuite) TestCheckTransactionWithInvalidTxid() {
 
 	isValid, err := suite.optGoar.CheckTransaction(txid)
 
-	// 无效交易ID应该返回错误或 false
+	// Invalid transaction ID should return error or false
 	if err != nil {
 		assert.Error(suite.T(), err)
 	} else {
@@ -325,29 +347,29 @@ func (suite *OptGoarTestSuite) TestCheckTransactionWithInvalidTxid() {
 	}
 }
 
-// TestDecodeBundleWithEmptyData 测试空数据的 bundle 解析
+// TestDecodeBundleWithEmptyData tests bundle parsing with empty data
 func (suite *OptGoarTestSuite) TestDecodeBundleWithEmptyData() {
-	// 测试空数据
+	// Test empty data
 	emptyData := []byte{}
 	_, err := goarUtils.DecodeBundle(emptyData)
 	assert.Error(suite.T(), err)
 }
 
-// TestDecodeBundleWithInvalidData 测试无效数据的 bundle 解析
+// TestDecodeBundleWithInvalidData tests bundle parsing with invalid data
 func (suite *OptGoarTestSuite) TestDecodeBundleWithInvalidData() {
 	invalidData := []byte("invalid bundle data")
 	_, err := goarUtils.DecodeBundle(invalidData)
 	assert.Error(suite.T(), err)
 }
 
-// 运行测试套件
+// Run test suite
 func TestOptGoarTestSuite(t *testing.T) {
 	suite.Run(t, new(OptGoarTestSuite))
 }
 
-// 基准测试
+// Benchmark tests
 
-// BenchmarkNew 基准测试 New 函数
+// BenchmarkNew benchmark test for New function
 func BenchmarkNew(b *testing.B) {
 	wallet := &goar.Wallet{}
 	ctx := context.Background()
@@ -358,7 +380,7 @@ func BenchmarkNew(b *testing.B) {
 	}
 }
 
-// BenchmarkUpload 基准测试 Upload 方法
+// BenchmarkUpload benchmark test for Upload method
 func BenchmarkUpload(b *testing.B) {
 	optGoar := New(nil, context.Background())
 	items := []goarSchema.BundleItem{
@@ -376,7 +398,7 @@ func BenchmarkUpload(b *testing.B) {
 	}
 }
 
-// BenchmarkDecodeBundle 基准测试 DecodeBundle 函数
+// BenchmarkDecodeBundle benchmark test for DecodeBundle function
 func BenchmarkDecodeBundle(b *testing.B) {
 	data := []byte("test bundle data")
 

@@ -2,9 +2,11 @@ package chainkit
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -125,7 +127,6 @@ func (suite *DBTestSuite) TestAddToUploads() {
 func (suite *DBTestSuite) TestMoveToPending() {
 	// Prepare test data
 	testTxIDs := []string{"tx1", "tx2", "tx3"}
-	parentTxID := "parent_tx_123"
 
 	// First add to upload set
 	for _, txid := range testTxIDs {
@@ -138,8 +139,8 @@ func (suite *DBTestSuite) TestMoveToPending() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(3), count)
 
-	// Execute move operation
-	err = suite.chainkit.moveToPending(parentTxID, testTxIDs)
+	// Execute move operation (moveToPending moves all uploads to pending with parentTxID "0")
+	err = suite.chainkit.moveToPending()
 	assert.NoError(suite.T(), err)
 
 	// Verify removal from upload set
@@ -147,8 +148,8 @@ func (suite *DBTestSuite) TestMoveToPending() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(0), count)
 
-	// Verify addition to pending set
-	childTxIDs, err := suite.chainkit.getPendingSub(parentTxID)
+	// Verify addition to pending set (with default parent "0")
+	childTxIDs, err := suite.chainkit.getPendingsByParentID(schema.ZeroParentID)
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), childTxIDs, 3)
 	for _, txid := range testTxIDs {
@@ -159,20 +160,20 @@ func (suite *DBTestSuite) TestMoveToPending() {
 // TestGetPendings test getting all pending parent transaction IDs
 func (suite *DBTestSuite) TestGetPendings() {
 	// Test empty state
-	parentTxIDs, err := suite.chainkit.getPendings()
+	parentTxIDs, err := suite.chainkit.getPendingParentIDs()
 	assert.NoError(suite.T(), err)
 	assert.Empty(suite.T(), parentTxIDs)
 
-	// 添加测试数据
+	// Add test data
 	testParents := []string{"parent1", "parent2", "parent3"}
 	for _, parent := range testParents {
 		testTxIDs := []string{"child1_" + parent, "child2_" + parent}
-		err := suite.chainkit.moveToPending(parent, testTxIDs)
+		err := suite.chainkit.updateParentId(parent, testTxIDs)
 		assert.NoError(suite.T(), err)
 	}
 
 	// Test getting all parent transaction IDs
-	parentTxIDs, err = suite.chainkit.getPendings()
+	parentTxIDs, err = suite.chainkit.getPendingParentIDs()
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), parentTxIDs, 3)
 	for _, parent := range testParents {
@@ -186,16 +187,16 @@ func (suite *DBTestSuite) TestGetPendingSub() {
 	testTxIDs := []string{"child1", "child2", "child3"}
 
 	// Test non-existent parent transaction
-	childTxIDs, err := suite.chainkit.getPendingSub("nonexistent")
+	childTxIDs, err := suite.chainkit.getPendingsByParentID("nonexistent")
 	assert.NoError(suite.T(), err)
 	assert.Empty(suite.T(), childTxIDs)
 
-	// 添加测试数据
-	err = suite.chainkit.moveToPending(parentTxID, testTxIDs)
+	// Add test data
+	err = suite.chainkit.updateParentId(parentTxID, testTxIDs)
 	assert.NoError(suite.T(), err)
 
 	// Test getting sub transaction IDs
-	childTxIDs, err = suite.chainkit.getPendingSub(parentTxID)
+	childTxIDs, err = suite.chainkit.getPendingsByParentID(parentTxID)
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), childTxIDs, 3)
 	for _, txid := range testTxIDs {
@@ -208,12 +209,12 @@ func (suite *DBTestSuite) TestRemovePending() {
 	parentTxID := "parent_tx_789"
 	testTxIDs := []string{"child1", "child2", "child3"}
 
-	// 添加测试数据
-	err := suite.chainkit.moveToPending(parentTxID, testTxIDs)
+	// Add test data
+	err := suite.chainkit.updateParentId(parentTxID, testTxIDs)
 	assert.NoError(suite.T(), err)
 
 	// Verify data exists
-	childTxIDs, err := suite.chainkit.getPendingSub(parentTxID)
+	childTxIDs, err := suite.chainkit.getPendingsByParentID(parentTxID)
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), childTxIDs, 3)
 
@@ -222,12 +223,12 @@ func (suite *DBTestSuite) TestRemovePending() {
 	assert.NoError(suite.T(), err)
 
 	// Verify deletion success
-	childTxIDs, err = suite.chainkit.getPendingSub(parentTxID)
+	childTxIDs, err = suite.chainkit.getPendingsByParentID(parentTxID)
 	assert.NoError(suite.T(), err)
 	assert.Empty(suite.T(), childTxIDs)
 
 	// Verify removal from parent transaction list
-	parentTxIDs, err := suite.chainkit.getPendings()
+	parentTxIDs, err := suite.chainkit.getPendingParentIDs()
 	assert.NoError(suite.T(), err)
 	assert.NotContains(suite.T(), parentTxIDs, parentTxID)
 }
@@ -250,43 +251,169 @@ func (suite *DBTestSuite) TestComplexWorkflow() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(5), count)
 
-	// 3. Move to pending set in batches
-	err = suite.chainkit.moveToPending(parentTxID1, testTxIDs[:3])
+	// 3. Move to pending set in batches using updateParentId
+	err = suite.chainkit.updateParentId(parentTxID1, testTxIDs[:3])
 	assert.NoError(suite.T(), err)
 
-	err = suite.chainkit.moveToPending(parentTxID2, testTxIDs[3:])
+	err = suite.chainkit.updateParentId(parentTxID2, testTxIDs[3:])
 	assert.NoError(suite.T(), err)
 
-	// 4. Verify upload set is cleared
-	count, err = suite.chainkit.getUploadsCount()
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), int64(0), count)
-
-	// 5. Verify pending set status
-	parentTxIDs, err := suite.chainkit.getPendings()
+	// 4. Verify pending set status
+	parentTxIDs, err := suite.chainkit.getPendingParentIDs()
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), parentTxIDs, 2)
 	assert.Contains(suite.T(), parentTxIDs, parentTxID1)
 	assert.Contains(suite.T(), parentTxIDs, parentTxID2)
 
-	// 6. Verify sub transaction grouping
-	childTxIDs1, err := suite.chainkit.getPendingSub(parentTxID1)
+	// 5. Verify sub transaction grouping
+	childTxIDs1, err := suite.chainkit.getPendingsByParentID(parentTxID1)
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), childTxIDs1, 3)
 
-	childTxIDs2, err := suite.chainkit.getPendingSub(parentTxID2)
+	childTxIDs2, err := suite.chainkit.getPendingsByParentID(parentTxID2)
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), childTxIDs2, 2)
 
-	// 7. Remove one parent transaction
+	// 6. Remove one parent transaction
 	err = suite.chainkit.removePending(parentTxID1)
 	assert.NoError(suite.T(), err)
 
-	// 8. Verify final state
-	parentTxIDs, err = suite.chainkit.getPendings()
+	// 7. Verify final state
+	parentTxIDs, err = suite.chainkit.getPendingParentIDs()
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), parentTxIDs, 1)
 	assert.Contains(suite.T(), parentTxIDs, parentTxID2)
+}
+
+// TestFindParentByTxid test finding parent transaction by sub transaction ID
+func (suite *DBTestSuite) TestFindParentByTxid() {
+	// Test with non-existent txid
+	parentID, err := suite.chainkit.findParentByTxid("nonexistent_tx")
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), parentID)
+
+	// Prepare test data
+	parentTxID1 := "parent_tx_001"
+	parentTxID2 := "parent_tx_002"
+	testTxIDs1 := []string{"child1", "child2"}
+	testTxIDs2 := []string{"child3", "child4"}
+
+	// Add test data to uploads first, then move to pending
+	for _, txid := range testTxIDs1 {
+		err := suite.chainkit.addToUploads(txid)
+		assert.NoError(suite.T(), err)
+	}
+	err = suite.chainkit.updateParentId(parentTxID1, testTxIDs1)
+	assert.NoError(suite.T(), err)
+
+	for _, txid := range testTxIDs2 {
+		err := suite.chainkit.addToUploads(txid)
+		assert.NoError(suite.T(), err)
+	}
+	err = suite.chainkit.updateParentId(parentTxID2, testTxIDs2)
+	assert.NoError(suite.T(), err)
+
+	// Test finding existing parent IDs
+	parentID, err = suite.chainkit.findParentByTxid("child1")
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), parentTxID1, parentID)
+
+	parentID, err = suite.chainkit.findParentByTxid("child3")
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), parentTxID2, parentID)
+
+	// Test with non-existent txid after adding data
+	parentID, err = suite.chainkit.findParentByTxid("nonexistent_child")
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), parentID)
+}
+
+// TestUpdateParentId test updating parent transaction ID
+func (suite *DBTestSuite) TestUpdateParentId() {
+	// Prepare initial data
+	oldParentTxID := "old_parent_123"
+	newParentTxID := "new_parent_456"
+	testTxIDs := []string{"tx1", "tx2", "tx3"}
+
+	// First add to old parent
+	err := suite.chainkit.updateParentId(oldParentTxID, testTxIDs)
+	assert.NoError(suite.T(), err)
+
+	// Verify initial state
+	childTxIDs, err := suite.chainkit.getPendingsByParentID(oldParentTxID)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), childTxIDs, 3)
+
+	// Update parent ID
+	err = suite.chainkit.updateParentId(newParentTxID, testTxIDs)
+	assert.NoError(suite.T(), err)
+
+	// Verify old parent is cleaned up
+	childTxIDs, err = suite.chainkit.getPendingsByParentID(oldParentTxID)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), childTxIDs)
+
+	// Verify new parent has the transactions
+	childTxIDs, err = suite.chainkit.getPendingsByParentID(newParentTxID)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), childTxIDs, 3)
+	for _, txid := range testTxIDs {
+		assert.Contains(suite.T(), childTxIDs, txid)
+	}
+
+	// Verify findParentByTxid returns new parent
+	for _, txid := range testTxIDs {
+		parentID, err := suite.chainkit.findParentByTxid(txid)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), newParentTxID, parentID)
+	}
+}
+
+// TestUpdateParentIdWithMultipleOldParents test updating parent ID with transactions from multiple old parents
+func (suite *DBTestSuite) TestUpdateParentIdWithMultipleOldParents() {
+	// Prepare data from multiple old parents
+	oldParent1 := "old_parent_1"
+	oldParent2 := "old_parent_2"
+	newParent := "new_parent"
+	txidsFromParent1 := []string{"tx1", "tx2"}
+	txidsFromParent2 := []string{"tx3", "tx4"}
+	allTxids := append(txidsFromParent1, txidsFromParent2...)
+
+	// Add to different old parents
+	err := suite.chainkit.updateParentId(oldParent1, txidsFromParent1)
+	assert.NoError(suite.T(), err)
+	err = suite.chainkit.updateParentId(oldParent2, txidsFromParent2)
+	assert.NoError(suite.T(), err)
+
+	// Verify initial state
+	childTxIDs1, err := suite.chainkit.getPendingsByParentID(oldParent1)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), childTxIDs1, 2)
+
+	childTxIDs2, err := suite.chainkit.getPendingsByParentID(oldParent2)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), childTxIDs2, 2)
+
+	// Update all transactions to new parent
+	err = suite.chainkit.updateParentId(newParent, allTxids)
+	assert.NoError(suite.T(), err)
+
+	// Verify both old parents are cleaned up
+	childTxIDs1, err = suite.chainkit.getPendingsByParentID(oldParent1)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), childTxIDs1)
+
+	childTxIDs2, err = suite.chainkit.getPendingsByParentID(oldParent2)
+	assert.NoError(suite.T(), err)
+	assert.Empty(suite.T(), childTxIDs2)
+
+	// Verify new parent has all transactions
+	childTxIDs, err := suite.chainkit.getPendingsByParentID(newParent)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), childTxIDs, 4)
+	for _, txid := range allTxids {
+		assert.Contains(suite.T(), childTxIDs, txid)
+	}
 }
 
 // TestEdgeCases test edge cases
@@ -304,12 +431,16 @@ func (suite *DBTestSuite) TestEdgeCases() {
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), members, specialTxID)
 
-	// Test moving empty array
-	err = suite.chainkit.moveToPending("empty_parent", []string{})
-	assert.NoError(suite.T(), err)
-
 	// Test deleting non-existent parent transaction
 	err = suite.chainkit.removePending("nonexistent_parent")
+	assert.NoError(suite.T(), err)
+
+	// Test updateParentId with empty txids
+	err = suite.chainkit.updateParentId("new_parent", []string{})
+	assert.NoError(suite.T(), err)
+
+	// Test updateParentId with non-existent txids
+	err = suite.chainkit.updateParentId("new_parent", []string{"nonexistent1", "nonexistent2"})
 	assert.NoError(suite.T(), err)
 }
 
@@ -338,7 +469,7 @@ func BenchmarkAddToUploads(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		txid := "benchmark_tx_" + string(rune(i))
+		txid := fmt.Sprintf("benchmark_tx_%d", i)
 		chainkit.addToUploads(txid)
 	}
 }
@@ -359,7 +490,7 @@ func BenchmarkGetUploads(b *testing.B) {
 	// Prepare test data
 	rdb.FlushDB(context.Background())
 	for i := 0; i < 1000; i++ {
-		txid := "benchmark_tx_" + string(rune(i))
+		txid := fmt.Sprintf("benchmark_tx_%d", i)
 		chainkit.addToUploads(txid)
 	}
 

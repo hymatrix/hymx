@@ -51,7 +51,6 @@ func (o *OptGoar) GraphQL(query string) ([]byte, error) {
 }
 
 func (o *OptGoar) CheckTransaction(txid string) (bool, error) {
-	// 先确定tx 状态
 	state, err := o.wallet.Client.GetTransactionStatus(txid)
 	if err != nil {
 		return false, err
@@ -61,7 +60,7 @@ func (o *OptGoar) CheckTransaction(txid string) (bool, error) {
 	}
 	fmt.Printf("txid: %s, state: %#v\n", txid, state)
 
-	// 确保 data 可以下载并解析成功
+	// check data
 	itemBytes, err := o.wallet.Client.GetTransactionData(txid, "json")
 	if err != nil {
 		return false, err

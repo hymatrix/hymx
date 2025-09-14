@@ -1,89 +1,84 @@
 package chainkit
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/hymatrix/hymx/chainkit/schema"
 	goarSchema "github.com/permadao/goar/schema"
 )
 
 // uploadToChain implements Chainkit upload functionality
 // Packages multiple BundleItems and uploads to blockchain network
 // Returns parent transaction ID for subsequent status tracking
-func (c *Chainkit) uploadToChain(items []goarSchema.BundleItem) (parentTxID string, err error) {
-	log.Info("uploading bundle items", "count", len(items))
-	return c.operator.Upload(items)
-}
-
-// Implements Chainkit transaction aggregation functionality
-// Gets all pending upload txids from uploadSet
-// Gets all transactions from idb
-// Uses goar
-// Uses operator.Upload for uploading
-// If successful, removes from uploadSet and adds to uploadingSet (records parent transaction ID)
-// If failed, waits for next aggregation
-func (c *Chainkit) aggregate() (string, error) {
-	// Collect all currently pending sub transactions
-	c.mu.Lock()
-	txids, err := c.getUploads()
-	if err != nil {
-		c.mu.Unlock()
-		return "", err
-	}
-	if len(txids) == 0 {
-		c.mu.Unlock()
-		return "", nil
-	}
-	c.mu.Unlock()
-
+func (c *Chainkit) uploadToChain(txids []string) (parentTxID string, err error) {
 	items := c.getBundleItems(txids)
 	if len(items) == 0 {
 		return "", nil
 	}
 
-	// Call operator.Upload for aggregated upload (operator implements specific packaging logic)
-	parentTxID, err := c.uploadToChain(items)
+	parentTxID, err = c.operator.Upload(items)
 	if err != nil {
 		return "", err
 	}
 
-	// Success: remove from pending upload, add to uploading set
-	uploaded := make([]string, len(items))
-	for _, item := range items {
-		uploaded = append(uploaded, item.Id)
-	}
-	if err = c.moveToPending(parentTxID, uploaded); err != nil {
+	// Add transactions to new parent
+	if err = c.updateParentId(parentTxID, txids); err != nil {
 		return "", err
 	}
 
 	return parentTxID, nil
 }
 
-// Execute aggregation tasks in a goroutine
-// Aggregate according to aggregationPolicy (time condition only)
-func (c *Chainkit) tryByTime() {
-	interval := c.aggregationPolicy.MaxDelay // second
-	ticker := time.NewTicker(interval * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case <-ticker.C:
-			go c.aggregate()
+// getBundleItems collects BundleItem data from given transaction ID list
+func (c *Chainkit) getBundleItems(txids []string) []goarSchema.BundleItem {
+	items := make([]goarSchema.BundleItem, 0, len(txids)*2)
+	for _, txid := range txids {
+		if msg, err := c.node.GetMessage(txid); err == nil && msg != nil {
+			items = append(items, *msg)
+		}
+		if assign, err := c.node.GetAssignByMessage(txid); err == nil && assign != nil {
+			items = append(items, *assign)
 		}
 	}
+	return items
 }
 
-func (c *Chainkit) tryByCount() {
-	n, err := c.getUploadsCount()
+func (c *Chainkit) check() {
+	// 1. Move transactions from upload set to pending set, set parentid to 0
+	if err := c.moveToPending(); err != nil {
+		log.Error("Failed to move uploads to pending", "err", err)
+		return
+	}
+
+	// 2. Fetch transactions with parentid 0 and upload them, generate parentid and timestamp
+	// 3. Check timed out parentids and re-upload them, generate new parentid and timestamp
+	parentIDs, err := c.getPendingParentIDs()
 	if err != nil {
 		return
 	}
-	if n >= c.aggregationPolicy.MaxItems {
-		go c.aggregate()
+	for _, parentID := range parentIDs {
+		// Check if timed out (over 1 hour unconfirmed)
+		// Or parentID is "0" which means never be uploaded
+		if parentID == schema.ZeroParentID || c.checkTimeout(parentID) {
+			txids, err := c.getPendingsByParentID(parentID)
+			if err != nil {
+				return
+			}
+			_, err = c.uploadToChain(txids)
+			if err != nil {
+				continue
+			}
+		}
+		// 4. Remove confirmed transactions from pending set, clean up timestamp, record txid
+		if parentID == schema.ZeroParentID {
+			continue
+		}
+		ok, err := c.operator.CheckTransaction(parentID)
+		if err == nil && ok {
+			c.removePending(parentID)
+		}
+		// TODO: record txid
 	}
 }
 
@@ -105,63 +100,8 @@ func (c *Chainkit) checkTimeout(parentTxID string) bool {
 	return time.Now().Unix()-uploadTime > 3600
 }
 
-// reupload re-uploads timed out parent transactions
-func (c *Chainkit) reupload(parentTxID string) (string, error) {
-	log.Debug("reupload parent transaction", "txid", parentTxID)
-
-	// Get all sub transaction IDs under this parent transaction
-	subTxIDs, err := c.getPendingSub(parentTxID)
-	if err != nil {
-		return "", fmt.Errorf("failed to get pending sub transactions: %w", err)
-	}
-
-	// Re-aggregate these sub transactions
-	items := c.getBundleItems(subTxIDs)
-	if len(items) == 0 {
-		return "", fmt.Errorf("no valid items to reupload")
-	}
-
-	// Re-upload
-	newParentTxID, err := c.uploadToChain(items)
-	if err != nil {
-		log.Error("Failed to reupload parent transaction", "txid", parentTxID, "err", err)
-		return "", fmt.Errorf("failed to upload to chain: %w", err)
-	}
-
-	// Update Redis records: remove old parent transaction record, add new one
-	// Remove old record
-	if err := c.removePending(parentTxID); err != nil {
-		return "", fmt.Errorf("failed to remove pending record: %w", err)
-	}
-	// Add new record
-	uploaded := make([]string, len(items))
-	for _, item := range items {
-		uploaded = append(uploaded, item.Id)
-	}
-	if err := c.moveToPending(newParentTxID, uploaded); err != nil {
-		return "", fmt.Errorf("failed to move to pending: %w", err)
-	}
-
-	log.Debug("reuploaded with new parent txid", "txid", newParentTxID)
-	return newParentTxID, nil
-}
-
-// getBundleItems collects BundleItem data from given transaction ID list
-func (c *Chainkit) getBundleItems(txids []string) []goarSchema.BundleItem {
-	items := make([]goarSchema.BundleItem, 0, len(txids)*2)
-	for _, txid := range txids {
-		if msg, err := c.node.GetMessage(txid); err == nil && msg != nil {
-			items = append(items, *msg)
-		}
-		if assign, err := c.node.GetAssignByMessage(txid); err == nil && assign != nil {
-			items = append(items, *assign)
-		}
-	}
-	return items
-}
-
 // Check transaction status every 5 minutes (check if parent transaction is confirmed)
-func (c *Chainkit) check() {
+func (c *Chainkit) checkTask() {
 	interval := 5 * time.Minute
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -171,24 +111,7 @@ func (c *Chainkit) check() {
 		case <-c.ctx.Done():
 			return
 		case <-ticker.C:
-			// Get all pending parent transaction IDs
-			parentIDs, err := c.getPendings()
-			if err != nil {
-				continue
-			}
-			for _, txid := range parentIDs {
-				// Check if timed out (over 1 hour unconfirmed)
-				if c.checkTimeout(txid) {
-					if _, err := c.reupload(txid); err == nil {
-						continue // Already re-uploaded, skip current check
-					}
-				}
-
-				ok, err := c.operator.CheckTransaction(txid)
-				if err == nil && ok {
-					c.removePending(txid)
-				}
-			}
+			c.check()
 		}
 	}
 }

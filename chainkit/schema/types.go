@@ -7,6 +7,10 @@ import (
 	goarSchema "github.com/permadao/goar/schema"
 )
 
+var (
+	ZeroParentID = "0"
+)
+
 // AggregationPolicy controls how aggregator groups transactions.
 type AggregationPolicy struct {
 	MaxItems int64         // flush when reaching item count

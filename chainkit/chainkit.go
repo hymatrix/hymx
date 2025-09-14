@@ -3,7 +3,6 @@ package chainkit
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/hymatrix/hymx/chainkit/schema"
@@ -19,7 +18,6 @@ type Chainkit struct {
 	operator          schema.IOperator
 	aggregationPolicy schema.AggregationPolicy
 
-	mu     sync.Mutex
 	ctx    context.Context
 	cancel context.CancelFunc
 	redis  *redis.Client
@@ -51,9 +49,7 @@ func New(op schema.IOperator, node schema.INodeDB, redisUrl string) *Chainkit {
 
 func (c *Chainkit) Run() {
 	log.Info("chainkit run")
-
-	go c.tryByTime()
-	go c.check()
+	go c.checkTask()
 }
 
 func (c *Chainkit) Close() {
@@ -63,27 +59,25 @@ func (c *Chainkit) Close() {
 	log.Info("chainkit closed")
 }
 
-// 上传一笔 BundleItem 交易，这个函数不会真正上传一笔交易，只是将交易放到上传队列中
-// 等待交易打包后才上传
+// Upload a BundleItem transaction. This function doesn't actually upload the transaction,
+// but adds it to the upload queue and waits for batch processing before uploading
 func (c *Chainkit) Upload(tx goarSchema.BundleItem) error {
 	if tx.Id == "" {
 		return errors.New("invalid bundle item: empty id")
 	}
 
-	// 使用 Redis Set 去重并记录待上传的 txid
+	// Use Redis Set to deduplicate and record pending upload txids
 	if err := c.addToUploads(tx.Id); err != nil {
 		return err
 	}
-
-	c.tryByCount()
 	return nil
 }
 
-// 下载一笔交易
-// 1. Qraphql 查询父交易
-// 2. 通过父交易下载子交易
-// 3. 验证子交易
-// 4. 返回交易
+// Download a transaction
+// 1. GraphQL query for parent transaction
+// 2. Download child transactions through parent transaction
+// 3. Verify child transactions
+// 4. Return transaction
 func (c *Chainkit) DownloadByTxid(txid string) (goarSchema.BundleItem, error) {
 	parentTxID, err := c.getParentTxid(txid)
 	if err != nil {
@@ -99,14 +93,14 @@ func (c *Chainkit) DownloadByTxid(txid string) (goarSchema.BundleItem, error) {
 	return *items[0], nil
 }
 
-// 下载一个 process 的所有交易, 从指定的 Nonce 开始到最新交易
+// Download all transactions of a process, from specified Nonce to latest transaction
 // todo: begin and end nonce
-// signer 参数（拿 txid=pid 的交易）
+// signer parameter (get transaction with txid=pid)
 func (c *Chainkit) DownloadByPid(pid string, nonce int64) ([]goarSchema.BundleItem, error) {
 	panic("unimplemented")
 }
 
-// 执行一个 GraphQL 查询
+// Execute a GraphQL query
 func (c *Chainkit) Query(query string) ([]byte, error) {
 	return c.operator.GraphQL(query)
 }
