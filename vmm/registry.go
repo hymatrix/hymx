@@ -52,10 +52,12 @@ func (v *Vmm) spawnRegistry(env schema.Env) (vm schema.Vm, err error) {
 		return nil, schema.ErrMissingParam
 	}
 
-	v.info.Node.Role = registrySchema.RoleMain
-	v.info.JoinNetwork = true
-	db := cache.NewRegistry(env.Meta.ItemId, tokenPid, nodeSchema.GenesisNode)
+	if !env.Meta.DryRun {
+		v.info.Node.Role = registrySchema.RoleMain
+		v.info.JoinNetwork = true
+	}
 
+	db := cache.NewRegistry(env.Meta.ItemId, tokenPid, nodeSchema.GenesisNode)
 	regVm, err := registry.New(db)
 	if err != nil {
 		return
