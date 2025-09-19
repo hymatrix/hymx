@@ -73,23 +73,12 @@ func (c *Chainkit) Upload(tx goarSchema.BundleItem) error {
 	}
 
 	// Use Redis Set to deduplicate and record pending upload txids
-	if err := c.addToUploads(tx.Id); err != nil {
-		return err
-	}
-	return nil
+	return c.addPendingTx(tx.Id)
 }
 
 // Download a transaction
-// 1. GraphQL query for parent transaction
-// 2. Download child transactions through parent transaction
-// 3. Verify child transactions
-// 4. Return transaction
-func (c *Chainkit) DownloadByTxid(txid string) (goarSchema.BundleItem, error) {
-	item, err := c.operator.Download(txid)
-	if err != nil {
-		return goarSchema.BundleItem{}, err
-	}
-	return *item, nil
+func (c *Chainkit) DownloadByTxid(txid string) (*goarSchema.BundleItem, error) {
+	return c.operator.Download(txid)
 }
 
 // Download all transactions of a process, from specified Nonce to latest transaction

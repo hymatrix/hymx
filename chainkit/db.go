@@ -1,143 +1,212 @@
 package chainkit
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
-	"github.com/hymatrix/hymx/chainkit/schema"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
-	RedisUrl                = "redis://@localhost:6379/0"
-	RedisKeyUploads         = "chainkit:uploads"
-	RedisKeyPendingPrefix   = "chainkit:pending:"          // Hash key prefix: chainkit:pending:{parentTxID}
-	RedisKeyUploadTimestamp = "chainkit:upload_timestamps" // Hash key for storing upload timestamps
-	RedisKeyUploadedTxids   = "chainkit:uploaded_txids"    // Set key for storing uploaded transaction IDs
+	RedisUrl            = "redis://@localhost:6379/0"
+	RdbPendingTxIds     = "chainkit:pending"              // Set: Pending TxId pool
+	RdbCurrentBundledIn = "chainkit:current_bundledin_id" // String: current bundledIn id
+	RdbBundledInStatus  = "chainkit:bundledin_status"     // Hash: chainkit:bundledin_status:<bundledInID>, BundleInStatus struct
+	RdbUploadedTxIds    = "chainkit:uploaded_txids"       // Set: Uploaded TxId pool
 )
 
-// Redis operation wrapper functions
+var (
+	ErrBundledInAlreadyExists = errors.New("bundledIn_already_exists")
+	ErrTxIdsEmpty             = errors.New("txids_is_empty")
+)
 
-// getUploadsCount gets the count of members in the upload set
-func (c *Chainkit) getUploadsCount() (int64, error) {
-	return c.redis.SCard(c.ctx, RedisKeyUploads).Result()
+// BundledInStatusEnum represents the current bundledIn status
+type BundledInStatusEnum string
+
+const (
+	BundledInStatusEmpty   BundledInStatusEnum = "empty"   // No RdbCurrentBundledIn
+	BundledInStatusPending BundledInStatusEnum = "pending" // Has RdbCurrentBundledIn, not timeout
+	BundledInStatusTimeout BundledInStatusEnum = "timeout" // Has RdbCurrentBundledIn, over 1 hour
+)
+
+type BundledInStatus struct {
+	BundledInID string   `json:"bundledInID"`
+	TxIds       []string `json:"txIds"`
+	UploadTime  int64    `json:"uploadTime"`
 }
 
-// getUploads gets all members from the upload set
-func (c *Chainkit) getUploads() ([]string, error) {
-	return c.redis.SMembers(c.ctx, RedisKeyUploads).Result()
+// addTx add a txid to pending txids set
+func (c *Chainkit) addPendingTx(txid string) error {
+	return c.redis.SAdd(c.ctx, RdbPendingTxIds, txid).Err()
 }
 
-// addToUploads adds transaction ID to the upload set
-func (c *Chainkit) addToUploads(txid string) error {
-	return c.redis.SAdd(c.ctx, RedisKeyUploads, txid).Err()
+func (c *Chainkit) getPendingTxs() ([]string, error) {
+	return c.redis.SMembers(c.ctx, RdbPendingTxIds).Result()
 }
 
-// moveToPending removes transaction ID from upload set and adds to pending hash set
-func (c *Chainkit) moveToPending() error {
-	// 0 means never be uploaded
-	parentTxID := schema.ZeroParentID
-	txids, err := c.redis.SMembers(c.ctx, RedisKeyUploads).Result()
+func (c *Chainkit) createBundledIn(bundledInID string, txids []string, uploadTime int64) error {
+	// First check if RdbCurrentBundledIn is empty, if not empty return error
+	currentBundledIn, err := c.redis.Get(c.ctx, RdbCurrentBundledIn).Result()
+	if err != nil && err != redis.Nil {
+		return fmt.Errorf("failed to check current bundledIn: %w", err)
+	}
+	if currentBundledIn != "" {
+		return ErrBundledInAlreadyExists
+	}
+	return c.updateBundledIn(bundledInID, txids, uploadTime)
+}
+
+func (c *Chainkit) updateBundledIn(bundledInID string, txids []string, uploadTime int64) error {
+	if len(txids) == 0 {
+		return ErrTxIdsEmpty
+	}
+
+	// Generate BundledInStatus struct
+	status := BundledInStatus{
+		BundledInID: bundledInID,
+		TxIds:       txids,
+		UploadTime:  uploadTime,
+	}
+	statusJSON, err := json.Marshal(status)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal bundledIn status failed: %w", err)
 	}
-	pipe := c.redis.TxPipeline()
-	for _, txid := range txids {
-		pipe.SRem(c.ctx, RedisKeyUploads, txid)
-		// Add sub txid to hash with parentTxID as key
-		pipe.HSet(c.ctx, RedisKeyPendingPrefix+parentTxID, txid, "1")
+
+	// Put all redis operations in one pipeline
+	pipe := c.redis.Pipeline()
+
+	// If there is RdbCurrentBundledIn, delete old bundledInID first
+	currentBundledIn, err := c.redis.Get(c.ctx, RdbCurrentBundledIn).Result()
+	if err != nil && err != redis.Nil {
+		return fmt.Errorf("failed to check current bundledIn: %w", err)
 	}
-	// Record upload timestamp of parent transaction
-	//pipe.HSet(c.ctx, RedisKeyUploadTimestamp, parentTxID, time.Now().Unix())
+	if currentBundledIn != "" {
+		pipe.Del(c.ctx, RdbCurrentBundledIn)
+	}
+	// Clear old bundledInStatus
+	oldBundledInStatusKey := RdbBundledInStatus + ":" + currentBundledIn
+	pipe.Del(c.ctx, oldBundledInStatusKey)
+
+	// 1. Remove txids from RdbPendingTxIds
+	if len(txids) > 0 {
+		pipe.SRem(c.ctx, RdbPendingTxIds, txids)
+	}
+
+	// 2. Save BundledInStatus to RdbBundledInStatus:<bundledInID>
+	bundledInStatusKey := RdbBundledInStatus + ":" + bundledInID
+	pipe.Set(c.ctx, bundledInStatusKey, string(statusJSON), 0)
+
+	// 3. Save bundledInID to RdbCurrentBundledIn
+	pipe.Set(c.ctx, RdbCurrentBundledIn, bundledInID, 0)
+
+	// Execute pipeline
 	_, err = pipe.Exec(c.ctx)
-	return err
-}
-
-func (c *Chainkit) updateParentId(newParentTxID string, txids []string) error {
-	pipe := c.redis.TxPipeline()
-
-	// Find and delete old parent transaction data for each txid
-	oldParentIDs := make(map[string]bool) // Use map to avoid duplicate deletions
-	for _, txid := range txids {
-		oldParentTxID, err := c.findParentByTxid(txid)
-		if err != nil {
-			continue // Skip if error finding parent
-		}
-		if oldParentTxID != "" && oldParentTxID != newParentTxID {
-			oldParentIDs[oldParentTxID] = true
-		}
-	}
-
-	// Delete all old parent transaction data
-	for oldParentTxID := range oldParentIDs {
-		pipe.Del(c.ctx, RedisKeyPendingPrefix+oldParentTxID)
-		pipe.HDel(c.ctx, RedisKeyUploadTimestamp, oldParentTxID)
-	}
-
-	// Add transactions to new parent
-	for _, txid := range txids {
-		pipe.HSet(c.ctx, RedisKeyPendingPrefix+newParentTxID, txid, "1")
-	}
-	// Record upload timestamp of parent transaction
-	pipe.HSet(c.ctx, RedisKeyUploadTimestamp, newParentTxID, time.Now().Unix())
-	_, err := pipe.Exec(c.ctx)
-	return err
-}
-
-// getPendings gets all pending parent transaction IDs
-func (c *Chainkit) getPendingParentIDs() ([]string, error) {
-	keys, err := c.redis.Keys(c.ctx, RedisKeyPendingPrefix+"*").Result()
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("pipeline execution failed: %w", err)
 	}
-	// Remove prefix, only return parentTxID
-	parentTxIDs := make([]string, len(keys))
-	for i, key := range keys {
-		parentTxIDs[i] = key[len(RedisKeyPendingPrefix):]
-	}
-	return parentTxIDs, nil
+
+	return nil
 }
 
-func (c *Chainkit) getPendingsByParentID(parentTxID string) ([]string, error) {
-	return c.redis.HKeys(c.ctx, RedisKeyPendingPrefix+parentTxID).Result()
-}
+func (c *Chainkit) deleteBundledIn(bundledInID string) error {
+	// Delete current bundledIn from RdbCurrentBundledIn
+	pipe := c.redis.Pipeline()
+	pipe.Del(c.ctx, RdbCurrentBundledIn)
 
-// findParentByTxid finds the parent transaction ID for a given sub transaction ID
-func (c *Chainkit) findParentByTxid(txid string) (string, error) {
-	// Get all pending parent IDs
-	parentIDs, err := c.getPendingParentIDs()
-	if err != nil {
-		return "", err
-	}
+	// Clear old bundledInStatus
+	bundledInStatusKey := RdbBundledInStatus + ":" + bundledInID
+	pipe.Del(c.ctx, bundledInStatusKey)
 
-	// Search through each parent to find which one contains this txid
-	for _, parentID := range parentIDs {
-		exists, err := c.redis.HExists(c.ctx, RedisKeyPendingPrefix+parentID, txid).Result()
-		if err != nil {
-			continue
-		}
-		if exists {
-			return parentID, nil
-		}
-	}
-
-	return "", nil // Not found
-}
-
-// removePending removes entire parent transaction and all its sub transactions
-func (c *Chainkit) removePending(parentTxID string) error {
-	pipe := c.redis.TxPipeline()
-	// Delete pending record
-	pipe.Del(c.ctx, RedisKeyPendingPrefix+parentTxID)
-	// Clean up upload time record
-	pipe.HDel(c.ctx, RedisKeyUploadTimestamp, parentTxID)
+	// Execute pipeline
 	_, err := pipe.Exec(c.ctx)
-	return err
+	if err != nil {
+		return fmt.Errorf("pipeline execution failed: %w", err)
+	}
+
+	return nil
 }
 
-// isUploadedTxid checks if a transaction ID has already been uploaded
-func (c *Chainkit) isUploaded(txid string) (bool, error) {
-	return c.redis.SIsMember(c.ctx, RedisKeyUploadedTxids, txid).Result()
+// getBundledInStatus returns the current bundledIn status enum
+func (c *Chainkit) getBundledInStatus() (BundledInStatusEnum, BundledInStatus, error) {
+	currentBundledIn, err := c.redis.Get(c.ctx, RdbCurrentBundledIn).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return BundledInStatusEmpty, BundledInStatus{}, nil // No current bundledIn
+		}
+		return "", BundledInStatus{}, fmt.Errorf("failed to check current bundledIn: %w", err)
+	}
+
+	// If no current bundledIn, return empty
+	if currentBundledIn == "" {
+		return BundledInStatusEmpty, BundledInStatus{}, nil // No current bundledIn
+	}
+
+	// Get bundledIn status data
+	bundledInStatusKey := RdbBundledInStatus + ":" + currentBundledIn
+	statusJSON, err := c.redis.Get(c.ctx, bundledInStatusKey).Result()
+	if err != nil {
+		if err == redis.Nil {
+			// Have currentBundledIn but no status data, may be abnormal situation, return pending
+			return BundledInStatusPending, BundledInStatus{}, nil // No current bundledIn
+		}
+		return "", BundledInStatus{}, fmt.Errorf("failed to get bundledIn status: %w", err)
+	}
+
+	var status BundledInStatus
+	if err := json.Unmarshal([]byte(statusJSON), &status); err != nil {
+		return "", BundledInStatus{}, fmt.Errorf("failed to unmarshal bundledIn status: %w", err)
+	}
+
+	// Check if timeout (over 1 hour)
+	if status.UploadTime > 0 {
+		currentTime := time.Now().Unix()
+		if currentTime-status.UploadTime > 3600 { // 3600 seconds = 1 hour
+			return BundledInStatusTimeout, status, nil // Timeout
+		}
+	}
+
+	return BundledInStatusPending, status, nil // Pending
 }
 
 func (c *Chainkit) addUploaded(txids []string) error {
-	return c.redis.SAdd(c.ctx, RedisKeyUploadedTxids, txids).Err()
+	return c.redis.SAdd(c.ctx, RdbUploadedTxIds, txids).Err()
+}
+
+// isUploaded checks if a transaction ID has already been uploaded
+func (c *Chainkit) isUploaded(txid string) (bool, error) {
+	return c.redis.SIsMember(c.ctx, RdbUploadedTxIds, txid).Result()
+}
+
+// isUploadedBatch checks if multiple transaction IDs have already been uploaded
+// Returns a map where key is txid and value is whether it's uploaded
+func (c *Chainkit) isUploadedBatch(txids []string) (map[string]bool, error) {
+	if len(txids) == 0 {
+		return make(map[string]bool), nil
+	}
+
+	// Use pipeline to check multiple txids efficiently
+	pipe := c.redis.Pipeline()
+	results := make([]*redis.BoolCmd, len(txids))
+
+	for i, txid := range txids {
+		results[i] = pipe.SIsMember(c.ctx, RdbUploadedTxIds, txid)
+	}
+
+	_, err := pipe.Exec(c.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check uploaded txids: %w", err)
+	}
+
+	// Build result map
+	result := make(map[string]bool, len(txids))
+	for i, txid := range txids {
+		result[txid], err = results[i].Result()
+		if err != nil {
+			return nil, fmt.Errorf("failed to check txid %s: %w", txid, err)
+		}
+	}
+
+	return result, nil
 }
