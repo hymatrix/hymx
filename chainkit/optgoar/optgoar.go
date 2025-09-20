@@ -47,7 +47,7 @@ func (o *OptGoar) Upload(items []goarSchema.BundleItem) (txid string, err error)
 // }
 
 func (o *OptGoar) Download(itemID string) (*goarSchema.BundleItem, error) {
-	parentTxID, err := o.GetParentTxid(itemID)
+	parentTxID, err := o.GetBundledInId(itemID)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (o *OptGoar) Downloads(itemsIds []string) (items []*goarSchema.BundleItem, 
 
 	// Get parentTxid for each itemID
 	for _, itemID := range itemsIds {
-		parentTxID, err := o.GetParentTxid(itemID)
+		parentTxID, err := o.GetBundledInId(itemID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get parent txid for item %s: %w", itemID, err)
 		}

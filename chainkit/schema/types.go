@@ -17,7 +17,11 @@ type AggregationPolicy struct {
 	MaxDelay time.Duration // flush when oldest item waits longer than this
 }
 
-type INodeDB interface {
+type INode interface {
+	// verify
+	AuthNode(accid, fromProcess string) error
+	VerifyFromProcess(item goarSchema.BundleItem, pid, signer, fromProcess string) error
+	// DB
 	GetMessage(msgid string) (msg *goarSchema.BundleItem, err error)
 	GetMessageByNonce(pid string, nonce int64) (msg *goarSchema.BundleItem, err error)
 
@@ -25,4 +29,10 @@ type INodeDB interface {
 	GetAssignByNonce(pid string, nonce int64) (assign *goarSchema.BundleItem, err error)
 
 	GetResult(msgid string) (result *vmmSchema.Result, err error)
+}
+
+type DownloadResult struct {
+	Nonce      int64
+	Assignment *goarSchema.BundleItem
+	Message    *goarSchema.BundleItem
 }

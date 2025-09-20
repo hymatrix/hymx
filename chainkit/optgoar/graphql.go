@@ -24,7 +24,7 @@ type BundledInResponse struct {
 	} `json:"transaction"`
 }
 
-func (o *OptGoar) GetParentTxid(txid string) (parentTxid string, err error) {
+func (o *OptGoar) GetBundledInId(txid string) (parentTxid string, err error) {
 	query := fmt.Sprintf(BundledInQueryTemplate, txid)
 	result, err := o.GraphQL(query)
 	if err != nil {

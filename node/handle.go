@@ -27,7 +27,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	// If the accid is registered in the node list, it is allowed to send a From-Process message.
 	// The From-Process value must also be registered under the corresponding node.
 	// If this io a registration request sent to the registry, this step is skipped.
-	if err = n.verifyFromProcess(item, pid, signer, fromProcess); err != nil {
+	if err = n.VerifyFromProcess(item, pid, signer, fromProcess); err != nil {
 		return
 	}
 
@@ -101,9 +101,9 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	return
 }
 
-// verifyFromProcess verifies the fromProcess authentication
+// VerifyFromProcess verifies the fromProcess authentication
 // It handles both registry process verification and regular node authentication
-func (n *Node) verifyFromProcess(item goarSchema.BundleItem, pid, signer, fromProcess string) error {
+func (n *Node) VerifyFromProcess(item goarSchema.BundleItem, pid, signer, fromProcess string) error {
 	if fromProcess == "" {
 		return nil
 	}
@@ -125,7 +125,7 @@ func (n *Node) verifyFromProcess(item goarSchema.BundleItem, pid, signer, fromPr
 	}
 
 	// Handle regular node authentication
-	if err := n.authNode(signer, fromProcess); err != nil {
+	if err := n.AuthNode(signer, fromProcess); err != nil {
 		log.Error("auth node failed", "pid", pid, "signer", signer, "fromProcess", fromProcess)
 		return err
 	}
@@ -165,7 +165,7 @@ func (n *Node) isRedirect(pid string) (ok bool, nodes []registrySchema.Node, err
 	return
 }
 
-func (n *Node) authNode(accid, fromProcess string) (err error) {
+func (n *Node) AuthNode(accid, fromProcess string) (err error) {
 	nodes, err := n.GetNodesByProcess(fromProcess)
 	if err != nil {
 		return err
