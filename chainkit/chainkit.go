@@ -8,17 +8,17 @@ import (
 	"github.com/go-co-op/gocron"
 	"github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/common"
+	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	goarSchema "github.com/permadao/goar/schema"
 	"github.com/redis/go-redis/v9"
 )
 
-var log = common.NewLog("node")
+var log = common.NewLog("chainkit")
 
 type Chainkit struct {
-	node              schema.INode
-	operator          schema.IOperator
-	aggregationPolicy schema.AggregationPolicy
-	scheduler         *gocron.Scheduler
+	node      schema.INode
+	operator  schema.IOperator
+	scheduler *gocron.Scheduler
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -37,12 +37,8 @@ func New(op schema.IOperator, node schema.INode, redisUrl string) *Chainkit {
 	redisOpt.MaxRetries = 3
 
 	return &Chainkit{
-		node:     node,
-		operator: op,
-		aggregationPolicy: schema.AggregationPolicy{
-			MaxItems: 1000,
-			MaxDelay: 5 * time.Minute,
-		},
+		node:      node,
+		operator:  op,
 		scheduler: gocron.NewScheduler(time.UTC),
 		ctx:       ctx,
 		cancel:    cancel,
@@ -51,7 +47,8 @@ func New(op schema.IOperator, node schema.INode, redisUrl string) *Chainkit {
 }
 
 func (c *Chainkit) Run() {
-	log.Info("chainkit run")
+	log.Info("chainkit running")
+	c.scheduler.StartAsync()
 	c.runJobs()
 }
 
@@ -63,6 +60,11 @@ func (c *Chainkit) Close() {
 		c.scheduler.Stop()
 	}
 	log.Info("chainkit closed")
+}
+
+func (c *Chainkit) AssignmentHandler(assignmentResult nodeSchema.AssignmentResult) {
+	log.Debug("call assignment handler", "msgid", assignmentResult.Item.Id)
+	c.Upload(assignmentResult.Item)
 }
 
 // Upload a BundleItem transaction. This function doesn't actually upload the transaction,
@@ -82,10 +84,8 @@ func (c *Chainkit) DownloadByTxid(txid string) (*goarSchema.BundleItem, error) {
 }
 
 // Download all transactions of a process, from specified Nonce to latest transaction
-// todo: begin and end nonce
-// signer parameter (get transaction with txid=pid)
 func (c *Chainkit) DownloadByPid(pid string, beginNonce, endNonce int64) (results []*schema.DownloadResult, err error) {
-	// 1. 下载 txid = pid 的交易，这笔交易是 nonce=0 的 spawn 交易，用于创建进程
+	// 1. download spawn transaction, txid = pid, nonce=0
 	spawnMsg, err := c.operator.Download(pid)
 	if err != nil {
 		log.Error("DownloadByPid failed", "pid", pid, "err", err)
@@ -95,12 +95,12 @@ func (c *Chainkit) DownloadByPid(pid string, beginNonce, endNonce int64) (result
 		log.Error("DownloadByPid failed, spawnMsg is nil", "pid", pid)
 		return nil, schema.ErrSpawnTxNotFound
 	}
-	// 2. 校验交易，获取 signer
+	// 2. verify spawn message
 	if err = c.verifySpawnMsg(spawnMsg); err != nil {
 		log.Error("verifySpawnMsg failed", "pid", pid, "err", err)
 		return nil, err
 	}
-	// 3. 下载所有 [beginNonce, endNonce] 范围内的交易
+	// 3. download transactions range [beginNonce, endNonce]
 	items, err := c.downloadByNonce("", pid, beginNonce, endNonce)
 	if err != nil {
 		log.Error("downloadByNonce failed", "pid", pid, "err", err)

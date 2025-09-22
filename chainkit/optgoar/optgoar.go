@@ -24,6 +24,7 @@ func New(wallet *goar.Wallet, ctx context.Context) *OptGoar {
 }
 
 func (o *OptGoar) Upload(items []goarSchema.BundleItem) (txid string, err error) {
+	// create bundle
 	bundle, err := goarUtils.NewBundle(items...)
 	if err != nil {
 		return "", err
@@ -41,10 +42,6 @@ func (o *OptGoar) Upload(items []goarSchema.BundleItem) (txid string, err error)
 	}
 	return tx.ID, nil
 }
-
-// func (o *OptGoar) Download(parentTxID string, itemsIds []string) (items []*goarSchema.BundleItem, err error) {
-// 	return o.wallet.Client.GetBundleItems(parentTxID, itemsIds)
-// }
 
 func (o *OptGoar) Download(itemID string) (*goarSchema.BundleItem, error) {
 	parentTxID, err := o.GetBundledInId(itemID)
@@ -111,12 +108,9 @@ func (o *OptGoar) CheckTransaction(txid string) (bool, error) {
 		return false, err
 	}
 
-	items, err := goarUtils.DecodeBundle(itemBytes)
+	_, err = goarUtils.DecodeBundle(itemBytes)
 	if err != nil {
 		return false, err
-	}
-	for _, item := range items.Items {
-		fmt.Println("====>", item.Id)
 	}
 
 	return true, nil
