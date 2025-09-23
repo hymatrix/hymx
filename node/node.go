@@ -112,7 +112,7 @@ func New(
 	chainkitRedis := "redis://@localhost:6379/5"
 	chainkit := chainkit.New(optGoar, node, chainkitRedis)
 	node.chainkit = chainkit
-	node.AddAssignmentHandler(chainkit.AssignmentHandler)
+	node.AddAssignResHandler(chainkit.AssignmentHandler)
 
 	return node
 }
