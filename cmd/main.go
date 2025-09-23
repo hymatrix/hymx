@@ -71,7 +71,8 @@ func run(c *cli.Context) (err error) {
 
 	}
 
-	s := server.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo, pay)
+	chainkitCfg := LoadChainkitConfig()
+	s := server.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo, pay, chainkitCfg)
 
 	// mount your vm here.....
 	// ex:

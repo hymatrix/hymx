@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/go-co-op/gocron"
+	"github.com/hymatrix/hymx/chainkit/optgoar"
 	"github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/common"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
+	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
 	goarUtils "github.com/permadao/goar/utils"
 	"github.com/redis/go-redis/v9"
@@ -26,10 +28,20 @@ type Chainkit struct {
 	redis  *redis.Client
 }
 
-func New(op schema.IOperator, node schema.INode, redisUrl string) *Chainkit {
+func New(node schema.INode, config schema.Config) *Chainkit {
 	ctx, cancel := context.WithCancel(context.Background())
+	var op schema.IOperator
+	if config.OptType == "goar" {
+		wallet, err := goar.NewWalletFromPath(config.Keyfile, "https://arweave.net")
+		if err != nil {
+			panic(err)
+		}
+		op = optgoar.New(wallet, ctx)
+	} else {
+		panic("unsupported opt type")
+	}
 
-	redisOpt, err := redis.ParseURL(redisUrl)
+	redisOpt, err := redis.ParseURL(config.RedisUrl)
 	if err != nil {
 		panic(err)
 	}

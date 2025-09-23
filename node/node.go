@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/hymatrix/hymx/chainkit"
-	"github.com/hymatrix/hymx/chainkit/optgoar"
 	chainkitSchema "github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/db/cache"
@@ -62,7 +61,12 @@ type Node struct {
 }
 
 func New(
-	bundler *goar.Bundler, redisURL, arweaveURL, hymxURL string, nodeInfo *schema.Info,
+	bundler *goar.Bundler,
+	redisURL string,
+	arweaveURL string,
+	hymxURL string,
+	nodeInfo *schema.Info,
+	chainkitCfg chainkitSchema.Config,
 ) *Node {
 	outboxChan := make(chan vmmSchema.Outbox, 1000)
 	resultChan := make(chan vmmSchema.Result, 1000)
@@ -103,16 +107,8 @@ func New(
 		recoveryTaskPool: taskPool,
 	}
 
-	path := "./arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json"
-	wallet, err := goar.NewWalletFromPath(path, "https://arweave.net")
-	if err != nil {
-		panic(err)
-	}
-	optGoar := optgoar.New(wallet, ctx)
-	chainkitRedis := "redis://@localhost:6379/5"
-	chainkit := chainkit.New(optGoar, node, chainkitRedis)
-	node.chainkit = chainkit
-	node.AddAssignResHandler(chainkit.AssignmentHandler)
+	node.chainkit = chainkit.New(node, chainkitCfg)
+	node.AddAssignResHandler(node.chainkit.AssignmentHandler)
 
 	return node
 }

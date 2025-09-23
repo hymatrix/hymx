@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 
+	chainkitSchema "github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/node"
 	"github.com/hymatrix/hymx/node/schema"
@@ -22,10 +23,10 @@ type Server struct {
 
 func New(
 	bundler *goar.Bundler, redisURL, arweaveURL, hymxURL string,
-	nodeInfo *schema.Info, pay *pay.Pay,
+	nodeInfo *schema.Info, pay *pay.Pay, chainkitCfg chainkitSchema.Config,
 ) *Server {
 	return &Server{
-		node: node.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo),
+		node: node.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo, chainkitCfg),
 		pay:  pay,
 	}
 }
