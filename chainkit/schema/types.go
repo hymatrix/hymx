@@ -1,21 +1,9 @@
 package schema
 
 import (
-	"time"
-
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
 )
-
-var (
-	ZeroParentID = "0"
-)
-
-// AggregationPolicy controls how aggregator groups transactions.
-type AggregationPolicy struct {
-	MaxItems int64         // flush when reaching item count
-	MaxDelay time.Duration // flush when oldest item waits longer than this
-}
 
 type INode interface {
 	// verify
