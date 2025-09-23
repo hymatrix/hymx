@@ -18,37 +18,52 @@ func (c *Chainkit) downloadByNonce(scheduler, pid string, beginNonce, endNonce i
 	log.Debug("downloadByNonce assignIds count", "count", len(assignIds))
 	log.Debug("downloadByNonce txIds count", "count", len(txIds))
 
-	for i := beginNonce; i <= endNonce; i++ {
-		assignId, ok := assignIds[i]
+	for nonce := beginNonce; nonce <= endNonce; nonce++ {
+		assignId, ok := assignIds[nonce]
+		if !ok {
+			//todo: if assignId exist? select which one ???
+			continue
+		}
+		txId, ok := txIds[nonce]
 		if !ok {
 			continue
 		}
-		txId, ok := txIds[i]
-		if !ok {
-			continue
+
+		// check local db before download
+		assignment, err := c.node.GetAssignByNonce(pid, nonce)
+		if err != nil {
+			log.Debug("begin download", "assignId", assignId, "txId", txId)
+			assignment, err = c.DownloadByTxid(assignId)
+			if err != nil {
+				return nil, err
+			}
+
+			err = c.verifyAssignment(assignment)
+			if err != nil {
+				log.Debug("verify assignment failed", "error", err)
+				continue
+			}
 		}
 
-		log.Debug("begin download", "assignId", assignId, "txId", txId)
-
-		assignment, err := c.DownloadByTxid(assignId)
+		// check local db before download
+		message, err := c.node.GetMessage(txId)
 		if err != nil {
-			return nil, err
-		}
+			log.Debug("begin download message", "txId", txId)
+			message, err = c.DownloadByTxid(txId)
+			if err != nil {
+				return nil, err
+			}
 
-		err = c.verifyAssignment(assignment)
-		if err != nil {
-			log.Debug("verify assignment failed", "error", err)
-			continue
-		}
-
-		log.Debug("begin download message", "txId", txId)
-		message, err := c.DownloadByTxid(txId)
-		if err != nil {
-			return nil, err
+			// commit to redis
+			err = c.node.CommitMessage(pid, nonce, *message, *assignment)
+			if err != nil {
+				log.Debug("commit to redis failed", "error", err)
+				continue
+			}
 		}
 
 		results = append(results, &schema.DownloadResult{
-			Nonce:      i,
+			Nonce:      nonce,
 			Assignment: assignment,
 			Message:    message,
 		})

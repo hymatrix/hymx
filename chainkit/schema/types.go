@@ -29,6 +29,8 @@ type INode interface {
 	GetAssignByNonce(pid string, nonce int64) (assign *goarSchema.BundleItem, err error)
 
 	GetResult(msgid string) (result *vmmSchema.Result, err error)
+
+	CommitMessage(pid string, nonce int64, msg, assign goarSchema.BundleItem) error
 }
 
 type DownloadResult struct {

@@ -6,6 +6,9 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/hymatrix/hymx/chainkit"
+	"github.com/hymatrix/hymx/chainkit/optgoar"
+	chainkitSchema "github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/db/cache"
 	"github.com/hymatrix/hymx/db/rdb"
@@ -25,8 +28,9 @@ type Node struct {
 	hymxURL string
 	info    *schema.Info
 
-	bundler *goar.Bundler
-	sdk     *sdk.SDK
+	bundler  *goar.Bundler
+	sdk      *sdk.SDK
+	chainkit *chainkit.Chainkit
 
 	vmm *vmm.Vmm
 
@@ -68,7 +72,7 @@ func New(
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return &Node{
+	node := &Node{
 		hymxURL: hymxURL,
 		info:    nodeInfo,
 
@@ -96,10 +100,24 @@ func New(
 		outboxDB:         cache.NewOutbox(),
 		recoveryTaskPool: taskPool,
 	}
+
+	path := "./arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json"
+	wallet, err := goar.NewWalletFromPath(path, "https://arweave.net")
+	if err != nil {
+		panic(err)
+	}
+	optGoar := optgoar.New(wallet, ctx)
+	chainkitRedis := "redis://@localhost:6379/5"
+	chainkit := chainkit.New(optGoar, node, chainkitRedis)
+	node.chainkit = chainkit
+	node.AddAssignmentHandler(chainkit.AssignmentHandler)
+
+	return node
 }
 
 func (n *Node) Run() {
 	n.vmm.Run()
+	n.chainkit.Run()
 	go n.runMsgChan()
 	go n.runProcChan()
 	go n.runResultChan()
@@ -198,6 +216,25 @@ func (n *Node) StakeOf(accid string) (*big.Int, error) {
 
 func (n *Node) GetCache(pid, key string) (string, error) {
 	return n.db.GetCache(pid, key)
+}
+
+func (n *Node) DownloadByPid(pid string, beginNonce, endNonce int64) ([]*chainkitSchema.DownloadResult, error) {
+	return n.chainkit.DownloadByPid(pid, beginNonce, endNonce)
+}
+
+func (n *Node) CommitMessage(pid string, nonce int64, msg, assign goarSchema.BundleItem) error {
+	exist, err := n.db.IsExist(pid)
+	if err != nil {
+		return err
+	}
+	if exist {
+		return nil
+	}
+	m, _ := n.db.GetMessage(msg.Id)
+	if m != nil {
+		return nil
+	}
+	return n.db.Commit(pid, nonce, msg, assign)
 }
 
 func (n *Node) GetModuleNames() []string {
