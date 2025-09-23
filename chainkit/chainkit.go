@@ -10,6 +10,7 @@ import (
 	"github.com/hymatrix/hymx/common"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	goarSchema "github.com/permadao/goar/schema"
+	goarUtils "github.com/permadao/goar/utils"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -86,26 +87,37 @@ func (c *Chainkit) DownloadByTxid(txid string) (*goarSchema.BundleItem, error) {
 // Download all transactions of a process, from specified Nonce to latest transaction
 func (c *Chainkit) DownloadByPid(pid string, beginNonce, endNonce int64) (results []*schema.DownloadResult, err error) {
 	// 1. download spawn transaction, txid = pid, nonce=0
-	spawnMsg, err := c.operator.Download(pid)
+	log.Debug("download spawn transaction", "pid", pid)
+	spawnItem, err := c.operator.Download(pid)
 	if err != nil {
 		log.Error("DownloadByPid failed", "pid", pid, "err", err)
 		return nil, err
 	}
-	if spawnMsg == nil {
+	if spawnItem == nil {
 		log.Error("DownloadByPid failed, spawnMsg is nil", "pid", pid)
 		return nil, schema.ErrSpawnTxNotFound
 	}
+	log.Debug("verify spawn transaction success", "pid", pid, "txid", spawnItem.Id)
 	// 2. verify spawn message
-	if err = c.verifySpawnMsg(spawnMsg); err != nil {
+	if err = c.verifySpawnMsg(spawnItem); err != nil {
 		log.Error("verifySpawnMsg failed", "pid", pid, "err", err)
 		return nil, err
 	}
+	log.Debug("download by nonce")
 	// 3. download transactions range [beginNonce, endNonce]
-	items, err := c.downloadByNonce("", pid, beginNonce, endNonce)
+	arAddressOwner, err := goarUtils.OwnerToAddress(spawnItem.Owner)
+	if err != nil {
+		log.Error("OwnerToAddress failed", "pid", pid, "err", err)
+		return nil, err
+	}
+	log.Debug("OwnerToAddress ", "owner", arAddressOwner)
+	items, err := c.downloadByNonce(arAddressOwner, pid, beginNonce, endNonce)
 	if err != nil {
 		log.Error("downloadByNonce failed", "pid", pid, "err", err)
 		return nil, err
 	}
+	log.Debug("items count", "count", len(items))
+
 	return items, nil
 }
 
