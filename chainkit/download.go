@@ -8,6 +8,54 @@ import (
 	goarUtils "github.com/permadao/goar/utils"
 )
 
+func (c *Chainkit) downloadByNonce(scheduler, pid string, beginNonce, endNonce int64) (results []*schema.DownloadResult, err error) {
+	assignIds, txIds, err := c.queryByNonce(scheduler, pid, beginNonce, endNonce)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug("downloadByNonce", "scheduler", scheduler, "pid", pid, "beginNonce", beginNonce, "endNonce", endNonce)
+	log.Debug("downloadByNonce assignIds count", "count", len(assignIds))
+	log.Debug("downloadByNonce txIds count", "count", len(txIds))
+
+	for i := beginNonce; i <= endNonce; i++ {
+		assignId, ok := assignIds[i]
+		if !ok {
+			continue
+		}
+		txId, ok := txIds[i]
+		if !ok {
+			continue
+		}
+
+		log.Debug("begin download", "assignId", assignId, "txId", txId)
+
+		assignment, err := c.DownloadByTxid(assignId)
+		if err != nil {
+			return nil, err
+		}
+
+		err = c.verifyAssignment(assignment)
+		if err != nil {
+			log.Debug("verify assignment failed", "error", err)
+			continue
+		}
+
+		log.Debug("begin download message", "txId", txId)
+		message, err := c.DownloadByTxid(txId)
+		if err != nil {
+			return nil, err
+		}
+
+		results = append(results, &schema.DownloadResult{
+			Nonce:      i,
+			Assignment: assignment,
+			Message:    message,
+		})
+	}
+	return results, nil
+}
+
 func (c *Chainkit) downloads(itemsIds []string) (items []*goarSchema.BundleItem, err error) {
 	items, err = c.operator.Downloads(itemsIds)
 	return items, err
@@ -63,44 +111,4 @@ func (c *Chainkit) verifyAssignment(assignmentItem *goarSchema.BundleItem) error
 	}
 
 	return nil
-}
-
-func (c *Chainkit) downloadByNonce(scheduler, pid string, beginNonce, endNonce int64) (results []*schema.DownloadResult, err error) {
-	assignIds, txIds, err := c.queryByNonce(scheduler, pid, beginNonce, endNonce)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := beginNonce; i <= endNonce; i++ {
-		assignId, ok := assignIds[i]
-		if !ok {
-			continue
-		}
-		txId, ok := txIds[i]
-		if !ok {
-			continue
-		}
-
-		assignment, err := c.DownloadByTxid(assignId)
-		if err != nil {
-			return nil, err
-		}
-
-		err = c.verifyAssignment(assignment)
-		if err != nil {
-			continue
-		}
-
-		message, err := c.DownloadByTxid(txId)
-		if err != nil {
-			return nil, err
-		}
-
-		results = append(results, &schema.DownloadResult{
-			Nonce:      i,
-			Assignment: assignment,
-			Message:    message,
-		})
-	}
-	return results, nil
 }

@@ -100,7 +100,6 @@ func (o *OptGoar) CheckTransaction(txid string) (bool, error) {
 	if state.NumberOfConfirmations <= 1 {
 		return false, nil
 	}
-	fmt.Printf("txid: %s, state: %#v\n", txid, state)
 
 	// check data
 	itemBytes, err := o.wallet.Client.GetTransactionData(txid, "json")

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	hymxSchema "github.com/hymatrix/hymx/schema"
+	"github.com/hymatrix/hymx/utils"
 	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
 	goarUtils "github.com/permadao/goar/utils"
@@ -168,14 +170,25 @@ func (suite *OptGoarTestSuite) TestDownloadWithValidParams() {
 	}
 
 	// parentTxID := "tiB55vvqzNvUOE5AVf5OsaO88R-5rmRHmasinXn3MKE"
-	itemsIds := []string{"ydzdP-svCgeZFj3MseCNVJgK94RCujPII8xOw5SJZ6w", "x8r4SYW3S_yyoaPUsbDcAFoxBVhaWZPKxYZf_RiwQdQ"}
+	itemsIds := []string{"u2B2eOrAIFKeP62bbsRkLRX9tJOKqqdJ5rcgsSwS10E"}
 
 	items, err := suite.optGoar.Downloads(itemsIds)
+	if err != nil {
+		return
+	}
+	fmt.Println("count:", len(items))
 	for _, item := range items {
-		data, err := goarUtils.Base64Decode(item.Data)
-		assert.NoError(suite.T(), err)
-		fmt.Printf("item id: %s\n", item.Id)
-		fmt.Printf("data: %s\n", data)
+		_, _, _, instance, err := utils.Decode(*item)
+		if err != nil {
+			fmt.Printf("decode item failed, err: %v\n", err)
+			return
+		}
+		a, ok := instance.(hymxSchema.Process)
+		if !ok {
+			fmt.Printf("convert Assignment failed, err: %v\n", err)
+			continue
+		}
+		fmt.Printf("assignment: %#v\n", a)
 	}
 
 	// Since using mock wallet, mainly test that method calls don't panic
