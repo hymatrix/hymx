@@ -6,6 +6,7 @@ import (
 
 	"github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/utils"
+	goarSchema "github.com/permadao/goar/schema"
 )
 
 func (n *Node) runRecovery() error {
@@ -49,6 +50,39 @@ func (n *Node) runRecovery() error {
 	return nil
 }
 
+// getMessageAndAssignByNonce retrieves both message and assignment by process ID and nonce
+func (n *Node) getMessageAndAssignByNonce(pid string, nonce int64) (msgItem, assignItem *goarSchema.BundleItem, err error) {
+	// Retry logic - attempt up to 3 times
+	const maxRetries = 3
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		msgItem, err1 := n.db.GetMessageByNonce(pid, nonce)
+		assignItem, err2 := n.db.GetAssignByNonce(pid, nonce)
+
+		if err1 != nil || err2 != nil {
+			// If either fetch fails, try to download and retry
+			_, err = n.chainkit.DownloadByPid(pid, nonce, nonce)
+			if err != nil {
+				// If download also fails, continue to next retry or return error
+				if attempt == maxRetries-1 {
+					// Last attempt failed, return the error
+					return nil, nil, err
+				}
+				// Not the last attempt, continue to retry
+				continue
+			}
+			// Download succeeded, continue to next iteration to retry fetching
+			continue
+		}
+
+		// Both fetches succeeded, return the results
+		return msgItem, assignItem, nil
+	}
+
+	// All retries exhausted, return error
+	return nil, nil, errors.New("failed to get message and assignment after 3 retries")
+}
+
 func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string) error {
 	if n.vmm.IsRecovering(pid) {
 		return schema.ErrProcessIsRecovering
@@ -71,18 +105,19 @@ func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string) error {
 
 	n.wg.Add(1)
 	defer n.wg.Done()
+
+	_, err := n.chainkit.DownloadByPid(pid, beginNonce, maxNonce)
+	if err != nil {
+		return err
+	}
+
 	// recovering all message of the process
 	for nonce := beginNonce; nonce <= maxNonce; nonce++ {
 		select {
 		case <-n.ctx.Done():
 			return errors.New("node closed")
 		default:
-			msg, err := n.db.GetMessageByNonce(pid, nonce)
-			if err != nil {
-				return err
-			}
-
-			assignItem, err := n.db.GetAssignByNonce(pid, nonce)
+			msg, assignItem, err := n.getMessageAndAssignByNonce(pid, nonce)
 			if err != nil {
 				return err
 			}
