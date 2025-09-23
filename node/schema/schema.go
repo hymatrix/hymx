@@ -18,7 +18,14 @@ type Info struct {
 	VmCount     int64               `json:"Vm-Count"`
 }
 
-type ResultHandler func(vmmSchema.Result)
+type ItemMeta struct {
+	Pid         string
+	Signer      string
+	FromProcess string
+	Instance    interface{}
+}
+
+type ItemHandler func(ItemMeta) error
 
 type AssignmentResult struct {
 	Pid        string
@@ -28,4 +35,6 @@ type AssignmentResult struct {
 	Error      error
 }
 
-type AssignmentHandler func(AssignmentResult)
+type AssignResHandler func(AssignmentResult)
+
+type ResultHandler func(vmmSchema.Result)

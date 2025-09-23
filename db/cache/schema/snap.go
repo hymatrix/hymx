@@ -36,3 +36,12 @@ type OutboxSnapshot struct {
 	Mailbox []*goarSchema.BundleItem `json:"m"`
 	Targets map[string][]int         `json:"t"`
 }
+
+type PaySnapshot struct {
+	Whitelist        map[string]bool                `json:"w"`
+	Executed         map[string]bool                `json:"e"`
+	Ledger           map[string]map[string]*big.Int `json:"l"`
+	TxPending        map[string]map[string]*big.Int `json:"tp"`
+	SpawnPending     map[string]map[string]*big.Int `json:"sp"`
+	ResidencyPending map[string]*big.Int            `json:"rp"`
+}

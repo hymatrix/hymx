@@ -41,6 +41,9 @@ func (s *Server) runAPI(endpoint string) {
 	engine.GET("/processes/:accid", s.GetProcesses)
 
 	// api for core token
+	engine.GET("/balanceOf/:accid", s.BalanceOf)
+	engine.GET("/stakeOf/:accid", s.StakeOf)
+	// for compatibility
 	engine.GET("/balanceof/:accid", s.BalanceOf)
 	engine.GET("/stakeof/:accid", s.StakeOf)
 
@@ -51,6 +54,9 @@ func (s *Server) runAPI(endpoint string) {
 
 	// get all supported modules
 	engine.GET("/modules", s.GetModules)
+
+	// inject pay api
+	s.injectPayApi(engine)
 
 	s.apiServer = &http.Server{
 		Addr:    endpoint,

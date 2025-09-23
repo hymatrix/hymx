@@ -10,7 +10,7 @@ import (
 )
 
 // outbox, manage out msg, sequence
-func (v *Vmm) outbox(env *schema.Env, result *schema.Result, dryrun bool) {
+func (v *Vmm) outbox(env *schema.Env, result *schema.Result) {
 	for _, msg := range result.Messages {
 		if _, err := utils.TagsToMessage(msg.Tags); err != nil {
 			log.Error("invalid msg tags", "err", err)
@@ -22,7 +22,7 @@ func (v *Vmm) outbox(env *schema.Env, result *schema.Result, dryrun bool) {
 		msg.Sequence = fmt.Sprintf("%d", env.Sequence)
 		v.vmsLockMu.Unlock()
 
-		if dryrun {
+		if result.DryRun {
 			continue
 		}
 
@@ -57,7 +57,7 @@ func (v *Vmm) outbox(env *schema.Env, result *schema.Result, dryrun bool) {
 		spawn.Sequance = fmt.Sprintf("%d", env.Sequence)
 		v.vmsLockMu.Unlock()
 
-		if dryrun {
+		if result.DryRun {
 			continue
 		}
 
@@ -83,7 +83,5 @@ func (v *Vmm) outbox(env *schema.Env, result *schema.Result, dryrun bool) {
 	}
 
 	// send to result chan
-	if !dryrun {
-		v.resultChan <- *result
-	}
+	v.resultChan <- *result
 }

@@ -90,20 +90,20 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client) {
 			}
 			assignItem, err := clients[0].GetAssignByNonce(pid, nonce)
 			if err != nil {
-				log.Error("fork process is in grogress, can not get assign", "pid", pid, "nonce", nonce, "err", err)
+				log.Error("fork process is in progress, can not get assign", "pid", pid, "nonce", nonce, "err", err)
 				time.Sleep(delay)
 				continue
 			}
 
 			assign, err := utils.TagsToAssignment(assignItem.Tags)
 			if err != nil {
-				log.Error("fork process is in grogress, decode assign failed", "pid", pid, "nonce", nonce, "err", err)
+				log.Error("fork process is in progress, decode assign failed", "pid", pid, "nonce", nonce, "err", err)
 				time.Sleep(delay)
 				continue
 			}
 
 			if err = n.HandleDryRun(msgItem, assign, -1); err != nil {
-				log.Error("fork process is in grogress, dry run failed", "pid", pid, "nonce", nonce, "err", err)
+				log.Error("fork process is in progress, dry run failed", "pid", pid, "nonce", nonce, "err", err)
 				time.Sleep(delay)
 				continue
 			}

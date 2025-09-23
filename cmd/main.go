@@ -5,15 +5,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/everFinance/goether"
 	"github.com/gin-gonic/gin"
 	"github.com/hymatrix/hymx/common"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/server"
-	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	"github.com/inconshreveable/log15"
-	"github.com/permadao/goar"
 	"github.com/spf13/viper"
 	"github.com/urfave/cli/v2"
 )
@@ -56,14 +53,17 @@ func run(c *cli.Context) (err error) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
-	// config
-	port := viper.GetString("port")
-	ginMode := viper.GetString("ginMode")
-	redisURL := viper.GetString("redisURL")
-	arweaveURL := viper.GetString("arweaveURL")
-	hymxURL := viper.GetString("hymxURL")
-	prvKey := viper.GetString("prvKey")
-	keyfilePath := viper.GetString("keyfilePath")
+	// node config
+	port, ginMode, redisURL, arweaveURL, hymxURL, bundler, nodeInfo, err := LoadNodeConfig()
+	if err != nil {
+		return err
+	}
+
+	// pay config
+	pay, err := LoadPayConfig()
+	if err != nil {
+		return err
+	}
 
 	gin.SetMode(ginMode)
 	if ginMode == "release" {
@@ -71,35 +71,7 @@ func run(c *cli.Context) (err error) {
 
 	}
 
-	var signer interface{}
-	if prvKey != "" {
-		signer, err = goether.NewSigner(prvKey)
-	} else {
-		signer, err = goar.NewSignerFromPath(keyfilePath)
-	}
-	if err != nil {
-		return err
-	}
-	bundler, err := goar.NewBundler(signer)
-	if err != nil {
-		return err
-	}
-
-	// config
-	nodeInfo := &nodeSchema.Info{
-		Protocol:    schema.DataProtocol,
-		Variant:     schema.Variant,
-		NodeVersion: nodeSchema.NodeVersion,
-		JoinNetwork: viper.GetBool("joinNetwork"),
-		Node: registrySchema.Node{
-			AccId: bundler.Address,
-			Name:  viper.GetString("nodeName"),
-			Desc:  viper.GetString("nodeDesc"),
-			URL:   viper.GetString("nodeURL"),
-		},
-	}
-
-	s := server.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo)
+	s := server.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo, pay)
 
 	// mount your vm here.....
 	// ex:

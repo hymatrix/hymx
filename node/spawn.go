@@ -31,7 +31,7 @@ func (n *Node) handleProcess(
 		Timestamp:        0,
 		Params:           params,
 		Data:             item.Data,
-		RecoveryDryRun:   dryRun,
+		DryRun:           dryRun,
 		RecoveryMaxNonce: maxNonce,
 	}
 

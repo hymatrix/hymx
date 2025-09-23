@@ -22,6 +22,21 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 		return
 	}
 
+	// Custom handler to process and filter items
+	n.itemHandlerLockMu.RLock()
+	for _, handler := range n.itemHandlers {
+		if err = handler(schema.ItemMeta{
+			Pid:         pid,
+			Signer:      signer,
+			FromProcess: fromProcess,
+			Instance:    instance,
+		}); err != nil {
+			n.itemHandlerLockMu.RUnlock()
+			return
+		}
+	}
+	n.itemHandlerLockMu.RUnlock()
+
 	// VERY IMPORTANT!!!
 	// Verify that the item is signed by the correct node owner.
 	// If the accid is registered in the node list, it is allowed to send a From-Process message.
