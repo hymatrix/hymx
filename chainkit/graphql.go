@@ -13,6 +13,7 @@ const (
 	queryBatchSize = 10
 )
 
+// query assignment & message by nonce
 func (c *Chainkit) queryByNonce(scheduler, pid string, beginNonce, endNonce int64) (assignIds, txIds map[int64]string, err error) {
 	// Query GraphQL for assignment messages, assignment message tags contain message txid
 	assignIds = make(map[int64]string)
