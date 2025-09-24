@@ -6,8 +6,6 @@ import (
 )
 
 type INode interface {
-	// verify
-	AuthNode(accid, fromProcess string) error
 	// DB
 	GetMessage(msgid string) (msg *goarSchema.BundleItem, err error)
 	GetMessageByNonce(pid string, nonce int64) (msg *goarSchema.BundleItem, err error)

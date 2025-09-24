@@ -140,7 +140,7 @@ func (n *Node) verifyFromProcess(item goarSchema.BundleItem, pid, signer, fromPr
 	}
 
 	// Handle regular node authentication
-	if err := n.AuthNode(signer, fromProcess); err != nil {
+	if err := n.authNode(signer, fromProcess); err != nil {
 		log.Error("auth node failed", "pid", pid, "signer", signer, "fromProcess", fromProcess)
 		return err
 	}
@@ -180,7 +180,7 @@ func (n *Node) isRedirect(pid string) (ok bool, nodes []registrySchema.Node, err
 	return
 }
 
-func (n *Node) AuthNode(accid, fromProcess string) (err error) {
+func (n *Node) authNode(accid, fromProcess string) (err error) {
 	nodes, err := n.GetNodesByProcess(fromProcess)
 	if err != nil {
 		return err
