@@ -216,10 +216,6 @@ func (n *Node) GetCache(pid, key string) (string, error) {
 	return n.db.GetCache(pid, key)
 }
 
-func (n *Node) DownloadByPid(pid string, beginNonce, endNonce int64) ([]*chainkitSchema.DownloadResult, error) {
-	return n.chainkit.DownloadByPid(pid, beginNonce, endNonce)
-}
-
 func (n *Node) GetModuleNames() []string {
 	return n.vmm.GetModuleNames()
 }
