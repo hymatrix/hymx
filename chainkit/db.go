@@ -1,7 +1,6 @@
 package chainkit
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -19,28 +18,8 @@ const (
 
 const (
 	// MaxUploadingCount is the maximum number of transactions allowed in uploading state
-	MaxUploadingCount = 100
+	MaxUploadingCount = 10000
 )
-
-var (
-	ErrBundledInAlreadyExists = errors.New("bundledIn_already_exists")
-	ErrTxIdsEmpty             = errors.New("txids_is_empty")
-)
-
-// BundledInStatusEnum represents the current bundledIn status
-type BundledInStatusEnum string
-
-const (
-	BundledInStatusEmpty   BundledInStatusEnum = "empty"   // No RdbCurrentBundledIn
-	BundledInStatusPending BundledInStatusEnum = "pending" // Has RdbCurrentBundledIn, not timeout
-	BundledInStatusTimeout BundledInStatusEnum = "timeout" // Has RdbCurrentBundledIn, over 1 hour
-)
-
-type BundledInStatus struct {
-	BundledInID string   `json:"bundledInID"`
-	TxIds       []string `json:"txIds"`
-	UploadTime  int64    `json:"uploadTime"`
-}
 
 func (c *Chainkit) moveToUploading() (int64, error) {
 	// Check if RdbCurrentBundledIn exists, return failure if it does
