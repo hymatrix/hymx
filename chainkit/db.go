@@ -1,7 +1,6 @@
 package chainkit
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -10,11 +9,17 @@ import (
 )
 
 const (
-	RedisUrl            = "redis://@localhost:6379/0"
-	RdbPendingTxIds     = "chainkit:pending"              // Set: Pending TxId pool
-	RdbCurrentBundledIn = "chainkit:current_bundledin_id" // String: current bundledIn id
-	RdbBundledInStatus  = "chainkit:bundledin_status"     // Hash: chainkit:bundledin_status:<bundledInID>, BundleInStatus struct
+	RedisUrl = "redis://@localhost:6379/0"
+
+	RdbPendingTxIds     = "chainkit:pending"              // List: Pending TxId FIFO queue
+	RdbUploadingTxIds   = "chainkit:uploading"            // Set: Uploading TxId pool
+	RdbCurrentBundledIn = "chainkit:current_bundledin_id" // String: current bundledIn id with 1 hour expiration
 	RdbUploadedTxIds    = "chainkit:uploaded_txids"       // Set: Uploaded TxId pool
+)
+
+const (
+	// MaxUploadingCount is the maximum number of transactions allowed in uploading state
+	MaxUploadingCount = 100
 )
 
 var (
@@ -37,69 +42,111 @@ type BundledInStatus struct {
 	UploadTime  int64    `json:"uploadTime"`
 }
 
-// addTx add a txid to pending txids set
-func (c *Chainkit) addPendingTx(txid string) error {
-	return c.redis.SAdd(c.ctx, RdbPendingTxIds, txid).Err()
-}
+func (c *Chainkit) moveToUploading() (int64, error) {
+	// Check if RdbCurrentBundledIn exists, return failure if it does
+	// Check uploading MaxCount, how many slots are available
+	// Move transactions from pending to uploading, but don't exceed MaxCount
+	// All operations use pipeline execution
 
-func (c *Chainkit) getPendingTxs() ([]string, error) {
-	return c.redis.SMembers(c.ctx, RdbPendingTxIds).Result()
-}
-
-func (c *Chainkit) createBundledIn(bundledInID string, txids []string, uploadTime int64) error {
-	// First check if RdbCurrentBundledIn is empty, if not empty return error
-	currentBundledIn, err := c.redis.Get(c.ctx, RdbCurrentBundledIn).Result()
-	if err != nil && err != redis.Nil {
-		return fmt.Errorf("failed to check current bundledIn: %w", err)
+	// 1. Check if RdbCurrentBundledIn exists - return failure if it does
+	currentBundledIn, err := c.getBundledIn()
+	if err != nil {
+		return 0, fmt.Errorf("failed to check current bundledIn: %w", err)
 	}
 	if currentBundledIn != "" {
-		return ErrBundledInAlreadyExists
-	}
-	return c.updateBundledIn(bundledInID, txids, uploadTime)
-}
-
-func (c *Chainkit) updateBundledIn(bundledInID string, txids []string, uploadTime int64) error {
-	if len(txids) == 0 {
-		return ErrTxIdsEmpty
+		return 0, fmt.Errorf("bundledIn already exists: %s", currentBundledIn)
 	}
 
-	// Generate BundledInStatus struct
-	status := BundledInStatus{
-		BundledInID: bundledInID,
-		TxIds:       txids,
-		UploadTime:  uploadTime,
-	}
-	statusJSON, err := json.Marshal(status)
+	// 2. Check current uploading count and calculate how many more can be added
+	currentUploadingCount, err := c.uploadingCount()
 	if err != nil {
-		return fmt.Errorf("marshal bundledIn status failed: %w", err)
+		return 0, fmt.Errorf("failed to get uploading count: %w", err)
 	}
 
-	// Put all redis operations in one pipeline
+	availableSlots := MaxUploadingCount - currentUploadingCount
+	if availableSlots <= 0 {
+		return 0, fmt.Errorf("uploading queue is full (max: %d, current: %d)", MaxUploadingCount, currentUploadingCount)
+	}
+
+	// 3. Get pending transactions to move
+	pendingCount, err := c.pendingCount()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get pending count: %w", err)
+	}
+
+	if pendingCount == 0 {
+		return 0, fmt.Errorf("no pending transactions available")
+	}
+
+	// Calculate how many to move (don't exceed available slots or pending count)
+	toMove := availableSlots
+	if pendingCount < availableSlots {
+		toMove = pendingCount
+	}
+
+	// 4. Use pipeline to execute all operations atomically
 	pipe := c.redis.Pipeline()
 
-	// If there is RdbCurrentBundledIn, delete old bundledInID first
-	currentBundledIn, err := c.redis.Get(c.ctx, RdbCurrentBundledIn).Result()
-	if err != nil && err != redis.Nil {
-		return fmt.Errorf("failed to check current bundledIn: %w", err)
-	}
-	if currentBundledIn != "" {
-		pipe.Del(c.ctx, RdbCurrentBundledIn)
-	}
-	// Clear old bundledInStatus
-	oldBundledInStatusKey := RdbBundledInStatus + ":" + currentBundledIn
-	pipe.Del(c.ctx, oldBundledInStatusKey)
-
-	// 1. Remove txids from RdbPendingTxIds
-	if len(txids) > 0 {
-		pipe.SRem(c.ctx, RdbPendingTxIds, txids)
+	// Use atomic LPopCount to get and remove transactions from pending
+	pendingTxids, err := c.redis.LPopCount(c.ctx, RdbPendingTxIds, int(toMove)).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return 0, fmt.Errorf("no pending transactions available")
+		}
+		return 0, fmt.Errorf("failed to pop pending transactions: %w", err)
 	}
 
-	// 2. Save BundledInStatus to RdbBundledInStatus:<bundledInID>
-	bundledInStatusKey := RdbBundledInStatus + ":" + bundledInID
-	pipe.Set(c.ctx, bundledInStatusKey, string(statusJSON), 0)
+	if len(pendingTxids) == 0 {
+		return 0, fmt.Errorf("no pending transactions to move")
+	}
 
-	// 3. Save bundledInID to RdbCurrentBundledIn
-	pipe.Set(c.ctx, RdbCurrentBundledIn, bundledInID, 0)
+	// Add popped transactions to uploading set
+	if len(pendingTxids) > 0 {
+		pipe.SAdd(c.ctx, RdbUploadingTxIds, pendingTxids)
+	}
+
+	// Execute pipeline
+	_, err = pipe.Exec(c.ctx)
+	if err != nil {
+		return 0, fmt.Errorf("pipeline execution failed: %w", err)
+	}
+
+	return int64(len(pendingTxids)), nil
+}
+
+func (c *Chainkit) endUpload() error {
+	// Move transactions from RdbUploadingTxIds to RdbUploadedTxIds
+	// Delete RdbCurrentBundledIn
+	// All operations use pipeline execution
+
+	// First get the current bundledIn ID
+	bundledInID, err := c.getBundledIn()
+	if err != nil {
+		return fmt.Errorf("failed to get current bundledIn: %w", err)
+	}
+	if bundledInID == "" {
+		return fmt.Errorf("no current bundledIn to move")
+	}
+
+	// Get all uploading txids
+	uploadingTxids, err := c.redis.SMembers(c.ctx, RdbUploadingTxIds).Result()
+	if err != nil {
+		return fmt.Errorf("failed to get uploading txids: %w", err)
+	}
+
+	// Use pipeline to execute all operations atomically
+	pipe := c.redis.Pipeline()
+
+	// 1. Move all uploading txids to uploaded
+	if len(uploadingTxids) > 0 {
+		pipe.SAdd(c.ctx, RdbUploadedTxIds, uploadingTxids)
+	}
+
+	// 2. Clear the uploading set (delete the key)
+	pipe.Del(c.ctx, RdbUploadingTxIds)
+
+	// 3. Delete the current bundledIn
+	pipe.Del(c.ctx, RdbCurrentBundledIn)
 
 	// Execute pipeline
 	_, err = pipe.Exec(c.ctx)
@@ -110,64 +157,39 @@ func (c *Chainkit) updateBundledIn(bundledInID string, txids []string, uploadTim
 	return nil
 }
 
-func (c *Chainkit) deleteBundledIn(bundledInID string) error {
-	// Delete current bundledIn from RdbCurrentBundledIn
-	pipe := c.redis.Pipeline()
-	pipe.Del(c.ctx, RdbCurrentBundledIn)
-
-	// Clear old bundledInStatus
-	bundledInStatusKey := RdbBundledInStatus + ":" + bundledInID
-	pipe.Del(c.ctx, bundledInStatusKey)
-
-	// Execute pipeline
-	_, err := pipe.Exec(c.ctx)
-	if err != nil {
-		return fmt.Errorf("pipeline execution failed: %w", err)
-	}
-
-	return nil
+// addPending adds a txid to pending txids queue (FIFO)
+func (c *Chainkit) addPending(txid string) error {
+	return c.redis.RPush(c.ctx, RdbPendingTxIds, txid).Err()
 }
 
-// getBundledInStatus returns the current bundledIn status enum
-func (c *Chainkit) getBundledInStatus() (BundledInStatusEnum, BundledInStatus, error) {
+// pendingCount returns the number of pending transactions in the queue
+func (c *Chainkit) pendingCount() (int64, error) {
+	return c.redis.LLen(c.ctx, RdbPendingTxIds).Result()
+}
+
+// uploadingCount returns the current number of uploading transactions
+func (c *Chainkit) uploadingCount() (int64, error) {
+	return c.redis.SCard(c.ctx, RdbUploadingTxIds).Result()
+}
+
+func (c *Chainkit) getUploading() ([]string, error) {
+	return c.redis.SMembers(c.ctx, RdbUploadingTxIds).Result()
+}
+
+func (c *Chainkit) setBundledIn(bundledInID string) error {
+	return c.redis.Set(c.ctx, RdbCurrentBundledIn, bundledInID, 1*time.Hour).Err()
+}
+
+// getBundledIn returns the current bundledIn ID if it exists, or empty string if it doesn't exist
+func (c *Chainkit) getBundledIn() (string, error) {
 	currentBundledIn, err := c.redis.Get(c.ctx, RdbCurrentBundledIn).Result()
 	if err != nil {
 		if err == redis.Nil {
-			return BundledInStatusEmpty, BundledInStatus{}, nil // No current bundledIn
+			return "", nil // No current bundledIn, return empty string
 		}
-		return "", BundledInStatus{}, fmt.Errorf("failed to check current bundledIn: %w", err)
+		return "", fmt.Errorf("failed to get current bundledIn: %w", err)
 	}
-
-	// If no current bundledIn, return empty
-	if currentBundledIn == "" {
-		return BundledInStatusEmpty, BundledInStatus{}, nil // No current bundledIn
-	}
-
-	// Get bundledIn status data
-	bundledInStatusKey := RdbBundledInStatus + ":" + currentBundledIn
-	statusJSON, err := c.redis.Get(c.ctx, bundledInStatusKey).Result()
-	if err != nil {
-		if err == redis.Nil {
-			// Have currentBundledIn but no status data, may be abnormal situation, return pending
-			return BundledInStatusPending, BundledInStatus{}, nil // No current bundledIn
-		}
-		return "", BundledInStatus{}, fmt.Errorf("failed to get bundledIn status: %w", err)
-	}
-
-	var status BundledInStatus
-	if err := json.Unmarshal([]byte(statusJSON), &status); err != nil {
-		return "", BundledInStatus{}, fmt.Errorf("failed to unmarshal bundledIn status: %w", err)
-	}
-
-	// Check if timeout (over 1 hour)
-	if status.UploadTime > 0 {
-		currentTime := time.Now().Unix()
-		if currentTime-status.UploadTime > 3600 { // 3600 seconds = 1 hour
-			return BundledInStatusTimeout, status, nil // Timeout
-		}
-	}
-
-	return BundledInStatusPending, status, nil // Pending
+	return currentBundledIn, nil
 }
 
 func (c *Chainkit) addUploaded(txids []string) error {

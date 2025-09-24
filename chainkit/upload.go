@@ -1,8 +1,6 @@
 package chainkit
 
 import (
-	"time"
-
 	goarSchema "github.com/permadao/goar/schema"
 	goarUtils "github.com/permadao/goar/utils"
 )
@@ -77,112 +75,85 @@ func (c *Chainkit) getBundleItems(txids []string) []goarSchema.BundleItem {
 }
 
 func (c *Chainkit) check() {
+	// Lock to prevent concurrent execution
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	log.Debug("chainkit enter check")
-	// 1. Check BundledInStatus
-	c.checkBundledInStatus()
-	log.Debug("chainkit check checkBundledInStatus end")
 
-	// 2. Check if transaction is confirmed
-	c.checkUploadStatus()
-	log.Debug("chainkit check checkUploadStatus end")
+	curBundledIn, err := c.getBundledIn()
+	if err != nil {
+		log.Error("Failed to get current bundledIn", "err", err)
+		return
+	}
 
-	log.Debug("chainkit check end ")
+	if curBundledIn != "" {
+		ok, err := c.operator.CheckTransaction(curBundledIn)
+		if err != nil {
+			log.Error("Failed to check transaction", "bundledInID", curBundledIn, "err", err)
+			return
+		}
+		if !ok {
+			log.Debug("Transaction not confirmed, skip", "bundledInID", curBundledIn)
+			return
+		}
+
+		// transaction confirmed move to uploaded
+		err = c.endUpload()
+		if err != nil {
+			log.Error("Failed to end upload", "bundledInID", curBundledIn, "err", err)
+			return
+		}
+	}
+
+	c.tryUpload()
 }
 
-func (c *Chainkit) checkBundledInStatus() {
-	log.Debug("chainkit enter checkBundledInStatus")
-	// If pending status, skip
-	// If timeout status, retransmit
-	// If empty status, create new bundledIn
-	status, statusStruct, err := c.getBundledInStatus()
+func (c *Chainkit) tryUpload() error {
+	log.Debug("chainkit tryUpload")
+
+	curBundledIn, err := c.getBundledIn()
 	if err != nil {
-		log.Error("Failed to get BundledInStatus", "err", err)
-		return
+		log.Error("Failed to get current bundledIn", "err", err)
+		return err
 	}
-	switch status {
-	case BundledInStatusEmpty:
-		// Create new bundledIn
-		pending, err := c.getPendingTxs()
-		if err != nil {
-			log.Error("Failed to get pending txs", "err", err)
-			return
-		}
-		if len(pending) > 0 {
-			bundledIn, uploaded, err := c.uploadToChain(pending)
-			if err != nil {
-				log.Error("Failed to upload pending txs", "err", err)
-				return
-			}
-			err = c.createBundledIn(bundledIn, uploaded, time.Now().Unix())
-			if err != nil {
-				log.Error("Failed to create bundledIn", "err", err)
-				return
-			}
-		}
-	case BundledInStatusPending:
-		// Skip
-		log.Debug("BundledInStatusPending, skip", "bundledInID", statusStruct.BundledInID)
-	case BundledInStatusTimeout:
-		log.Debug("BundledInStatusTimeout, resubmit", "bundledInID", statusStruct.BundledInID)
 
-		// Retransmit
-		toReUpdates := statusStruct.TxIds
-		// First add pending pool transactions to upload list
-		pending, err := c.getPendingTxs()
-		if err != nil {
-			log.Error("Failed to get pending txs", "err", err)
-		}
-		if len(pending) > 0 {
-			toReUpdates = append(toReUpdates, pending...)
-		}
-		if len(toReUpdates) > 0 {
-			bundledIn, uploaded, err := c.uploadToChain(toReUpdates)
-			if err != nil {
-				log.Error("Failed to upload txs", "err", err)
-				return
-			}
-			err = c.updateBundledIn(bundledIn, uploaded, time.Now().Unix())
-			if err != nil {
-				log.Error("Failed to update bundledIn", "err", err)
-				return
-			}
-		}
+	if curBundledIn != "" {
+		return nil
 	}
-}
 
-func (c *Chainkit) checkUploadStatus() {
-	log.Debug("chainkit enter checkUploadStatus")
+	// move to uploading
+	c.moveToUploading()
 
-	// If confirmed, delete BundledIn and upload pending transactions
-	// If not confirmed, return
-	status, statusStruct, err := c.getBundledInStatus()
+	uploadingTxids, err := c.getUploading()
 	if err != nil {
-		log.Error("Failed to get BundledInStatus", "err", err)
-		return
+		log.Error("Failed to get uploading txids", "err", err)
+		return err
 	}
-	if status == BundledInStatusEmpty {
-		log.Debug("BundledInStatusEmpty, skip")
-		return
-	}
-	ok, err := c.operator.CheckTransaction(statusStruct.BundledInID)
-	if err != nil {
-		log.Error("Failed to check transaction", "bundledInID", statusStruct.BundledInID, "err", err)
-		return
-	}
-	if ok {
-		// Delete BundledIn
-		log.Debug("checkUploadStatus, transaction confirmed, delete BundledIn", "bundledInID", statusStruct.BundledInID)
 
-		err = c.deleteBundledIn(statusStruct.BundledInID)
-		if err != nil {
-			log.Error("Failed to delete bundledIn", "err", err)
-			return
-		}
-		// Mark these txids as successfully uploaded
-		err = c.addUploaded(statusStruct.TxIds)
-		if err != nil {
-			log.Error("Failed to add uploaded txids", "err", err)
-			return
-		}
+	if len(uploadingTxids) == 0 {
+		log.Debug("No txids to upload", "count", len(uploadingTxids))
+		return nil
 	}
+
+	// upload
+	bundledInId, uploaded, err := c.uploadToChain(uploadingTxids)
+	if err != nil {
+		log.Error("Failed to upload txids", "err", err)
+		return err
+	}
+
+	if len(uploaded) == 0 {
+		log.Debug("No txids uploaded", "count", len(uploaded))
+		return nil
+	}
+
+	// save bundledIn
+	err = c.setBundledIn(bundledInId)
+	if err != nil {
+		log.Error("Failed to set bundledIn", "bundledInID", bundledInId, "err", err)
+		return err
+	}
+
+	return nil
 }

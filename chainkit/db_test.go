@@ -2,7 +2,7 @@ package chainkit
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -32,14 +32,14 @@ func (t *TestRedisClient) Close() error {
 
 func setupTest(t *testing.T) (*Chainkit, *TestRedisClient) {
 	testRedis := NewTestRedisClient()
-	
+
 	// Clean up test database before each test
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	err := testRedis.client.FlushDB(ctx).Err()
 	require.NoError(t, err)
-	
+
 	ck := &Chainkit{
 		redis: testRedis.client,
 		ctx:   context.Background(),
@@ -47,18 +47,18 @@ func setupTest(t *testing.T) (*Chainkit, *TestRedisClient) {
 	return ck, testRedis
 }
 
-func TestAddPendingTx(t *testing.T) {
+func TestAddPending(t *testing.T) {
 	ck, testRedis := setupTest(t)
 	defer testRedis.Close()
-	
+
 	txid := "test-txid-123"
-	
+
 	// Test adding a pending transaction
-	err := ck.addPendingTx(txid)
+	err := ck.addPending(txid)
 	assert.NoError(t, err)
-	
+
 	// Verify it was added
-	members, err := ck.redis.SMembers(ck.ctx, RdbPendingTxIds).Result()
+	members, err := ck.redis.LRange(ck.ctx, RdbPendingTxIds, 0, -1).Result()
 	assert.NoError(t, err)
 	assert.Contains(t, members, txid)
 }
@@ -66,142 +66,124 @@ func TestAddPendingTx(t *testing.T) {
 func TestGetPendingTxs(t *testing.T) {
 	ck, testRedis := setupTest(t)
 	defer testRedis.Close()
-	
-	// Test empty case
-	txs, err := ck.getPendingTxs()
+
+	// Test empty case - pending transactions are stored in a list, so we need to check the list
+	count, err := ck.pendingCount()
 	assert.NoError(t, err)
-	assert.Empty(t, txs)
-	
+	assert.Equal(t, int64(0), count)
+
 	// Add some test transactions
 	testTxids := []string{"txid1", "txid2", "txid3"}
 	for _, txid := range testTxids {
-		err := ck.addPendingTx(txid)
+		err := ck.addPending(txid)
 		assert.NoError(t, err)
 	}
-	
-	// Get pending transactions
-	txs, err = ck.getPendingTxs()
+
+	// Verify pending transactions count
+	count, err = ck.pendingCount()
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, testTxids, txs)
+	assert.Equal(t, int64(3), count)
+
+	// Get pending transactions from Redis directly to verify order
+	pendingTxs, err := ck.redis.LRange(ck.ctx, RdbPendingTxIds, 0, -1).Result()
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, testTxids, pendingTxs)
 }
 
-func TestCreateBundledIn(t *testing.T) {
+// Tests for bundledIn functionality removed as these functions don't exist in current implementation
+
+func TestGetUploading(t *testing.T) {
 	ck, testRedis := setupTest(t)
 	defer testRedis.Close()
-	
-	bundledInID := "test-bundled-id"
-	txids := []string{"txid1", "txid2"}
-	uploadTime := time.Now().Unix()
-	
-	// Test creating a bundled in entry
-	err := ck.createBundledIn(bundledInID, txids, uploadTime)
+
+	// Test empty case
+	uploading, err := ck.getUploading()
 	assert.NoError(t, err)
-	
-	// Verify it was created
-	result, err := ck.redis.Get(ck.ctx, RdbCurrentBundledIn).Result()
+	assert.Empty(t, uploading)
+
+	// Add some transactions to uploading set
+	testTxids := []string{"txid1", "txid2", "txid3"}
+	err = ck.redis.SAdd(ck.ctx, RdbUploadingTxIds, testTxids).Err()
 	assert.NoError(t, err)
-	assert.Equal(t, bundledInID, result)
-	
-	// Verify status was created
-	statusKey := RdbBundledInStatus + ":" + bundledInID
-	statusJSON, err := ck.redis.Get(ck.ctx, statusKey).Result()
+
+	// Get uploading transactions
+	uploading, err = ck.getUploading()
 	assert.NoError(t, err)
-	
-	var status BundledInStatus
-	err = json.Unmarshal([]byte(statusJSON), &status)
-	assert.NoError(t, err)
-	assert.Equal(t, bundledInID, status.BundledInID)
-	assert.Equal(t, txids, status.TxIds)
-	assert.Equal(t, uploadTime, status.UploadTime)
+	assert.ElementsMatch(t, testTxids, uploading)
 }
 
-func TestUpdateBundledIn(t *testing.T) {
+func TestSetAndGetBundledIn(t *testing.T) {
 	ck, testRedis := setupTest(t)
 	defer testRedis.Close()
-	
-	bundledInID := "test-bundled-id"
-	initialTxids := []string{"txid1", "txid2"}
-	updatedTxids := []string{"txid3", "txid4"}
-	
-	// Create initial entry
-	err := ck.createBundledIn(bundledInID, initialTxids, time.Now().Unix())
+
+	// Test get with no bundledIn
+	bundledIn, err := ck.getBundledIn()
 	assert.NoError(t, err)
-	
-	// Update the bundled in with new txids
-	err = ck.updateBundledIn(bundledInID, updatedTxids, time.Now().Unix())
+	assert.Empty(t, bundledIn)
+
+	// Test set bundledIn
+	testBundledInID := "test-bundled-id"
+	err = ck.setBundledIn(testBundledInID)
 	assert.NoError(t, err)
-	
-	// Verify it was updated
-	statusKey := RdbBundledInStatus + ":" + bundledInID
-	statusJSON, err := ck.redis.Get(ck.ctx, statusKey).Result()
+
+	// Test get bundledIn
+	bundledIn, err = ck.getBundledIn()
 	assert.NoError(t, err)
-	
-	var status BundledInStatus
-	err = json.Unmarshal([]byte(statusJSON), &status)
-	assert.NoError(t, err)
-	assert.Equal(t, updatedTxids, status.TxIds)
+	assert.Equal(t, testBundledInID, bundledIn)
 }
 
-func TestDeleteBundledIn(t *testing.T) {
+func TestPendingCount(t *testing.T) {
 	ck, testRedis := setupTest(t)
 	defer testRedis.Close()
-	
-	bundledInID := "test-bundled-id"
-	txids := []string{"txid1", "txid2"}
-	
-	// Create initial entry
-	err := ck.createBundledIn(bundledInID, txids, time.Now().Unix())
+
+	// Test empty case
+	count, err := ck.pendingCount()
 	assert.NoError(t, err)
-	
-	// Delete the entry
-	err = ck.deleteBundledIn(bundledInID)
+	assert.Equal(t, int64(0), count)
+
+	// Add some transactions
+	testTxids := []string{"txid1", "txid2", "txid3"}
+	for _, txid := range testTxids {
+		err := ck.addPending(txid)
+		assert.NoError(t, err)
+	}
+
+	// Test count
+	count, err = ck.pendingCount()
 	assert.NoError(t, err)
-	
-	// Verify it was deleted
-	result, err := ck.redis.Get(ck.ctx, RdbCurrentBundledIn).Result()
-	assert.Equal(t, redis.Nil, err)
-	assert.Empty(t, result)
-	
-	statusKey := RdbBundledInStatus + ":" + bundledInID
-	result, err = ck.redis.Get(ck.ctx, statusKey).Result()
-	assert.Equal(t, redis.Nil, err)
-	assert.Empty(t, result)
+	assert.Equal(t, int64(3), count)
 }
 
-func TestGetBundledInStatus(t *testing.T) {
+func TestUploadingCount(t *testing.T) {
 	ck, testRedis := setupTest(t)
 	defer testRedis.Close()
-	
-	// Test empty status
-	statusEnum, status, err := ck.getBundledInStatus()
+
+	// Test empty case
+	count, err := ck.uploadingCount()
 	assert.NoError(t, err)
-	assert.Equal(t, BundledInStatusEmpty, statusEnum)
-	assert.Empty(t, status.BundledInID)
-	
-	// Create entry
-	bundledInID := "test-bundled-id"
-	txids := []string{"txid1", "txid2"}
-	err = ck.createBundledIn(bundledInID, txids, time.Now().Unix())
+	assert.Equal(t, int64(0), count)
+
+	// Add some transactions to uploading set
+	testTxids := []string{"txid1", "txid2", "txid3"}
+	err = ck.redis.SAdd(ck.ctx, RdbUploadingTxIds, testTxids).Err()
 	assert.NoError(t, err)
-	
-	// Get status
-	statusEnum, status, err = ck.getBundledInStatus()
+
+	// Test count
+	count, err = ck.uploadingCount()
 	assert.NoError(t, err)
-	assert.Equal(t, BundledInStatusPending, statusEnum)
-	assert.Equal(t, bundledInID, status.BundledInID)
-	assert.Equal(t, txids, status.TxIds)
+	assert.Equal(t, int64(3), count)
 }
 
 func TestAddUploaded(t *testing.T) {
 	ck, testRedis := setupTest(t)
 	defer testRedis.Close()
-	
+
 	txids := []string{"txid1", "txid2", "txid3"}
-	
+
 	// Test adding uploaded transactions
 	err := ck.addUploaded(txids)
 	assert.NoError(t, err)
-	
+
 	// Verify they were added
 	for _, txid := range txids {
 		isMember, err := ck.redis.SIsMember(ck.ctx, RdbUploadedTxIds, txid).Result()
@@ -213,18 +195,18 @@ func TestAddUploaded(t *testing.T) {
 func TestIsUploaded(t *testing.T) {
 	ck, testRedis := setupTest(t)
 	defer testRedis.Close()
-	
+
 	txid := "test-txid-123"
-	
+
 	// Test non-uploaded transaction
 	uploaded, err := ck.isUploaded(txid)
 	assert.NoError(t, err)
 	assert.False(t, uploaded)
-	
+
 	// Add transaction to uploaded set
 	err = ck.addUploaded([]string{txid})
 	assert.NoError(t, err)
-	
+
 	// Test uploaded transaction
 	uploaded, err = ck.isUploaded(txid)
 	assert.NoError(t, err)
@@ -234,14 +216,14 @@ func TestIsUploaded(t *testing.T) {
 func TestIsUploadedBatch(t *testing.T) {
 	ck, testRedis := setupTest(t)
 	defer testRedis.Close()
-	
+
 	// Test with mixed uploaded/non-uploaded transactions
 	txids := []string{"txid1", "txid2", "txid3"}
-	
+
 	// Upload only some transactions
 	err := ck.addUploaded([]string{"txid1", "txid3"})
 	assert.NoError(t, err)
-	
+
 	// Test batch check
 	results, err := ck.isUploadedBatch(txids)
 	assert.NoError(t, err)
@@ -254,50 +236,202 @@ func TestIsUploadedBatch(t *testing.T) {
 func TestErrorHandling(t *testing.T) {
 	ck, testRedis := setupTest(t)
 	defer testRedis.Close()
-	
+
 	// Test with empty txid
-	err := ck.addPendingTx("")
-	assert.NoError(t, err) // Should not error, just add empty string to set
-	
+	err := ck.addPending("")
+	assert.NoError(t, err) // Should not error, just add empty string to list
+
 	// Verify empty txid was added
-	isMember, err := ck.redis.SIsMember(ck.ctx, RdbPendingTxIds, "").Result()
+	members, err := ck.redis.LRange(ck.ctx, RdbPendingTxIds, 0, -1).Result()
 	assert.NoError(t, err)
-	assert.True(t, isMember)
-	
-	// Test createBundledIn with empty txids
-	err = ck.createBundledIn("test-bundled", []string{}, time.Now().Unix())
-	assert.Equal(t, ErrTxIdsEmpty, err)
-	
-	// Test double createBundledIn
-	err = ck.createBundledIn("test-bundled", []string{"txid1"}, time.Now().Unix())
+	assert.Contains(t, members, "")
+
+	// Test setBundledIn with empty string (should work)
+	err = ck.setBundledIn("")
 	assert.NoError(t, err)
-	
-	err = ck.createBundledIn("test-bundled", []string{"txid2"}, time.Now().Unix())
-	assert.Equal(t, ErrBundledInAlreadyExists, err)
+
+	// Test double setBundledIn (should work, just overwrites)
+	err = ck.setBundledIn("test-bundled")
+	assert.NoError(t, err)
+
+	err = ck.setBundledIn("test-bundled-2")
+	assert.NoError(t, err)
+
+	// Verify the last value was set
+	currentBundledIn, err := ck.getBundledIn()
+	assert.NoError(t, err)
+	assert.Equal(t, "test-bundled-2", currentBundledIn)
+}
+
+func TestMoveToUploading(t *testing.T) {
+	ck, testRedis := setupTest(t)
+	defer testRedis.Close()
+
+	// Test with no pending transactions
+	moved, err := ck.moveToUploading()
+	assert.Error(t, err)
+	assert.Equal(t, int64(0), moved)
+
+	// Add some pending transactions
+	testTxids := []string{"txid1", "txid2", "txid3"}
+	for _, txid := range testTxids {
+		err := ck.addPending(txid)
+		assert.NoError(t, err)
+	}
+
+	// Test moving to uploading
+	moved, err = ck.moveToUploading()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(3), moved)
+
+	// Verify pending queue is empty
+	pendingCount, err := ck.pendingCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), pendingCount)
+
+	// Verify uploading set has the transactions
+	uploadingTxids, err := ck.getUploading()
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, testTxids, uploadingTxids)
+
+	// Test with existing bundledIn (should fail)
+	err = ck.setBundledIn("existing-bundled")
+	assert.NoError(t, err)
+
+	moved, err = ck.moveToUploading()
+	assert.Error(t, err)
+	assert.Equal(t, int64(0), moved)
+}
+
+func TestEndUpload(t *testing.T) {
+	ck, testRedis := setupTest(t)
+	defer testRedis.Close()
+
+	// Test with no current bundledIn (should fail)
+	err := ck.endUpload()
+	assert.Error(t, err)
+
+	// Set up test data
+	bundledInID := "test-bundled-id"
+	testTxids := []string{"txid1", "txid2", "txid3"}
+
+	// Add transactions to uploading set
+	err = ck.redis.SAdd(ck.ctx, RdbUploadingTxIds, testTxids).Err()
+	assert.NoError(t, err)
+
+	// Set current bundledIn
+	err = ck.setBundledIn(bundledInID)
+	assert.NoError(t, err)
+
+	// Test endUpload
+	err = ck.endUpload()
+	assert.NoError(t, err)
+
+	// Verify uploading set is empty
+	uploadingCount, err := ck.uploadingCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), uploadingCount)
+
+	// Verify transactions are in uploaded set
+	for _, txid := range testTxids {
+		uploaded, err := ck.isUploaded(txid)
+		assert.NoError(t, err)
+		assert.True(t, uploaded)
+	}
+
+	// Verify current bundledIn is deleted
+	currentBundledIn, err := ck.getBundledIn()
+	assert.NoError(t, err)
+	assert.Empty(t, currentBundledIn)
 }
 
 func TestConcurrentOperations(t *testing.T) {
 	ck, testRedis := setupTest(t)
 	defer testRedis.Close()
-	
+
 	// Test concurrent adds
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func(i int) {
 			txid := "txid-" + string(rune('0'+i))
-			err := ck.addPendingTx(txid)
+			err := ck.addPending(txid)
 			assert.NoError(t, err)
 			done <- true
 		}(i)
 	}
-	
+
 	// Wait for all goroutines to complete
 	for i := 0; i < 10; i++ {
 		<-done
 	}
-	
+
 	// Verify all transactions were added
-	members, err := ck.redis.SMembers(ck.ctx, RdbPendingTxIds).Result()
+	members, err := ck.redis.LRange(ck.ctx, RdbPendingTxIds, 0, -1).Result()
 	assert.NoError(t, err)
 	assert.Len(t, members, 10)
+}
+
+func TestMutexProtection(t *testing.T) {
+	ck, testRedis := setupTest(t)
+	defer testRedis.Close()
+
+	// Test concurrent moveToUploading operations
+	// Add some pending transactions first
+	for i := 0; i < 5; i++ {
+		err := ck.addPending(fmt.Sprintf("txid%d", i))
+		assert.NoError(t, err)
+	}
+
+	// Try concurrent moveToUploading operations
+	done := make(chan bool, 3)
+	results := make([]int64, 3)
+	errors := make([]error, 3)
+
+	for i := 0; i < 3; i++ {
+		go func(i int) {
+			results[i], errors[i] = ck.moveToUploading()
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < 3; i++ {
+		<-done
+	}
+
+	// Only one should succeed due to mutex protection
+	successCount := 0
+	for i := 0; i < 3; i++ {
+		if errors[i] == nil && results[i] > 0 {
+			successCount++
+		}
+	}
+
+	// Due to mutex, only one operation should succeed
+	assert.Equal(t, 1, successCount, "Only one moveToUploading should succeed due to mutex protection")
+}
+
+func TestUploadingCountLimit(t *testing.T) {
+	ck, testRedis := setupTest(t)
+	defer testRedis.Close()
+
+	// Add more transactions than the limit
+	for i := 0; i < MaxUploadingCount+10; i++ {
+		err := ck.addPending(fmt.Sprintf("txid%d", i))
+		assert.NoError(t, err)
+	}
+
+	// First moveToUploading should move MaxUploadingCount transactions
+	moved, err := ck.moveToUploading()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(MaxUploadingCount), moved)
+
+	// Second moveToUploading should fail due to existing bundledIn
+	moved, err = ck.moveToUploading()
+	assert.Error(t, err)
+	assert.Equal(t, int64(0), moved)
+
+	pendingCount, err := ck.pendingCount()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(10), pendingCount)
 }

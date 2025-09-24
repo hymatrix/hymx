@@ -3,6 +3,7 @@ package chainkit
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/go-co-op/gocron"
@@ -26,6 +27,7 @@ type Chainkit struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	redis  *redis.Client
+	mu     sync.Mutex // Mutex to prevent concurrent execution
 }
 
 func New(node schema.INode, config schema.Config) *Chainkit {
@@ -88,7 +90,7 @@ func (c *Chainkit) Upload(tx goarSchema.BundleItem) error {
 	}
 
 	// Use Redis Set to deduplicate and record pending upload txids
-	return c.addPendingTx(tx.Id)
+	return c.addPending(tx.Id)
 }
 
 // Download a transaction
