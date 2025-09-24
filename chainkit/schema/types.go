@@ -8,7 +8,6 @@ import (
 type INode interface {
 	// verify
 	AuthNode(accid, fromProcess string) error
-	VerifyFromProcess(item goarSchema.BundleItem, pid, signer, fromProcess string) error
 	// DB
 	GetMessage(msgid string) (msg *goarSchema.BundleItem, err error)
 	GetMessageByNonce(pid string, nonce int64) (msg *goarSchema.BundleItem, err error)
@@ -17,8 +16,6 @@ type INode interface {
 	GetAssignByNonce(pid string, nonce int64) (assign *goarSchema.BundleItem, err error)
 
 	GetResult(msgid string) (result *vmmSchema.Result, err error)
-
-	CommitMessage(pid string, nonce int64, msg, assign goarSchema.BundleItem) error
 }
 
 type DownloadResult struct {

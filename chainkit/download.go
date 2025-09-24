@@ -54,12 +54,7 @@ func (c *Chainkit) downloadByNonce(scheduler, pid string, beginNonce, endNonce i
 				return nil, err
 			}
 
-			// commit to redis
-			err = c.node.CommitMessage(pid, nonce, *message, *assignment)
-			if err != nil {
-				log.Debug("commit to redis failed", "error", err)
-				continue
-			}
+			// todo: commit to local cache
 		}
 
 		results = append(results, &schema.DownloadResult{
@@ -81,14 +76,14 @@ func (c *Chainkit) verifySpawnMsg(spawnMsg *goarSchema.BundleItem) error {
 	if err := goarUtils.VerifyBundleItem(*spawnMsg); err != nil {
 		return err
 	}
-	pid, signer, fromProcess, instance, err := utils.Decode(*spawnMsg)
+	pid, _, _, instance, err := utils.Decode(*spawnMsg)
 	if err != nil {
 		return err
 	}
 	// verify fromProcess
-	if err = c.node.VerifyFromProcess(*spawnMsg, pid, signer, fromProcess); err != nil {
-		return err
-	}
+	// if err = c.node.VerifyFromProcess(*spawnMsg, pid, signer, fromProcess); err != nil {
+	// 	return err
+	// }
 	// verify Scheduler is valid
 	proc, ok := instance.(hymxSchema.Process)
 	if !ok {
@@ -107,23 +102,23 @@ func (c *Chainkit) verifyAssignment(assignmentItem *goarSchema.BundleItem) error
 		return err
 	}
 	// get pid, signer, fromProcess, instance
-	pid, signer, fromProcess, instance, err := utils.Decode(*assignmentItem)
+	_, _, _, instance, err := utils.Decode(*assignmentItem)
 	if err != nil {
 		return err
 	}
 	// verify fromProcess
-	if err = c.node.VerifyFromProcess(*assignmentItem, pid, signer, fromProcess); err != nil {
-		return err
-	}
+	// if err = c.node.VerifyFromProcess(*assignmentItem, pid, signer, fromProcess); err != nil {
+	// 	return err
+	// }
 	// verify Item type
 	_, ok := instance.(hymxSchema.Assignment)
 	if !ok {
 		return schema.ErrInvalidAssignmentType
 	}
 	// verify signer
-	if err = c.node.AuthNode(signer, pid); err != nil {
-		return err
-	}
+	// if err = c.node.AuthNode(signer, pid); err != nil {
+	// 	return err
+	// }
 
 	return nil
 }

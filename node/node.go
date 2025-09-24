@@ -220,21 +220,6 @@ func (n *Node) DownloadByPid(pid string, beginNonce, endNonce int64) ([]*chainki
 	return n.chainkit.DownloadByPid(pid, beginNonce, endNonce)
 }
 
-func (n *Node) CommitMessage(pid string, nonce int64, msg, assign goarSchema.BundleItem) error {
-	exist, err := n.db.IsExist(pid)
-	if err != nil {
-		return err
-	}
-	if exist {
-		return nil
-	}
-	m, _ := n.db.GetMessage(msg.Id)
-	if m != nil {
-		return nil
-	}
-	return n.db.Commit(pid, nonce, msg, assign)
-}
-
 func (n *Node) GetModuleNames() []string {
 	return n.vmm.GetModuleNames()
 }
