@@ -42,7 +42,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	// If the accid is registered in the node list, it is allowed to send a From-Process message.
 	// The From-Process value must also be registered under the corresponding node.
 	// If this io a registration request sent to the registry, this step is skipped.
-	if err = n.VerifyFromProcess(item, pid, signer, fromProcess); err != nil {
+	if err = n.verifyFromProcess(item, pid, signer, fromProcess); err != nil {
 		return
 	}
 
@@ -116,9 +116,9 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	return
 }
 
-// VerifyFromProcess verifies the fromProcess authentication
+// verifyFromProcess verifies the fromProcess authentication
 // It handles both registry process verification and regular node authentication
-func (n *Node) VerifyFromProcess(item goarSchema.BundleItem, pid, signer, fromProcess string) error {
+func (n *Node) verifyFromProcess(item goarSchema.BundleItem, pid, signer, fromProcess string) error {
 	if fromProcess == "" {
 		return nil
 	}
