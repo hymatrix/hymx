@@ -97,6 +97,7 @@ func (c *Chainkit) check() {
 			log.Debug("Transaction not confirmed, skip", "bundledInID", curBundledIn)
 			return
 		}
+		log.Debug("Transaction confirmed, move to uploaded", "bundledInID", curBundledIn)
 
 		// transaction confirmed move to uploaded
 		err = c.endUpload()
