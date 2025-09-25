@@ -1,6 +1,7 @@
-package chainkit
+package rdb
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -8,8 +9,6 @@ import (
 )
 
 const (
-	RedisUrl = "redis://@localhost:6379/0"
-
 	RdbPendingTxIds     = "chainkit:pending"              // List: Pending TxId FIFO queue
 	RdbUploadingTxIds   = "chainkit:uploading"            // Set: Uploading TxId pool
 	RdbCurrentBundledIn = "chainkit:current_bundledin_id" // String: current bundledIn id with 1 hour expiration
@@ -21,14 +20,34 @@ const (
 	MaxUploadingCount = 100000 // 10w
 )
 
-func (c *Chainkit) moveToUploading() (int64, error) {
+type Chainkit struct {
+	redis *redis.Client
+	ctx   context.Context
+}
+
+func NewChainkitDB(redisUrl string) *Chainkit {
+	redisOpt, err := redis.ParseURL(redisUrl)
+	if err != nil {
+		panic(err)
+	}
+	redisOpt.PoolSize = 500
+	redisOpt.MinIdleConns = 50
+	redisOpt.MaxRetries = 3
+
+	return &Chainkit{
+		redis: redis.NewClient(redisOpt),
+		ctx:   context.Background(),
+	}
+}
+
+func (r *Chainkit) MoveToUploading() (int64, error) {
 	// Check if RdbCurrentBundledIn exists, return failure if it does
 	// Check uploading MaxCount, how many slots are available
 	// Move transactions from pending to uploading, but don't exceed MaxCount
 	// All operations use pipeline execution
 
 	// 1. Check if RdbCurrentBundledIn exists - return failure if it does
-	currentBundledIn, err := c.getBundledIn()
+	currentBundledIn, err := r.GetBundledIn()
 	if err != nil {
 		return 0, fmt.Errorf("failed to check current bundledIn: %w", err)
 	}
@@ -37,7 +56,7 @@ func (c *Chainkit) moveToUploading() (int64, error) {
 	}
 
 	// 2. Check current uploading count and calculate how many more can be added
-	currentUploadingCount, err := c.uploadingCount()
+	currentUploadingCount, err := r.uploadingCount()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get uploading count: %w", err)
 	}
@@ -48,7 +67,7 @@ func (c *Chainkit) moveToUploading() (int64, error) {
 	}
 
 	// 3. Get pending transactions to move
-	pendingCount, err := c.pendingCount()
+	pendingCount, err := r.pendingCount()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get pending count: %w", err)
 	}
@@ -63,11 +82,8 @@ func (c *Chainkit) moveToUploading() (int64, error) {
 		toMove = pendingCount
 	}
 
-	// 4. Use pipeline to execute all operations atomically
-	pipe := c.redis.Pipeline()
-
-	// Use atomic LPopCount to get and remove transactions from pending
-	pendingTxids, err := c.redis.LPopCount(c.ctx, RdbPendingTxIds, int(toMove)).Result()
+	// 4. Use LPopCount to get and remove transactions from pending
+	pendingTxids, err := r.redis.LPopCount(r.ctx, RdbPendingTxIds, int(toMove)).Result()
 	if err != nil {
 		if err == redis.Nil {
 			return 0, fmt.Errorf("no pending transactions available")
@@ -79,13 +95,12 @@ func (c *Chainkit) moveToUploading() (int64, error) {
 		return 0, fmt.Errorf("no pending transactions to move")
 	}
 
-	// Add popped transactions to uploading set
-	if len(pendingTxids) > 0 {
-		pipe.SAdd(c.ctx, RdbUploadingTxIds, pendingTxids)
-	}
+	// 5. Use pipeline to add popped transactions to uploading set
+	pipe := r.redis.Pipeline()
+	pipe.SAdd(r.ctx, RdbUploadingTxIds, pendingTxids)
 
 	// Execute pipeline
-	_, err = pipe.Exec(c.ctx)
+	_, err = pipe.Exec(r.ctx)
 	if err != nil {
 		return 0, fmt.Errorf("pipeline execution failed: %w", err)
 	}
@@ -93,13 +108,13 @@ func (c *Chainkit) moveToUploading() (int64, error) {
 	return int64(len(pendingTxids)), nil
 }
 
-func (c *Chainkit) endUpload() error {
+func (r *Chainkit) EndUpload() error {
 	// Move transactions from RdbUploadingTxIds to RdbUploadedTxIds
 	// Delete RdbCurrentBundledIn
 	// All operations use pipeline execution
 
 	// First get the current bundledIn ID
-	bundledInID, err := c.getBundledIn()
+	bundledInID, err := r.GetBundledIn()
 	if err != nil {
 		return fmt.Errorf("failed to get current bundledIn: %w", err)
 	}
@@ -108,27 +123,27 @@ func (c *Chainkit) endUpload() error {
 	}
 
 	// Get all uploading txids
-	uploadingTxids, err := c.redis.SMembers(c.ctx, RdbUploadingTxIds).Result()
+	uploadingTxids, err := r.redis.SMembers(r.ctx, RdbUploadingTxIds).Result()
 	if err != nil {
 		return fmt.Errorf("failed to get uploading txids: %w", err)
 	}
 
 	// Use pipeline to execute all operations atomically
-	pipe := c.redis.Pipeline()
+	pipe := r.redis.Pipeline()
 
 	// 1. Move all uploading txids to uploaded
 	if len(uploadingTxids) > 0 {
-		pipe.SAdd(c.ctx, RdbUploadedTxIds, uploadingTxids)
+		pipe.SAdd(r.ctx, RdbUploadedTxIds, uploadingTxids)
 	}
 
 	// 2. Clear the uploading set (delete the key)
-	pipe.Del(c.ctx, RdbUploadingTxIds)
+	pipe.Del(r.ctx, RdbUploadingTxIds)
 
 	// 3. Delete the current bundledIn
-	pipe.Del(c.ctx, RdbCurrentBundledIn)
+	pipe.Del(r.ctx, RdbCurrentBundledIn)
 
 	// Execute pipeline
-	_, err = pipe.Exec(c.ctx)
+	_, err = pipe.Exec(r.ctx)
 	if err != nil {
 		return fmt.Errorf("pipeline execution failed: %w", err)
 	}
@@ -137,31 +152,31 @@ func (c *Chainkit) endUpload() error {
 }
 
 // addPending adds a txid to pending txids queue (FIFO)
-func (c *Chainkit) addPending(txid string) error {
-	return c.redis.RPush(c.ctx, RdbPendingTxIds, txid).Err()
+func (r *Chainkit) AddPending(txid string) error {
+	return r.redis.RPush(r.ctx, RdbPendingTxIds, txid).Err()
 }
 
 // pendingCount returns the number of pending transactions in the queue
-func (c *Chainkit) pendingCount() (int64, error) {
-	return c.redis.LLen(c.ctx, RdbPendingTxIds).Result()
+func (r *Chainkit) pendingCount() (int64, error) {
+	return r.redis.LLen(r.ctx, RdbPendingTxIds).Result()
 }
 
 // uploadingCount returns the current number of uploading transactions
-func (c *Chainkit) uploadingCount() (int64, error) {
-	return c.redis.SCard(c.ctx, RdbUploadingTxIds).Result()
+func (r *Chainkit) uploadingCount() (int64, error) {
+	return r.redis.SCard(r.ctx, RdbUploadingTxIds).Result()
 }
 
-func (c *Chainkit) getUploading() ([]string, error) {
-	return c.redis.SMembers(c.ctx, RdbUploadingTxIds).Result()
+func (r *Chainkit) GetUploading() ([]string, error) {
+	return r.redis.SMembers(r.ctx, RdbUploadingTxIds).Result()
 }
 
-func (c *Chainkit) setBundledIn(bundledInID string) error {
-	return c.redis.Set(c.ctx, RdbCurrentBundledIn, bundledInID, 1*time.Hour).Err()
+func (r *Chainkit) SetBundledIn(bundledInID string) error {
+	return r.redis.Set(r.ctx, RdbCurrentBundledIn, bundledInID, 1*time.Hour).Err()
 }
 
-// getBundledIn returns the current bundledIn ID if it exists, or empty string if it doesn't exist
-func (c *Chainkit) getBundledIn() (string, error) {
-	currentBundledIn, err := c.redis.Get(c.ctx, RdbCurrentBundledIn).Result()
+// GetBundledIn returns the current bundledIn ID if it exists, or empty string if it doesn't exist
+func (r *Chainkit) GetBundledIn() (string, error) {
+	currentBundledIn, err := r.redis.Get(r.ctx, RdbCurrentBundledIn).Result()
 	if err != nil {
 		if err == redis.Nil {
 			return "", nil // No current bundledIn, return empty string
@@ -171,31 +186,31 @@ func (c *Chainkit) getBundledIn() (string, error) {
 	return currentBundledIn, nil
 }
 
-func (c *Chainkit) addUploaded(txids []string) error {
-	return c.redis.SAdd(c.ctx, RdbUploadedTxIds, txids).Err()
+func (r *Chainkit) addUploaded(txids []string) error {
+	return r.redis.SAdd(r.ctx, RdbUploadedTxIds, txids).Err()
 }
 
 // isUploaded checks if a transaction ID has already been uploaded
-func (c *Chainkit) isUploaded(txid string) (bool, error) {
-	return c.redis.SIsMember(c.ctx, RdbUploadedTxIds, txid).Result()
+func (r *Chainkit) isUploaded(txid string) (bool, error) {
+	return r.redis.SIsMember(r.ctx, RdbUploadedTxIds, txid).Result()
 }
 
 // isUploadedBatch checks if multiple transaction IDs have already been uploaded
 // Returns a map where key is txid and value is whether it's uploaded
-func (c *Chainkit) isUploadedBatch(txids []string) (map[string]bool, error) {
+func (r *Chainkit) IsUploadedBatch(txids []string) (map[string]bool, error) {
 	if len(txids) == 0 {
 		return make(map[string]bool), nil
 	}
 
 	// Use pipeline to check multiple txids efficiently
-	pipe := c.redis.Pipeline()
+	pipe := r.redis.Pipeline()
 	results := make([]*redis.BoolCmd, len(txids))
 
 	for i, txid := range txids {
-		results[i] = pipe.SIsMember(c.ctx, RdbUploadedTxIds, txid)
+		results[i] = pipe.SIsMember(r.ctx, RdbUploadedTxIds, txid)
 	}
 
-	_, err := pipe.Exec(c.ctx)
+	_, err := pipe.Exec(r.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check uploaded txids: %w", err)
 	}

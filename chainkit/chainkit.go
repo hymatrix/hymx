@@ -10,10 +10,10 @@ import (
 	"github.com/hymatrix/hymx/chainkit/optgoar"
 	"github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/common"
+	"github.com/hymatrix/hymx/db/rdb"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
-	"github.com/redis/go-redis/v9"
 )
 
 var log = common.NewLog("chainkit")
@@ -22,10 +22,10 @@ type Chainkit struct {
 	node      schema.INode
 	operator  schema.IOperator
 	scheduler *gocron.Scheduler
+	db        schema.IDB
 
 	ctx    context.Context
 	cancel context.CancelFunc
-	redis  *redis.Client
 	mu     sync.Mutex // Mutex to prevent concurrent execution
 }
 
@@ -42,21 +42,13 @@ func New(node schema.INode, config schema.Config) *Chainkit {
 		panic("unsupported opt type")
 	}
 
-	redisOpt, err := redis.ParseURL(config.RedisUrl)
-	if err != nil {
-		panic(err)
-	}
-	redisOpt.PoolSize = 500
-	redisOpt.MinIdleConns = 50
-	redisOpt.MaxRetries = 3
-
 	return &Chainkit{
 		node:      node,
+		db:        rdb.NewChainkitDB(config.RedisUrl),
 		operator:  op,
 		scheduler: gocron.NewScheduler(time.UTC),
 		ctx:       ctx,
 		cancel:    cancel,
-		redis:     redis.NewClient(redisOpt),
 	}
 }
 
@@ -89,7 +81,7 @@ func (c *Chainkit) Upload(tx goarSchema.BundleItem) error {
 	}
 
 	// Use Redis Set to deduplicate and record pending upload txids
-	return c.addPending(tx.Id)
+	return c.db.AddPending(tx.Id)
 }
 
 // Download a transaction

@@ -44,7 +44,7 @@ func (c *Chainkit) uploadToChain(txids []string) (bundledInId string, uploaded [
 
 // filterUnuploadedTxids filters out txids that have already been uploaded
 func (c *Chainkit) filterUnuploadedTxids(txids []string) []string {
-	uploadedMap, err := c.isUploadedBatch(txids)
+	uploadedMap, err := c.db.IsUploadedBatch(txids)
 	if err != nil {
 		log.Error("Failed to check uploaded txids in batch", "err", err)
 		return txids
@@ -81,7 +81,7 @@ func (c *Chainkit) check() {
 
 	log.Debug("chainkit enter check")
 
-	curBundledIn, err := c.getBundledIn()
+	curBundledIn, err := c.db.GetBundledIn()
 	if err != nil {
 		log.Error("Failed to get current bundledIn", "err", err)
 		return
@@ -100,7 +100,7 @@ func (c *Chainkit) check() {
 		log.Debug("Transaction confirmed, move to uploaded", "bundledInID", curBundledIn)
 
 		// transaction confirmed move to uploaded
-		err = c.endUpload()
+		err = c.db.EndUpload()
 		if err != nil {
 			log.Error("Failed to end upload", "bundledInID", curBundledIn, "err", err)
 			return
@@ -113,7 +113,7 @@ func (c *Chainkit) check() {
 func (c *Chainkit) tryUpload() error {
 	log.Debug("chainkit tryUpload")
 
-	curBundledIn, err := c.getBundledIn()
+	curBundledIn, err := c.db.GetBundledIn()
 	if err != nil {
 		log.Error("Failed to get current bundledIn", "err", err)
 		return err
@@ -124,9 +124,9 @@ func (c *Chainkit) tryUpload() error {
 	}
 
 	// move to uploading
-	c.moveToUploading()
+	c.db.MoveToUploading()
 
-	uploadingTxids, err := c.getUploading()
+	uploadingTxids, err := c.db.GetUploading()
 	if err != nil {
 		log.Error("Failed to get uploading txids", "err", err)
 		return err
@@ -150,7 +150,7 @@ func (c *Chainkit) tryUpload() error {
 	}
 
 	// save bundledIn
-	err = c.setBundledIn(bundledInId)
+	err = c.db.SetBundledIn(bundledInId)
 	if err != nil {
 		log.Error("Failed to set bundledIn", "bundledInID", bundledInId, "err", err)
 		return err

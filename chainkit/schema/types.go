@@ -16,6 +16,17 @@ type INode interface {
 	GetResult(msgid string) (result *vmmSchema.Result, err error)
 }
 
+type IDB interface {
+	AddPending(txid string) error
+	MoveToUploading() (int64, error)
+	EndUpload() error
+
+	IsUploadedBatch(txids []string) (map[string]bool, error)
+	GetUploading() ([]string, error)
+	SetBundledIn(bundledInID string) error
+	GetBundledIn() (string, error)
+}
+
 type DownloadResult struct {
 	Nonce      int64
 	Assignment *goarSchema.BundleItem
