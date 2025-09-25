@@ -29,7 +29,7 @@ type GraphQLTag struct {
 	Value string `json:"value"`
 }
 
-var QueryTmp = `
+const QueryTmp = `
 {
   transactions(
     owners: ["%s"]

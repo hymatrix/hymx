@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-co-op/gocron"
+	"github.com/go-co-op/gocron/v2"
 	"github.com/hymatrix/hymx/chainkit/optgoar"
 	"github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/common"
@@ -21,7 +21,7 @@ var log = common.NewLog("chainkit")
 type Chainkit struct {
 	node      schema.INode
 	operator  schema.IOperator
-	scheduler *gocron.Scheduler
+	scheduler gocron.Scheduler
 	db        schema.IDB
 
 	ctx    context.Context
@@ -42,11 +42,16 @@ func New(node schema.INode, config schema.Config) *Chainkit {
 		panic("unsupported opt type")
 	}
 
+	scheduler, err := gocron.NewScheduler(gocron.WithLocation(time.UTC))
+	if err != nil {
+		panic(err)
+	}
+
 	return &Chainkit{
 		node:      node,
 		db:        rdb.NewChainkitDB(config.RedisUrl),
 		operator:  op,
-		scheduler: gocron.NewScheduler(time.UTC),
+		scheduler: scheduler,
 		ctx:       ctx,
 		cancel:    cancel,
 	}
@@ -54,7 +59,7 @@ func New(node schema.INode, config schema.Config) *Chainkit {
 
 func (c *Chainkit) Run() {
 	log.Info("chainkit running")
-	c.scheduler.StartAsync()
+	c.scheduler.Start()
 	c.runJobs()
 }
 
@@ -63,7 +68,7 @@ func (c *Chainkit) Close() {
 		c.cancel()
 	}
 	if c.scheduler != nil {
-		c.scheduler.Stop()
+		c.scheduler.Shutdown()
 	}
 	log.Info("chainkit closed")
 }

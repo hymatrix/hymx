@@ -9,7 +9,6 @@ require (
 	github.com/everFinance/goether v1.2.0
 	github.com/getsentry/sentry-go v0.28.1
 	github.com/gin-gonic/gin v1.10.0
-	github.com/go-co-op/gocron v1.37.0
 	github.com/go-co-op/gocron/v2 v2.16.5
 	github.com/inconshreveable/log15 v2.16.0+incompatible
 	github.com/panjf2000/ants/v2 v2.10.0
