@@ -18,7 +18,7 @@ const (
 
 const (
 	// MaxUploadingCount is the maximum number of transactions allowed in uploading state
-	MaxUploadingCount = 10000
+	MaxUploadingCount = 100000 // 10w
 )
 
 func (c *Chainkit) moveToUploading() (int64, error) {
