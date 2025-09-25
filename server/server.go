@@ -39,6 +39,7 @@ func (s *Server) Run(endpoint string) {
 
 	if s.chainkit != nil {
 		s.chainkit.Run()
+		s.AddAssignResHandler(s.chainkit.AssignmentHandler)
 	}
 
 	go s.runAPI(endpoint)
@@ -72,4 +73,8 @@ func (s *Server) AddItemHandler(handlers ...schema.ItemHandler) {
 
 func (s *Server) AddResultHandler(handlers ...schema.ResultHandler) {
 	s.node.AddResultHandler(handlers...)
+}
+
+func (s *Server) AddAssignResHandler(handlers ...schema.AssignResHandler) {
+	s.node.AddAssignResHandler(handlers...)
 }
