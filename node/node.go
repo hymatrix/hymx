@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/hymatrix/hymx/chainkit"
-	chainkitSchema "github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/db/cache"
 	"github.com/hymatrix/hymx/db/rdb"
@@ -27,9 +25,8 @@ type Node struct {
 	hymxURL string
 	info    *schema.Info
 
-	bundler  *goar.Bundler
-	sdk      *sdk.SDK
-	chainkit *chainkit.Chainkit
+	bundler *goar.Bundler
+	sdk     *sdk.SDK
 
 	vmm *vmm.Vmm
 
@@ -66,7 +63,6 @@ func New(
 	arweaveURL string,
 	hymxURL string,
 	nodeInfo *schema.Info,
-	chainkitCfg chainkitSchema.Config,
 ) *Node {
 	outboxChan := make(chan vmmSchema.Outbox, 1000)
 	resultChan := make(chan vmmSchema.Result, 1000)
@@ -107,15 +103,11 @@ func New(
 		recoveryTaskPool: taskPool,
 	}
 
-	node.chainkit = chainkit.New(node, chainkitCfg)
-	node.AddAssignResHandler(node.chainkit.AssignmentHandler)
-
 	return node
 }
 
 func (n *Node) Run() {
 	n.vmm.Run()
-	n.chainkit.Run()
 	go n.runMsgChan()
 	go n.runProcChan()
 	go n.runResultChan()
