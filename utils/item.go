@@ -55,7 +55,7 @@ func Decode(item goarSchema.BundleItem) (pid, accid, fromProcess string, instanc
 		if err != nil {
 			return
 		}
-
+		instance = assign
 		pid = assign.Process
 	default:
 		err = nodeSchema.ErrInvalidType

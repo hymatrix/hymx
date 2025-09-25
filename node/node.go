@@ -58,7 +58,11 @@ type Node struct {
 }
 
 func New(
-	bundler *goar.Bundler, redisURL, arweaveURL, hymxURL string, nodeInfo *schema.Info,
+	bundler *goar.Bundler,
+	redisURL string,
+	arweaveURL string,
+	hymxURL string,
+	nodeInfo *schema.Info,
 ) *Node {
 	outboxChan := make(chan vmmSchema.Outbox, 1000)
 	resultChan := make(chan vmmSchema.Result, 1000)

@@ -6,7 +6,9 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hymatrix/hymx/chainkit"
 	"github.com/hymatrix/hymx/common"
+	"github.com/hymatrix/hymx/node"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/server"
@@ -68,10 +70,12 @@ func run(c *cli.Context) (err error) {
 	gin.SetMode(ginMode)
 	if ginMode == "release" {
 		log15.Root().SetHandler(log15.LvlFilterHandler(log15.LvlInfo, log15.StderrHandler))
-
 	}
 
-	s := server.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo, pay)
+	node := node.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo)
+	chainkit := chainkit.New(node, LoadChainkitConfig())
+
+	s := server.New(node, pay, chainkit)
 
 	// mount your vm here.....
 	// ex:

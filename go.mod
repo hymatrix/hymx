@@ -9,13 +9,13 @@ require (
 	github.com/everFinance/goether v1.2.0
 	github.com/getsentry/sentry-go v0.28.1
 	github.com/gin-gonic/gin v1.10.0
-	github.com/go-co-op/gocron/v2 v2.16.3
+	github.com/go-co-op/gocron/v2 v2.16.5
 	github.com/inconshreveable/log15 v2.16.0+incompatible
 	github.com/panjf2000/ants/v2 v2.10.0
 	github.com/permadao/goar v1.1.1
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/spf13/viper v1.19.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v2 v2.27.4
 )
 

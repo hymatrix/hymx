@@ -3,30 +3,29 @@ package server
 import (
 	"net/http"
 
+	"github.com/hymatrix/hymx/chainkit"
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/node"
 	"github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/pay"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
-	"github.com/permadao/goar"
 )
 
 var log = common.NewLog("server")
 
 type Server struct {
-	node *node.Node
-	pay  *pay.Pay
+	node     *node.Node
+	pay      *pay.Pay
+	chainkit *chainkit.Chainkit
 
 	apiServer *http.Server
 }
 
-func New(
-	bundler *goar.Bundler, redisURL, arweaveURL, hymxURL string,
-	nodeInfo *schema.Info, pay *pay.Pay,
-) *Server {
+func New(node *node.Node, pay *pay.Pay, chainkit *chainkit.Chainkit) *Server {
 	return &Server{
-		node: node.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo),
-		pay:  pay,
+		node:     node,
+		pay:      pay,
+		chainkit: chainkit,
 	}
 }
 
@@ -36,6 +35,11 @@ func (s *Server) Run(endpoint string) {
 		s.pay.Run()
 		s.AddResultHandler(s.pay.HymxDepositHandler)
 		s.AddItemHandler(s.pay.HymxFeeHandler)
+	}
+
+	if s.chainkit != nil {
+		s.chainkit.Run()
+		s.AddAssignResHandler(s.chainkit.AssignmentHandler)
 	}
 
 	go s.runAPI(endpoint)
@@ -53,6 +57,9 @@ func (s *Server) Close() {
 		s.pay.Close()
 		s.pay.SaveCheckpoint()
 	}
+	if s.chainkit != nil {
+		s.chainkit.Close()
+	}
 	log.Info("server has been shut down")
 }
 
@@ -66,4 +73,8 @@ func (s *Server) AddItemHandler(handlers ...schema.ItemHandler) {
 
 func (s *Server) AddResultHandler(handlers ...schema.ResultHandler) {
 	s.node.AddResultHandler(handlers...)
+}
+
+func (s *Server) AddAssignResHandler(handlers ...schema.AssignResHandler) {
+	s.node.AddAssignResHandler(handlers...)
 }
