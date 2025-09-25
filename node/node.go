@@ -74,7 +74,7 @@ func New(
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	node := &Node{
+	return &Node{
 		hymxURL: hymxURL,
 		info:    nodeInfo,
 
@@ -102,8 +102,6 @@ func New(
 		outboxDB:         cache.NewOutbox(),
 		recoveryTaskPool: taskPool,
 	}
-
-	return node
 }
 
 func (n *Node) Run() {
