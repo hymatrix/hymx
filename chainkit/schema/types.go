@@ -25,6 +25,9 @@ type IDB interface {
 	GetUploading() ([]string, error)
 	SetBundledIn(bundledInID string) error
 	GetBundledIn() (string, error)
+
+	Cache(pid string, nonce int64, msg, assignment goarSchema.BundleItem) error
+	GetCache(pid string, nonce int64) (msg, assignment goarSchema.BundleItem, err error)
 }
 
 type DownloadResult struct {
