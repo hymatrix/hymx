@@ -87,6 +87,17 @@ func (c *Chainkit) Upload(tx goarSchema.BundleItem) error {
 		return errors.New("invalid bundle item: empty id")
 	}
 
+	// Check if transaction is already uploaded
+	uploaded, err := c.db.IsUploaded(tx.Id)
+	if err != nil {
+		log.Error("IsUploaded failed", "txid", tx.Id, "err", err)
+		return err
+	}
+	if uploaded {
+		log.Debug("txid already uploaded", "txid", tx.Id)
+		return nil
+	}
+
 	// Use Redis Set to deduplicate and record pending upload txids
 	return c.db.AddPending(tx.Id)
 }

@@ -1,6 +1,8 @@
 package chainkit
 
 import (
+	"fmt"
+
 	goarSchema "github.com/permadao/goar/schema"
 	goarUtils "github.com/permadao/goar/utils"
 )
@@ -17,7 +19,7 @@ func (c *Chainkit) uploadToChain(txids []string) (bundledInId string, uploaded [
 
 	items := c.getBundleItems(filteredTxids)
 	if len(items) == 0 {
-		return "", filteredTxids, nil
+		return "", filteredTxids, fmt.Errorf("no valid bundle items found")
 	}
 
 	// gen binary
@@ -146,6 +148,7 @@ func (c *Chainkit) tryUpload() error {
 
 	if len(uploaded) == 0 {
 		log.Debug("No txids uploaded", "count", len(uploaded))
+		// todo: clear uploading pool
 		return nil
 	}
 

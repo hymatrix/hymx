@@ -189,16 +189,12 @@ func (r *Chainkit) GetBundledIn() (string, error) {
 	return currentBundledIn, nil
 }
 
-func (r *Chainkit) addUploaded(txids []string) error {
-	return r.redis.SAdd(r.ctx, RdbUploadedTxIds, txids).Err()
-}
-
-// isUploaded checks if a transaction ID has already been uploaded
-func (r *Chainkit) isUploaded(txid string) (bool, error) {
+// IsUploaded checks if a transaction ID has already been uploaded
+func (r *Chainkit) IsUploaded(txid string) (bool, error) {
 	return r.redis.SIsMember(r.ctx, RdbUploadedTxIds, txid).Result()
 }
 
-// isUploadedBatch checks if multiple transaction IDs have already been uploaded
+// IsUploadedBatch checks if multiple transaction IDs have already been uploaded
 // Returns a map where key is txid and value is whether it's uploaded
 func (r *Chainkit) IsUploadedBatch(txids []string) (map[string]bool, error) {
 	if len(txids) == 0 {

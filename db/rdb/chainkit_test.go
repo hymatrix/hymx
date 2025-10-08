@@ -49,6 +49,21 @@ func setupTest(t *testing.T) *Chainkit {
 	return ck
 }
 
+// addUploaded is a helper function for testing that adds txids to the uploaded set
+func (r *Chainkit) addUploaded(txids []string) error {
+	if len(txids) == 0 {
+		return nil
+	}
+	
+	// Convert []string to []interface{} for Redis SAdd
+	members := make([]interface{}, len(txids))
+	for i, txid := range txids {
+		members[i] = txid
+	}
+	
+	return r.redis.SAdd(r.ctx, RdbUploadedTxIds, members...).Err()
+}
+
 func TestAddPending(t *testing.T) {
 	ck := setupTest(t)
 
@@ -193,16 +208,16 @@ func TestIsUploaded(t *testing.T) {
 	txid := "test-txid-123"
 
 	// Test non-uploaded transaction
-	uploaded, err := ck.isUploaded(txid)
+	uploaded, err := ck.IsUploaded(txid)
 	assert.NoError(t, err)
 	assert.False(t, uploaded)
 
-	// Add transaction to uploaded set
+	// Add the transaction to uploaded set
 	err = ck.addUploaded([]string{txid})
 	assert.NoError(t, err)
 
 	// Test uploaded transaction
-	uploaded, err = ck.isUploaded(txid)
+	uploaded, err = ck.IsUploaded(txid)
 	assert.NoError(t, err)
 	assert.True(t, uploaded)
 }
@@ -483,7 +498,7 @@ func TestCacheAndGetCache(t *testing.T) {
 
 	// Test data
 	txid := "test-txid-123"
-	
+
 	// Create test BundleItem
 	testItem := goarSchema.BundleItem{
 		Id:   "item-123",
@@ -506,7 +521,7 @@ func TestCacheNonExistent(t *testing.T) {
 
 	// Test GetCache for non-existent data
 	txid := "non-existent-txid"
-	
+
 	retrievedItem, err := ck.GetCache(txid)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "item not found")
@@ -590,7 +605,7 @@ func TestCacheConcurrentAccess(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func(idx int) {
 			defer wg.Done()
-			
+
 			txid := fmt.Sprintf("concurrent-txid-%d", idx)
 			testItem := goarSchema.BundleItem{
 				Id:   fmt.Sprintf("concurrent-item-%d", idx),
