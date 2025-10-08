@@ -6,6 +6,7 @@ import (
 
 	"github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/utils"
+	goarSchema "github.com/permadao/goar/schema"
 )
 
 func (n *Node) runRecovery() error {
@@ -72,18 +73,18 @@ func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string) error {
 	n.wg.Add(1)
 	defer n.wg.Done()
 
+	_, err := n.chainkit.DownloadByPid(pid, beginNonce, maxNonce)
+	if err != nil {
+		return err
+	}
+
 	// recovering all message of the process
 	for nonce := beginNonce; nonce <= maxNonce; nonce++ {
 		select {
 		case <-n.ctx.Done():
 			return errors.New("node closed")
 		default:
-			msg, err := n.db.GetMessageByNonce(pid, nonce)
-			if err != nil {
-				return err
-			}
-
-			assignItem, err := n.db.GetAssignByNonce(pid, nonce)
+			msg, assignItem, err := n.getMessageAndAssignByNonce(pid, nonce)
 			if err != nil {
 				return err
 			}
@@ -101,4 +102,27 @@ func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string) error {
 
 	}
 	return nil
+}
+
+// getMessageAndAssignByNonce retrieves both message and assignment by process ID and nonce
+func (n *Node) getMessageAndAssignByNonce(pid string, nonce int64) (msgItem, assignItem *goarSchema.BundleItem, err error) {
+	// First try to get from local database
+	msgItem, err1 := n.db.GetMessageByNonce(pid, nonce)
+	assignItem, err2 := n.db.GetAssignByNonce(pid, nonce)
+
+	// If both are available locally, return them
+	if err1 == nil && err2 == nil {
+		return msgItem, assignItem, nil
+	}
+
+	// If either is missing, try to download once
+	result, err := n.chainkit.DownloadByPid(pid, nonce, nonce)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	msgItem = result[0].Message
+	assignItem = result[0].Assignment
+
+	return msgItem, assignItem, nil
 }

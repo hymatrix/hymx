@@ -233,69 +233,71 @@ func (r *Chainkit) IsUploadedBatch(txids []string) (map[string]bool, error) {
 func (r *Chainkit) Cache(pid string, nonce int64, msg, assignment goarSchema.BundleItem) error {
 	// Create key: pid+nonce
 	key := fmt.Sprintf("%s:%s:%d", RdbMessageCache, pid, nonce)
-	
+
 	// Marshal message and assignment to JSON
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
-	
+
 	assignBytes, err := json.Marshal(assignment)
 	if err != nil {
 		return fmt.Errorf("failed to marshal assignment: %w", err)
 	}
-	
+
 	// Use pipeline to store both message and assignment
 	pipe := r.redis.Pipeline()
 	pipe.HSet(r.ctx, key, "msg", msgBytes)
 	pipe.HSet(r.ctx, key, "assign", assignBytes)
-	
+
 	// Execute pipeline
 	_, err = pipe.Exec(r.ctx)
 	if err != nil {
 		return fmt.Errorf("failed to cache message and assignment: %w", err)
 	}
-	
+
 	return nil
 }
 
-func (r *Chainkit) GetCache(pid string, nonce int64) (msg, assignment goarSchema.BundleItem, err error) {
+func (r *Chainkit) GetCache(pid string, nonce int64) (msg, assignment *goarSchema.BundleItem, err error) {
 	// Create key: pid+nonce
 	key := fmt.Sprintf("%s:%s:%d", RdbMessageCache, pid, nonce)
-	
+
 	// Get both message and assignment from hash
 	result, err := r.redis.HMGet(r.ctx, key, "msg", "assign").Result()
 	if err != nil {
 		if err == redis.Nil {
-			return msg, assignment, fmt.Errorf("message not found for pid %s nonce %d", pid, nonce)
+			return nil, nil, fmt.Errorf("message not found for pid %s nonce %d", pid, nonce)
 		}
-		return msg, assignment, fmt.Errorf("failed to get message from cache: %w", err)
+		return nil, nil, fmt.Errorf("failed to get message from cache: %w", err)
 	}
-	
+
 	// Check if both values exist
 	if len(result) != 2 {
-		return msg, assignment, fmt.Errorf("invalid cache data for pid %s nonce %d", pid, nonce)
+		return nil, nil, fmt.Errorf("invalid cache data for pid %s nonce %d", pid, nonce)
 	}
-	
+
 	// Parse message
 	msgStr, ok := result[0].(string)
 	if !ok {
-		return msg, assignment, fmt.Errorf("invalid message data for pid %s nonce %d", pid, nonce)
+		return nil, nil, fmt.Errorf("invalid message data for pid %s nonce %d", pid, nonce)
 	}
-	
-	if err := json.Unmarshal([]byte(msgStr), &msg); err != nil {
-		return msg, assignment, fmt.Errorf("failed to unmarshal message: %w", err)
+
+	msg = &goarSchema.BundleItem{}
+	if err := json.Unmarshal([]byte(msgStr), msg); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal message: %w", err)
 	}
-	
+
 	// Parse assignment
 	assignStr, ok := result[1].(string)
 	if !ok {
-		return msg, assignment, fmt.Errorf("invalid assignment data for pid %s nonce %d", pid, nonce)
+		return nil, nil, fmt.Errorf("invalid assignment data for pid %s nonce %d", pid, nonce)
 	}
-	
-	if err := json.Unmarshal([]byte(assignStr), &assignment); err != nil {
-		return msg, assignment, fmt.Errorf("failed to unmarshal assignment: %w", err)
+
+	assignment = &goarSchema.BundleItem{}
+	if err := json.Unmarshal([]byte(assignStr), assignment); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal assignment: %w", err)
 	}
-	
+
 	return msg, assignment, nil
 }

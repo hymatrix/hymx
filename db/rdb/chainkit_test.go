@@ -520,9 +520,9 @@ func TestCacheNonExistent(t *testing.T) {
 	retrievedMsg, retrievedAssignment, err := ck.GetCache(pid, nonce)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid message data")
-	// The function should return empty BundleItem structs even when there's an error
-	assert.NotNil(t, retrievedMsg)
-	assert.NotNil(t, retrievedAssignment)
+	// The function should return nil pointers when there's an error
+	assert.Nil(t, retrievedMsg)
+	assert.Nil(t, retrievedAssignment)
 }
 
 func TestCacheMultipleEntries(t *testing.T) {

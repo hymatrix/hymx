@@ -29,37 +29,43 @@ func (c *Chainkit) downloadByNonce(scheduler, pid string, beginNonce, endNonce i
 			continue
 		}
 
-		// check local db before download
-		assignment, err := c.node.GetAssignByNonce(pid, nonce)
-		if err != nil {
-			log.Debug("begin download", "assignId", assignId, "txId", txId)
-			assignment, err = c.DownloadByTxid(assignId)
+		// try get from chainkit cache
+		message, assignment, err := c.db.GetCache(pid, nonce)
+		if err != nil { // miss cache
+			// check local db before download
+			assignment, err = c.node.GetAssignByNonce(pid, nonce)
 			if err != nil {
-				return nil, err
+				log.Debug("begin download", "assignId", assignId, "txId", txId)
+				assignment, err = c.DownloadByTxid(assignId)
+				if err != nil {
+					log.Error("download assignment failed", "assignId", assignId, "txId", txId, "error", err)
+					continue
+				}
+
+				err = c.verifyMessage(assignment, hymxSchema.TypeAssignment)
+				if err != nil {
+					log.Error("verify assignment failed", "assignId", assignId, "txId", txId, "error", err)
+					continue
+				}
 			}
 
-			err = c.verifyMessage(assignment, hymxSchema.TypeAssignment)
+			// check local db before download
+			message, err = c.node.GetMessage(txId)
 			if err != nil {
-				log.Debug("verify assignment failed", "error", err)
-				continue
+				log.Debug("begin download message", "txId", txId)
+				message, err = c.DownloadByTxid(txId)
+				if err != nil {
+					log.Error("download message failed", "txId", txId, "error", err)
+					continue
+				}
 			}
 		}
 
-		// check local db before download
-		message, err := c.node.GetMessage(txId)
+		// commit to local cache
+		err = c.db.Cache(pid, nonce, *message, *assignment)
 		if err != nil {
-			log.Debug("begin download message", "txId", txId)
-			message, err = c.DownloadByTxid(txId)
-			if err != nil {
-				return nil, err
-			}
-
-			// commit to local cache
-			err = c.db.Cache(pid, nonce, *message, *assignment)
-			if err != nil {
-				log.Debug("commit to redis failed", "error", err)
-				continue
-			}
+			log.Debug("commit to redis failed", "error", err)
+			continue
 		}
 
 		results = append(results, &schema.DownloadResult{

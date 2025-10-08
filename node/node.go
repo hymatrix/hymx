@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/hymatrix/hymx/chainkit"
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/db/cache"
 	"github.com/hymatrix/hymx/db/rdb"
@@ -53,6 +54,8 @@ type Node struct {
 
 	db       schema.IDB
 	outboxDB schema.IDBOutbox
+
+	chainkit *chainkit.Chainkit
 
 	recoveryTaskPool *ants.Pool
 }
@@ -130,6 +133,10 @@ func (n *Node) Close() {
 	n.vmm.Close()
 
 	log.Info("node has been shut down")
+}
+
+func (n *Node) SetChainkit(chainkit *chainkit.Chainkit) {
+	n.chainkit = chainkit
 }
 
 func (n *Node) Info() schema.Info {
