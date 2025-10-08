@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	goarSchema "github.com/permadao/goar/schema"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -475,4 +476,182 @@ func TestUploadingCountLimit(t *testing.T) {
 	finalPending, err := ck.pendingCount()
 	assert.NoError(t, err)
 	assert.Equal(t, pendingToAdd-moved, finalPending) // Should decrease by the number moved
+}
+
+func TestCacheAndGetCache(t *testing.T) {
+	ck := setupTest(t)
+
+	// Test data
+	pid := "test-process-123"
+	nonce := int64(456)
+	
+	// Create test message BundleItem
+	testMsg := goarSchema.BundleItem{
+		Id:   "msg-123",
+		Tags: []goarSchema.Tag{{Name: "test", Value: "value"}},
+	}
+	
+	// Create test assignment BundleItem
+	testAssignment := goarSchema.BundleItem{
+		Id:   "assign-123",
+		Tags: []goarSchema.Tag{{Name: "test", Value: "assignment"}},
+	}
+
+	// Test Cache function
+	err := ck.Cache(pid, nonce, testMsg, testAssignment)
+	assert.NoError(t, err)
+
+	// Test GetCache function
+	retrievedMsg, retrievedAssignment, err := ck.GetCache(pid, nonce)
+	assert.NoError(t, err)
+	assert.NotNil(t, retrievedMsg)
+	assert.NotNil(t, retrievedAssignment)
+	assert.Equal(t, testMsg.Id, retrievedMsg.Id)
+	assert.Equal(t, testAssignment.Id, retrievedAssignment.Id)
+}
+
+func TestCacheNonExistent(t *testing.T) {
+	ck := setupTest(t)
+
+	// Test GetCache for non-existent data
+	pid := "non-existent-process"
+	nonce := int64(999)
+	
+	retrievedMsg, retrievedAssignment, err := ck.GetCache(pid, nonce)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid message data")
+	// The function should return empty BundleItem structs even when there's an error
+	assert.NotNil(t, retrievedMsg)
+	assert.NotNil(t, retrievedAssignment)
+}
+
+func TestCacheMultipleEntries(t *testing.T) {
+	ck := setupTest(t)
+
+	// Test multiple cache entries
+	entries := []struct {
+		pid       string
+		nonce     int64
+		msgID     string
+		assignID  string
+	}{
+		{"process-1", 1, "msg-1", "assign-1"},
+		{"process-1", 2, "msg-2", "assign-2"},
+		{"process-2", 1, "msg-3", "assign-3"},
+		{"process-2", 2, "msg-4", "assign-4"},
+	}
+
+	// Cache all entries
+	for _, entry := range entries {
+		testMsg := goarSchema.BundleItem{
+			Id:   entry.msgID,
+			Tags: []goarSchema.Tag{{Name: "test", Value: entry.msgID}},
+		}
+		testAssignment := goarSchema.BundleItem{
+			Id:   entry.assignID,
+			Tags: []goarSchema.Tag{{Name: "test", Value: entry.assignID}},
+		}
+
+		err := ck.Cache(entry.pid, entry.nonce, testMsg, testAssignment)
+		assert.NoError(t, err)
+	}
+
+	// Verify all entries can be retrieved
+	for _, entry := range entries {
+		retrievedMsg, retrievedAssignment, err := ck.GetCache(entry.pid, entry.nonce)
+		assert.NoError(t, err)
+		assert.NotNil(t, retrievedMsg)
+		assert.NotNil(t, retrievedAssignment)
+		assert.Equal(t, entry.msgID, retrievedMsg.Id)
+		assert.Equal(t, entry.assignID, retrievedAssignment.Id)
+	}
+}
+
+func TestCacheOverwrite(t *testing.T) {
+	ck := setupTest(t)
+
+	pid := "test-process"
+	nonce := int64(123)
+
+	// First cache entry
+	firstMsg := goarSchema.BundleItem{
+		Id:   "first-msg",
+		Tags: []goarSchema.Tag{{Name: "version", Value: "1"}},
+	}
+	firstAssignment := goarSchema.BundleItem{
+		Id:   "first-assign",
+		Tags: []goarSchema.Tag{{Name: "version", Value: "1"}},
+	}
+
+	err := ck.Cache(pid, nonce, firstMsg, firstAssignment)
+	assert.NoError(t, err)
+
+	// Second cache entry (should overwrite)
+	secondMsg := goarSchema.BundleItem{
+		Id:   "second-msg",
+		Tags: []goarSchema.Tag{{Name: "version", Value: "2"}},
+	}
+	secondAssignment := goarSchema.BundleItem{
+		Id:   "second-assign",
+		Tags: []goarSchema.Tag{{Name: "version", Value: "2"}},
+	}
+
+	err = ck.Cache(pid, nonce, secondMsg, secondAssignment)
+	assert.NoError(t, err)
+
+	// Verify the second entry overwrote the first
+	retrievedMsg, retrievedAssignment, err := ck.GetCache(pid, nonce)
+	assert.NoError(t, err)
+	assert.NotNil(t, retrievedMsg)
+	assert.NotNil(t, retrievedAssignment)
+	assert.Equal(t, secondMsg.Id, retrievedMsg.Id)
+	assert.Equal(t, secondAssignment.Id, retrievedAssignment.Id)
+}
+
+func TestCacheConcurrentAccess(t *testing.T) {
+	ck := setupTest(t)
+
+	pid := "concurrent-process"
+	numGoroutines := 10
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	// Concurrent cache operations
+	for i := 0; i < numGoroutines; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			
+			nonce := int64(idx)
+			testMsg := goarSchema.BundleItem{
+				Id:   fmt.Sprintf("concurrent-msg-%d", idx),
+				Tags: []goarSchema.Tag{{Name: "index", Value: fmt.Sprintf("%d", idx)}},
+			}
+			testAssignment := goarSchema.BundleItem{
+				Id:   fmt.Sprintf("concurrent-assign-%d", idx),
+				Tags: []goarSchema.Tag{{Name: "index", Value: fmt.Sprintf("%d", idx)}},
+			}
+
+			err := ck.Cache(pid, nonce, testMsg, testAssignment)
+			assert.NoError(t, err)
+
+			// Also try to retrieve
+			retrievedMsg, retrievedAssignment, err := ck.GetCache(pid, nonce)
+			assert.NoError(t, err)
+			assert.NotNil(t, retrievedMsg)
+			assert.NotNil(t, retrievedAssignment)
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify all entries exist
+	for i := 0; i < numGoroutines; i++ {
+		retrievedMsg, retrievedAssignment, err := ck.GetCache(pid, int64(i))
+		assert.NoError(t, err)
+		assert.NotNil(t, retrievedMsg)
+		assert.NotNil(t, retrievedAssignment)
+		assert.Equal(t, fmt.Sprintf("concurrent-msg-%d", i), retrievedMsg.Id)
+		assert.Equal(t, fmt.Sprintf("concurrent-assign-%d", i), retrievedAssignment.Id)
+	}
 }
