@@ -482,47 +482,36 @@ func TestCacheAndGetCache(t *testing.T) {
 	ck := setupTest(t)
 
 	// Test data
-	pid := "test-process-123"
-	nonce := int64(456)
+	txid := "test-txid-123"
 	
-	// Create test message BundleItem
-	testMsg := goarSchema.BundleItem{
-		Id:   "msg-123",
+	// Create test BundleItem
+	testItem := goarSchema.BundleItem{
+		Id:   "item-123",
 		Tags: []goarSchema.Tag{{Name: "test", Value: "value"}},
-	}
-	
-	// Create test assignment BundleItem
-	testAssignment := goarSchema.BundleItem{
-		Id:   "assign-123",
-		Tags: []goarSchema.Tag{{Name: "test", Value: "assignment"}},
 	}
 
 	// Test Cache function
-	err := ck.Cache(pid, nonce, testMsg, testAssignment)
+	err := ck.Cache(txid, testItem)
 	assert.NoError(t, err)
 
 	// Test GetCache function
-	retrievedMsg, retrievedAssignment, err := ck.GetCache(pid, nonce)
+	retrievedItem, err := ck.GetCache(txid)
 	assert.NoError(t, err)
-	assert.NotNil(t, retrievedMsg)
-	assert.NotNil(t, retrievedAssignment)
-	assert.Equal(t, testMsg.Id, retrievedMsg.Id)
-	assert.Equal(t, testAssignment.Id, retrievedAssignment.Id)
+	assert.NotNil(t, retrievedItem)
+	assert.Equal(t, testItem.Id, retrievedItem.Id)
 }
 
 func TestCacheNonExistent(t *testing.T) {
 	ck := setupTest(t)
 
 	// Test GetCache for non-existent data
-	pid := "non-existent-process"
-	nonce := int64(999)
+	txid := "non-existent-txid"
 	
-	retrievedMsg, retrievedAssignment, err := ck.GetCache(pid, nonce)
+	retrievedItem, err := ck.GetCache(txid)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid message data")
-	// The function should return nil pointers when there's an error
-	assert.Nil(t, retrievedMsg)
-	assert.Nil(t, retrievedAssignment)
+	assert.Contains(t, err.Error(), "item not found")
+	// The function should return nil pointer when there's an error
+	assert.Nil(t, retrievedItem)
 }
 
 func TestCacheMultipleEntries(t *testing.T) {
@@ -530,88 +519,68 @@ func TestCacheMultipleEntries(t *testing.T) {
 
 	// Test multiple cache entries
 	entries := []struct {
-		pid       string
-		nonce     int64
-		msgID     string
-		assignID  string
+		txid   string
+		itemID string
 	}{
-		{"process-1", 1, "msg-1", "assign-1"},
-		{"process-1", 2, "msg-2", "assign-2"},
-		{"process-2", 1, "msg-3", "assign-3"},
-		{"process-2", 2, "msg-4", "assign-4"},
+		{"txid-1", "item-1"},
+		{"txid-2", "item-2"},
+		{"txid-3", "item-3"},
+		{"txid-4", "item-4"},
 	}
 
 	// Cache all entries
 	for _, entry := range entries {
-		testMsg := goarSchema.BundleItem{
-			Id:   entry.msgID,
-			Tags: []goarSchema.Tag{{Name: "test", Value: entry.msgID}},
-		}
-		testAssignment := goarSchema.BundleItem{
-			Id:   entry.assignID,
-			Tags: []goarSchema.Tag{{Name: "test", Value: entry.assignID}},
+		testItem := goarSchema.BundleItem{
+			Id:   entry.itemID,
+			Tags: []goarSchema.Tag{{Name: "test", Value: entry.itemID}},
 		}
 
-		err := ck.Cache(entry.pid, entry.nonce, testMsg, testAssignment)
+		err := ck.Cache(entry.txid, testItem)
 		assert.NoError(t, err)
 	}
 
 	// Verify all entries can be retrieved
 	for _, entry := range entries {
-		retrievedMsg, retrievedAssignment, err := ck.GetCache(entry.pid, entry.nonce)
+		retrievedItem, err := ck.GetCache(entry.txid)
 		assert.NoError(t, err)
-		assert.NotNil(t, retrievedMsg)
-		assert.NotNil(t, retrievedAssignment)
-		assert.Equal(t, entry.msgID, retrievedMsg.Id)
-		assert.Equal(t, entry.assignID, retrievedAssignment.Id)
+		assert.NotNil(t, retrievedItem)
+		assert.Equal(t, entry.itemID, retrievedItem.Id)
 	}
 }
 
 func TestCacheOverwrite(t *testing.T) {
 	ck := setupTest(t)
 
-	pid := "test-process"
-	nonce := int64(123)
+	txid := "test-txid"
 
 	// First cache entry
-	firstMsg := goarSchema.BundleItem{
-		Id:   "first-msg",
-		Tags: []goarSchema.Tag{{Name: "version", Value: "1"}},
-	}
-	firstAssignment := goarSchema.BundleItem{
-		Id:   "first-assign",
+	firstItem := goarSchema.BundleItem{
+		Id:   "first-item",
 		Tags: []goarSchema.Tag{{Name: "version", Value: "1"}},
 	}
 
-	err := ck.Cache(pid, nonce, firstMsg, firstAssignment)
+	err := ck.Cache(txid, firstItem)
 	assert.NoError(t, err)
 
 	// Second cache entry (should overwrite)
-	secondMsg := goarSchema.BundleItem{
-		Id:   "second-msg",
-		Tags: []goarSchema.Tag{{Name: "version", Value: "2"}},
-	}
-	secondAssignment := goarSchema.BundleItem{
-		Id:   "second-assign",
+	secondItem := goarSchema.BundleItem{
+		Id:   "second-item",
 		Tags: []goarSchema.Tag{{Name: "version", Value: "2"}},
 	}
 
-	err = ck.Cache(pid, nonce, secondMsg, secondAssignment)
+	err = ck.Cache(txid, secondItem)
 	assert.NoError(t, err)
 
 	// Verify the second entry overwrote the first
-	retrievedMsg, retrievedAssignment, err := ck.GetCache(pid, nonce)
+	retrievedItem, err := ck.GetCache(txid)
 	assert.NoError(t, err)
-	assert.NotNil(t, retrievedMsg)
-	assert.NotNil(t, retrievedAssignment)
-	assert.Equal(t, secondMsg.Id, retrievedMsg.Id)
-	assert.Equal(t, secondAssignment.Id, retrievedAssignment.Id)
+	assert.NotNil(t, retrievedItem)
+	assert.Equal(t, secondItem.Id, retrievedItem.Id)
 }
 
 func TestCacheConcurrentAccess(t *testing.T) {
 	ck := setupTest(t)
 
-	pid := "concurrent-process"
 	numGoroutines := 10
 
 	var wg sync.WaitGroup
@@ -622,24 +591,19 @@ func TestCacheConcurrentAccess(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			
-			nonce := int64(idx)
-			testMsg := goarSchema.BundleItem{
-				Id:   fmt.Sprintf("concurrent-msg-%d", idx),
-				Tags: []goarSchema.Tag{{Name: "index", Value: fmt.Sprintf("%d", idx)}},
-			}
-			testAssignment := goarSchema.BundleItem{
-				Id:   fmt.Sprintf("concurrent-assign-%d", idx),
+			txid := fmt.Sprintf("concurrent-txid-%d", idx)
+			testItem := goarSchema.BundleItem{
+				Id:   fmt.Sprintf("concurrent-item-%d", idx),
 				Tags: []goarSchema.Tag{{Name: "index", Value: fmt.Sprintf("%d", idx)}},
 			}
 
-			err := ck.Cache(pid, nonce, testMsg, testAssignment)
+			err := ck.Cache(txid, testItem)
 			assert.NoError(t, err)
 
 			// Also try to retrieve
-			retrievedMsg, retrievedAssignment, err := ck.GetCache(pid, nonce)
+			retrievedItem, err := ck.GetCache(txid)
 			assert.NoError(t, err)
-			assert.NotNil(t, retrievedMsg)
-			assert.NotNil(t, retrievedAssignment)
+			assert.NotNil(t, retrievedItem)
 		}(i)
 	}
 
@@ -647,11 +611,10 @@ func TestCacheConcurrentAccess(t *testing.T) {
 
 	// Verify all entries exist
 	for i := 0; i < numGoroutines; i++ {
-		retrievedMsg, retrievedAssignment, err := ck.GetCache(pid, int64(i))
+		txid := fmt.Sprintf("concurrent-txid-%d", i)
+		retrievedItem, err := ck.GetCache(txid)
 		assert.NoError(t, err)
-		assert.NotNil(t, retrievedMsg)
-		assert.NotNil(t, retrievedAssignment)
-		assert.Equal(t, fmt.Sprintf("concurrent-msg-%d", i), retrievedMsg.Id)
-		assert.Equal(t, fmt.Sprintf("concurrent-assign-%d", i), retrievedAssignment.Id)
+		assert.NotNil(t, retrievedItem)
+		assert.Equal(t, fmt.Sprintf("concurrent-item-%d", i), retrievedItem.Id)
 	}
 }

@@ -93,14 +93,15 @@ func (c *Chainkit) Upload(tx goarSchema.BundleItem) error {
 
 // Download a transaction
 func (c *Chainkit) DownloadByTxid(txid string) (*goarSchema.BundleItem, error) {
-	return c.operator.Download(txid)
+	return c.downloadByTxid(txid)
 }
 
 // Download all transactions of a process, from specified Nonce to latest transaction
 func (c *Chainkit) DownloadByPid(pid string, beginNonce, endNonce int64) (results []*schema.DownloadResult, err error) {
+	log.Debug("DownloadByPid", "pid", pid, "beginNonce", beginNonce, "endNonce", endNonce)
 	// 1. download spawn transaction, txid = pid, nonce=0
 	log.Debug("download spawn transaction", "pid", pid)
-	spawnItem, err := c.operator.Download(pid)
+	spawnItem, err := c.downloadByTxid(pid)
 	if err != nil {
 		log.Error("DownloadByPid failed", "pid", pid, "err", err)
 		return nil, err
@@ -115,7 +116,7 @@ func (c *Chainkit) DownloadByPid(pid string, beginNonce, endNonce int64) (result
 		log.Error("verifyProcessMsg failed", "pid", pid, "err", err)
 		return nil, err
 	}
-	log.Debug("download by nonce")
+
 	// 3. download transactions range [beginNonce, endNonce]
 	arAddressOwner, err := goarUtils.OwnerToAddress(spawnItem.Owner)
 	if err != nil {

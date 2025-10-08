@@ -51,6 +51,7 @@ func (n *Node) runRecovery() error {
 }
 
 func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string) error {
+	log.Debug("recovery process", "pid", pid, "maxNonce", maxNonce, "ckpId", ckpId)
 	if n.vmm.IsRecovering(pid) {
 		return schema.ErrProcessIsRecovering
 	}
@@ -111,7 +112,7 @@ func (n *Node) getMessageAndAssignByNonce(pid string, nonce int64) (msgItem, ass
 	assignItem, err2 := n.db.GetAssignByNonce(pid, nonce)
 
 	// If both are available locally, return them
-	if err1 == nil && err2 == nil {
+	if err1 == nil && err2 == nil && msgItem != nil && assignItem != nil {
 		return msgItem, assignItem, nil
 	}
 
@@ -120,7 +121,6 @@ func (n *Node) getMessageAndAssignByNonce(pid string, nonce int64) (msgItem, ass
 	if err != nil {
 		return nil, nil, err
 	}
-
 	msgItem = result[0].Message
 	assignItem = result[0].Assignment
 

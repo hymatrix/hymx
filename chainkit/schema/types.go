@@ -26,8 +26,8 @@ type IDB interface {
 	SetBundledIn(bundledInID string) error
 	GetBundledIn() (string, error)
 
-	Cache(pid string, nonce int64, msg, assignment goarSchema.BundleItem) error
-	GetCache(pid string, nonce int64) (msg, assignment *goarSchema.BundleItem, err error)
+	Cache(txid string, item goarSchema.BundleItem) error
+	GetCache(txid string) (*goarSchema.BundleItem, error)
 }
 
 type DownloadResult struct {

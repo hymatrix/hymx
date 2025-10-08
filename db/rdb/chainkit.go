@@ -15,7 +15,7 @@ const (
 	RdbUploadingTxIds   = "chainkit:uploading"            // Set: Uploading TxId pool
 	RdbCurrentBundledIn = "chainkit:current_bundledin_id" // String: current bundledIn id with 1 hour expiration
 	RdbUploadedTxIds    = "chainkit:uploaded_txids"       // Set: Uploaded TxId pool
-	RdbMessageCache     = "chainkit:cache"                // key: pid+nonce, value message & assignment
+	RdbCache            = "chainkit:cache"                // key: TxId, value BundleItem
 )
 
 const (
@@ -230,74 +230,43 @@ func (r *Chainkit) IsUploadedBatch(txids []string) (map[string]bool, error) {
 	return result, nil
 }
 
-func (r *Chainkit) Cache(pid string, nonce int64, msg, assignment goarSchema.BundleItem) error {
-	// Create key: pid+nonce
-	key := fmt.Sprintf("%s:%s:%d", RdbMessageCache, pid, nonce)
+func (r *Chainkit) Cache(txid string, item goarSchema.BundleItem) error {
+	// Create key: txid
+	key := fmt.Sprintf("%s:%s", RdbCache, txid)
 
-	// Marshal message and assignment to JSON
-	msgBytes, err := json.Marshal(msg)
+	// Marshal item to JSON
+	itemBytes, err := json.Marshal(item)
 	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+		return fmt.Errorf("failed to marshal item: %w", err)
 	}
 
-	assignBytes, err := json.Marshal(assignment)
+	// Store the item
+	err = r.redis.Set(r.ctx, key, itemBytes, 0).Err()
 	if err != nil {
-		return fmt.Errorf("failed to marshal assignment: %w", err)
-	}
-
-	// Use pipeline to store both message and assignment
-	pipe := r.redis.Pipeline()
-	pipe.HSet(r.ctx, key, "msg", msgBytes)
-	pipe.HSet(r.ctx, key, "assign", assignBytes)
-
-	// Execute pipeline
-	_, err = pipe.Exec(r.ctx)
-	if err != nil {
-		return fmt.Errorf("failed to cache message and assignment: %w", err)
+		return fmt.Errorf("failed to cache item: %w", err)
 	}
 
 	return nil
 }
 
-func (r *Chainkit) GetCache(pid string, nonce int64) (msg, assignment *goarSchema.BundleItem, err error) {
-	// Create key: pid+nonce
-	key := fmt.Sprintf("%s:%s:%d", RdbMessageCache, pid, nonce)
+func (r *Chainkit) GetCache(txid string) (*goarSchema.BundleItem, error) {
+	// Create key: txid
+	key := fmt.Sprintf("%s:%s", RdbCache, txid)
 
-	// Get both message and assignment from hash
-	result, err := r.redis.HMGet(r.ctx, key, "msg", "assign").Result()
+	// Get item from cache
+	result, err := r.redis.Get(r.ctx, key).Result()
 	if err != nil {
 		if err == redis.Nil {
-			return nil, nil, fmt.Errorf("message not found for pid %s nonce %d", pid, nonce)
+			return nil, fmt.Errorf("item not found for txid %s", txid)
 		}
-		return nil, nil, fmt.Errorf("failed to get message from cache: %w", err)
+		return nil, fmt.Errorf("failed to get item from cache: %w", err)
 	}
 
-	// Check if both values exist
-	if len(result) != 2 {
-		return nil, nil, fmt.Errorf("invalid cache data for pid %s nonce %d", pid, nonce)
+	// Parse item
+	item := &goarSchema.BundleItem{}
+	if err := json.Unmarshal([]byte(result), item); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal item: %w", err)
 	}
 
-	// Parse message
-	msgStr, ok := result[0].(string)
-	if !ok {
-		return nil, nil, fmt.Errorf("invalid message data for pid %s nonce %d", pid, nonce)
-	}
-
-	msg = &goarSchema.BundleItem{}
-	if err := json.Unmarshal([]byte(msgStr), msg); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal message: %w", err)
-	}
-
-	// Parse assignment
-	assignStr, ok := result[1].(string)
-	if !ok {
-		return nil, nil, fmt.Errorf("invalid assignment data for pid %s nonce %d", pid, nonce)
-	}
-
-	assignment = &goarSchema.BundleItem{}
-	if err := json.Unmarshal([]byte(assignStr), assignment); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal assignment: %w", err)
-	}
-
-	return msg, assignment, nil
+	return item, nil
 }

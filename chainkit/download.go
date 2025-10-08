@@ -8,6 +8,25 @@ import (
 	goarUtils "github.com/permadao/goar/utils"
 )
 
+func (c *Chainkit) downloadByTxid(itemId string) (bundleItem *goarSchema.BundleItem, err error) {
+	// Get from cache first
+	bundleItem, err = c.db.GetCache(itemId)
+	if err == nil {
+		return bundleItem, nil
+	}
+
+	bundleItem, err = c.operator.Download(itemId)
+	if err != nil {
+		return nil, err
+	}
+	// Cache the downloaded bundle item
+	err = c.db.Cache(itemId, *bundleItem)
+	if err != nil {
+		log.Error("cache bundle item failed", "itemId", itemId, "error", err)
+	}
+	return bundleItem, nil
+}
+
 func (c *Chainkit) downloadByNonce(scheduler, pid string, beginNonce, endNonce int64) (results []*schema.DownloadResult, err error) {
 	assignIds, txIds, err := c.queryByNonce(scheduler, pid, beginNonce, endNonce)
 	if err != nil {
@@ -29,42 +48,36 @@ func (c *Chainkit) downloadByNonce(scheduler, pid string, beginNonce, endNonce i
 			continue
 		}
 
-		// try get from chainkit cache
-		message, assignment, err := c.db.GetCache(pid, nonce)
-		if err != nil { // miss cache
-			// check local db before download
-			assignment, err = c.node.GetAssignByNonce(pid, nonce)
+		// check local db before download
+		assignment, err := c.node.GetAssignByNonce(pid, nonce)
+		if err != nil || assignment == nil {
+			log.Debug("begin download", "assignId", assignId, "txId", txId)
+			assignment, err = c.downloadByTxid(assignId)
 			if err != nil {
-				log.Debug("begin download", "assignId", assignId, "txId", txId)
-				assignment, err = c.DownloadByTxid(assignId)
-				if err != nil {
-					log.Error("download assignment failed", "assignId", assignId, "txId", txId, "error", err)
-					continue
-				}
-
-				err = c.verifyMessage(assignment, hymxSchema.TypeAssignment)
-				if err != nil {
-					log.Error("verify assignment failed", "assignId", assignId, "txId", txId, "error", err)
-					continue
-				}
+				log.Error("download assignment failed", "assignId", assignId, "txId", txId, "error", err)
+				continue
 			}
 
-			// check local db before download
-			message, err = c.node.GetMessage(txId)
+			err = c.verifyMessage(assignment, hymxSchema.TypeAssignment)
 			if err != nil {
-				log.Debug("begin download message", "txId", txId)
-				message, err = c.DownloadByTxid(txId)
-				if err != nil {
-					log.Error("download message failed", "txId", txId, "error", err)
-					continue
-				}
+				log.Error("verify assignment failed", "assignId", assignId, "txId", txId, "error", err)
+				continue
 			}
 		}
 
-		// commit to local cache
-		err = c.db.Cache(pid, nonce, *message, *assignment)
-		if err != nil {
-			log.Debug("commit to redis failed", "error", err)
+		// check local db before download
+		message, err := c.node.GetMessage(txId)
+		if err != nil || message == nil {
+			log.Debug("begin download message", "txId", txId)
+			message, err = c.downloadByTxid(txId)
+			if err != nil {
+				log.Error("download message failed", "txId", txId, "error", err)
+				continue
+			}
+		}
+
+		if message == nil || assignment == nil {
+			log.Error("downloadByNonce failed", "nonce", nonce, "assignId", assignId, "txId", txId)
 			continue
 		}
 
