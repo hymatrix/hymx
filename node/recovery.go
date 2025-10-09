@@ -74,11 +74,6 @@ func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string) error {
 	n.wg.Add(1)
 	defer n.wg.Done()
 
-	_, err := n.chainkit.DownloadByPid(pid, beginNonce, maxNonce)
-	if err != nil {
-		return err
-	}
-
 	// recovering all message of the process
 	for nonce := beginNonce; nonce <= maxNonce; nonce++ {
 		select {
