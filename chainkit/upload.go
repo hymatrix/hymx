@@ -148,7 +148,6 @@ func (c *Chainkit) tryUpload() error {
 
 	if len(uploaded) == 0 {
 		log.Debug("No txids uploaded", "count", len(uploaded))
-		// todo: clear uploading pool
 		return nil
 	}
 
