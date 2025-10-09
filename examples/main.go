@@ -9,14 +9,14 @@ import (
 	"github.com/hymatrix/hymx/sdk"
 	"github.com/hymatrix/hymx/vmm/core/token/schema"
 	"github.com/permadao/goar"
+	"github.com/spf13/viper"
 )
 
 var (
 	// url = "https://hymatrix.ai"
-	url = "http://127.0.0.1:8082"
+	url = "http://127.0.0.1:8080"
 
-	// prvKey     = "0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b"
-	prvKey     = "0xbf9cdeced304f1ef845362c4527fe4ddaecb3fa36fa9ed615447abdffdd16418"
+	prvKey     = "0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b"
 	signer, _  = goether.NewSigner(prvKey)
 	bundler, _ = goar.NewBundler(signer)
 	s          = sdk.NewFromBundler(url, bundler)
@@ -42,6 +42,23 @@ func main() {
 		deposit(s, "0xc2835a6caa18CCD33a79C62D104FEA817d715149", "UB0yJx53xBo_rFA4CvKP-WKO25M7kIGrqm2caarghkc", big.NewInt(100000000000))
 	case "module":
 		module()
+	case "upload":
+		if len(os.Args) < 3 {
+			fmt.Println("please input pid, ex: go run ./ upload <pid>")
+			os.Exit(1)
+		}
+		pid := os.Args[2]
+		configPath := "./config.yaml"
+		viper.SetConfigFile(configPath)
+		viper.SetConfigType("yaml")
+		if err := viper.ReadInConfig(); err != nil {
+			fmt.Printf("read config file %s failed, err: %v\n", configPath, err)
+			os.Exit(1)
+		}
+		nodeRedis := viper.GetString("redisURL")
+		chainkitRedis := viper.GetString("chainkit.redisURL")
+		keyfile := viper.GetString("chainkit.keyfilePath")
+		Upload(pid, nodeRedis, chainkitRedis, keyfile)
 	default:
 		fmt.Printf("unknown cmd: %s\n", cmd)
 		os.Exit(1)
