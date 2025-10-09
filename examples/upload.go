@@ -25,10 +25,6 @@ func (n *NodeDB) GetMessage(msgid string) (msg *goarSchema.BundleItem, err error
 	return n.db.GetMessage(msgid)
 }
 
-func (n *NodeDB) GetMessageByNonce(pid string, nonce int64) (msg *goarSchema.BundleItem, err error) {
-	return n.db.GetMessageByNonce(pid, nonce)
-}
-
 func (n *NodeDB) GetAssignByMessage(msgid string) (assign *goarSchema.BundleItem, err error) {
 	res, err := n.db.GetResult(msgid)
 	if err != nil {
@@ -59,9 +55,14 @@ func Upload(pid string, nodeRedis, chainkitRedis, keyfile string) error {
 	chainkit.Run()
 
 	from := int64(0)
-	to := int64(10)
-	for nonce := from; nonce < to; nonce++ {
-		tx, err := node.GetMessageByNonce(pid, nonce)
+	to, err := node.db.GetNonce(pid)
+	if err != nil {
+		fmt.Printf("GetNonce failed, pid: %s, err: %v\n", pid, err)
+		return err
+	}
+
+	for nonce := from; nonce <= to; nonce++ {
+		tx, err := node.db.GetMessageByNonce(pid, nonce)
 		if err != nil || tx == nil {
 			fmt.Printf("GetMessageByNonce failed, nonce: %d, err: %v\n", nonce, err)
 			continue
