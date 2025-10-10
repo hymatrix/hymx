@@ -49,7 +49,7 @@ func main() {
 			os.Exit(1)
 		}
 		pid := os.Args[2]
-		configPath := "./config.yaml"
+		configPath := "./config_chainkit.yaml"
 		viper.SetConfigFile(configPath)
 		viper.SetConfigType("yaml")
 		if err := viper.ReadInConfig(); err != nil {
