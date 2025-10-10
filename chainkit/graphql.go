@@ -58,7 +58,7 @@ func (c *Chainkit) queryBatch(scheduler, pid string, beginNonce, size int64) (as
 	// tag: Message
 
 	// todo: handle relocation
-	// todo: 多笔 Nonce 处理
+	// todo: handle multiple Nonce values in a single batch
 
 	assignIds = make(map[int64]string)
 	txIds = make(map[int64]string)
