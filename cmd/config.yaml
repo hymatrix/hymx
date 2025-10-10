@@ -17,6 +17,7 @@ joinNetwork: false
 
 chainkit:
   redisURL: redis://@localhost:6379/10
+  nodeRedisURL: redis://@localhost:6379/0
   keyfilePath: ./arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json
   optType: goar
 
