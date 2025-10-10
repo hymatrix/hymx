@@ -49,7 +49,7 @@ func (c *Chainkit) downloadByNonce(scheduler, pid string, beginNonce, endNonce i
 		}
 
 		// check local db before download
-		assignment, err := c.node.GetAssignByNonce(pid, nonce)
+		assignment, err := c.nodeDB.GetAssignByNonce(pid, nonce)
 		if err != nil || assignment == nil {
 			log.Debug("begin download", "assignId", assignId, "txId", txId)
 			assignment, err = c.downloadByTxid(assignId)
@@ -66,7 +66,7 @@ func (c *Chainkit) downloadByNonce(scheduler, pid string, beginNonce, endNonce i
 		}
 
 		// check local db before download
-		message, err := c.node.GetMessage(txId)
+		message, err := c.nodeDB.GetMessage(txId)
 		if err != nil || message == nil {
 			log.Debug("begin download message", "txId", txId)
 			message, err = c.downloadByTxid(txId)

@@ -17,6 +17,7 @@ func (c *Chainkit) runJobs() {
 		// gocron.DurationJob(40*time.Second),
 		gocron.DurationJob(5*time.Minute),
 		gocron.NewTask(c.check),
+		gocron.WithStartAt(gocron.WithStartImmediately()),
 		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 	)
 	if err != nil {

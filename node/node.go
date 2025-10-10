@@ -66,6 +66,7 @@ func New(
 	arweaveURL string,
 	hymxURL string,
 	nodeInfo *schema.Info,
+	chainkit *chainkit.Chainkit,
 ) *Node {
 	outboxChan := make(chan vmmSchema.Outbox, 1000)
 	resultChan := make(chan vmmSchema.Result, 1000)
@@ -104,6 +105,7 @@ func New(
 		db:               rdb.New(redisURL),
 		outboxDB:         cache.NewOutbox(),
 		recoveryTaskPool: taskPool,
+		chainkit:         chainkit,
 	}
 }
 
@@ -133,10 +135,6 @@ func (n *Node) Close() {
 	n.vmm.Close()
 
 	log.Info("node has been shut down")
-}
-
-func (n *Node) SetChainkit(chainkit *chainkit.Chainkit) {
-	n.chainkit = chainkit
 }
 
 func (n *Node) Info() schema.Info {

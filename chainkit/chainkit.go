@@ -21,26 +21,28 @@ import (
 var log = common.NewLog("chainkit")
 
 type Chainkit struct {
-	node      schema.INode
-	operator  schema.IOperator
+	db       schema.IDB       // chainkit local db
+	nodeDB   schema.INodeDB   // node db, readonly functions
+	operator schema.IOperator // interfaces with different blockchains
+
 	scheduler gocron.Scheduler
-	db        schema.IDB
 
 	ctx    context.Context
 	cancel context.CancelFunc
 	mu     sync.Mutex // Mutex to prevent concurrent execution
 }
 
-func New(node schema.INode, config schema.Config) *Chainkit {
+func New(config schema.Config) *Chainkit {
 	ctx, cancel := context.WithCancel(context.Background())
 	var op schema.IOperator
-	if config.OptType == "goar" {
+	switch config.OptType {
+	case "goar":
 		wallet, err := goar.NewWalletFromPath(config.Keyfile, "https://arweave.net")
 		if err != nil {
 			panic(err)
 		}
 		op = optgoar.New(wallet, ctx)
-	} else {
+	default:
 		panic("unsupported opt type")
 	}
 
@@ -50,7 +52,7 @@ func New(node schema.INode, config schema.Config) *Chainkit {
 	}
 
 	return &Chainkit{
-		node:      node,
+		nodeDB:    rdb.New(config.NodeRedisUrl),
 		db:        rdb.NewChainkitDB(config.RedisUrl),
 		operator:  op,
 		scheduler: scheduler,
@@ -60,9 +62,9 @@ func New(node schema.INode, config schema.Config) *Chainkit {
 }
 
 func (c *Chainkit) Run() {
-	log.Info("chainkit running")
 	c.scheduler.Start()
 	c.runJobs()
+	log.Info("chainkit running")
 }
 
 func (c *Chainkit) Close() {

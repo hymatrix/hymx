@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/everFinance/goether"
+	chainkitSchema "github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/sdk"
 	"github.com/hymatrix/hymx/vmm/core/token/schema"
 	"github.com/permadao/goar"
@@ -55,10 +56,13 @@ func main() {
 			fmt.Printf("read config file %s failed, err: %v\n", configPath, err)
 			os.Exit(1)
 		}
-		nodeRedis := viper.GetString("redisURL")
-		chainkitRedis := viper.GetString("chainkit.redisURL")
-		keyfile := viper.GetString("chainkit.keyfilePath")
-		Upload(pid, nodeRedis, chainkitRedis, keyfile)
+		cfg := chainkitSchema.Config{
+			RedisUrl:     viper.GetString("chainkit.redisURL"),
+			NodeRedisUrl: viper.GetString("chainkit.nodeRedisURL"),
+			Keyfile:      viper.GetString("chainkit.keyfilePath"),
+			OptType:      viper.GetString("chainkit.optType"),
+		}
+		Upload(pid, cfg)
 	default:
 		fmt.Printf("unknown cmd: %s\n", cmd)
 		os.Exit(1)
