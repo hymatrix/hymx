@@ -22,7 +22,7 @@ var (
 		// URL: "http://127.0.0.1:8080",
 	}
 
-	SleepSchedule = []time.Duration{
+	TryAssignSleepTime = []time.Duration{
 		0,
 		500 * time.Millisecond,
 		1 * time.Second,
