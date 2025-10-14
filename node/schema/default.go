@@ -1,6 +1,10 @@
 package schema
 
-import "github.com/hymatrix/hymx/vmm/core/registry/schema"
+import (
+	"time"
+
+	"github.com/hymatrix/hymx/vmm/core/registry/schema"
+)
 
 const (
 	NodeVersion  = "v0.2.0"
@@ -16,5 +20,17 @@ var (
 		Desc:  "Test network genesis node",
 		URL:   "https://hymatrix.ai",
 		// URL: "http://127.0.0.1:8080",
+	}
+
+	SleepSchedule = []time.Duration{
+		0,
+		500 * time.Millisecond,
+		1 * time.Second,
+		3 * time.Second,
+		5 * time.Second,
+		10 * time.Second,
+		20 * time.Second,
+		50 * time.Second,
+		80 * time.Second,
 	}
 )
