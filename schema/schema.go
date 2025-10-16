@@ -70,6 +70,7 @@ type Process struct {
 	Module      string           `json:"Module"`
 	Scheduler   string           `json:"Scheduler"`
 	FromProcess string           `json:"From-Process,omitempty"`
+	PushedFor   string           `json:"Pushed-For"`
 	Tags        []goarSchema.Tag `json:"Tags"`
 }
 
