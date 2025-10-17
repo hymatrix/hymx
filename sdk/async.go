@@ -13,7 +13,7 @@ import (
 	goarSchema "github.com/permadao/goar/schema"
 )
 
-func (s *SDK) ResultAndWait(msgid string) (result vmmSchema.Result, err error) {
+func (s *SDK) ResultAndWait(pid, msgid string) (result vmmSchema.Result, err error) {
 	timeout := time.After(2 * time.Minute)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -23,7 +23,7 @@ func (s *SDK) ResultAndWait(msgid string) (result vmmSchema.Result, err error) {
 		case <-timeout:
 			return result, fmt.Errorf("timeout waiting for result after 2 minutes")
 		case <-ticker.C:
-			result, err = s.Client.GetResult(msgid)
+			result, err = s.Client.GetResult(pid, msgid)
 			if err != nil {
 				return result, err
 			}
@@ -50,7 +50,7 @@ func (s *SDK) SendAndWait(processId, data string, tags []goarSchema.Tag) (res *s
 		defer realSdk.Close()
 	}
 
-	result, err := realSdk.ResultAndWait(res.Id)
+	result, err := realSdk.ResultAndWait(processId, res.Id)
 	if err != nil {
 		return
 	}

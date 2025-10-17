@@ -25,7 +25,7 @@ func (s *Server) runAPI(endpoint string) {
 
 	// api post message
 	engine.POST("/", s.Submit)
-	engine.GET("/result/:msgid", s.GetResult)
+	engine.GET("/result/:pid/:msgid", s.GetResult)
 	engine.GET("/results/:pid", s.GetResults)
 
 	// api for get message and assignment by nonce
@@ -123,13 +123,7 @@ func (s *Server) Submit(c *gin.Context) {
 	if err != nil {
 		// Check if it's a redirect error
 		if redirectErr, ok := err.(*nodeSchema.RedirectError); ok {
-			// Return 308 Permanent Redirect with Location header and nodes information
-			if len(redirectErr.Nodes) > 0 {
-				// Set Location header to the first available node URL for browser auto-redirect
-				c.Header("Location", redirectErr.Nodes[0].URL)
-			}
-			// Also return nodes information in response body for client SDK usage
-			c.JSON(http.StatusPermanentRedirect, redirectErr.Nodes)
+			s.handleRedirectError(c, redirectErr)
 			return
 		}
 		log.Error("handle item failed", "err", err)
@@ -143,10 +137,16 @@ func (s *Server) Submit(c *gin.Context) {
 }
 
 func (s *Server) GetResult(c *gin.Context) {
+	pid := c.Param("pid")
 	msgid := c.Param("msgid")
-	// pid := c.Query("process-id")
-	dbResult, err := s.node.GetResult(msgid)
+
+	dbResult, err := s.node.GetResult(pid, msgid)
 	if err != nil {
+		// Check if it's a redirect error
+		if redirectErr, ok := err.(*nodeSchema.RedirectError); ok {
+			s.handleRedirectError(c, redirectErr)
+			return
+		}
 		schema.ErrorResponse(c, err.Error())
 		return
 	}
@@ -366,4 +366,15 @@ func (s *Server) TrySend(c *gin.Context) {
 func (s *Server) GetModules(c *gin.Context) {
 	names := s.node.GetModuleNames()
 	c.JSON(http.StatusOK, names)
+}
+
+// handleRedirectError handles redirect errors by setting appropriate headers and response
+func (s *Server) handleRedirectError(c *gin.Context, redirectErr *nodeSchema.RedirectError) {
+	// Return 308 Permanent Redirect with Location header and nodes information
+	if len(redirectErr.Nodes) > 0 {
+		// Set Location header to the first available node URL for browser auto-redirect
+		c.Header("Location", redirectErr.Nodes[0].URL)
+	}
+	// Also return nodes information in response body for client SDK usage
+	c.JSON(http.StatusPermanentRedirect, redirectErr.Nodes)
 }

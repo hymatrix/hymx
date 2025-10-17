@@ -217,8 +217,8 @@ func (c *Client) Callback(targetURL string) (res string, err error) {
 	return string(body), nil
 }
 
-func (c *Client) GetResult(msgid string) (result vmmSchema.Result, err error) {
-	url, err := c.buildURL("/result/" + msgid)
+func (c *Client) GetResult(pid, msgid string) (result vmmSchema.Result, err error) {
+	url, err := c.buildURL(fmt.Sprintf("/result/%s/%s", pid, msgid))
 	if err != nil {
 		return
 	}
@@ -230,6 +230,13 @@ func (c *Client) GetResult(msgid string) (result vmmSchema.Result, err error) {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return
+	}
+	defer resp.Body.Close()
+
+	// Handle redirect response
+	resp, _, err = c.handleRedirect(resp, req, nil)
+	if err != nil {
+		return result, err
 	}
 	defer resp.Body.Close()
 
