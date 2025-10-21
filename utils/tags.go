@@ -123,6 +123,12 @@ func ProcessToTags(p schema.Process) (tags []goarSchema.Tag, err error) {
 		{Name: "Scheduler", Value: p.Scheduler},
 	}...)
 	tags = append(tags, p.Tags...)
+	if p.FromProcess != "" {
+		tags = append(tags, goarSchema.Tag{Name: "From-Process", Value: p.FromProcess})
+	}
+	if p.PushedFor != "" {
+		tags = append(tags, goarSchema.Tag{Name: "Pushed-For", Value: p.PushedFor})
+	}
 	err = CheckDuplicateTag(tags)
 	return
 }
@@ -143,6 +149,8 @@ func TagsToProcess(tags []goarSchema.Tag) (p schema.Process, err error) {
 			p.Scheduler = v.Value
 		case "From-Process":
 			p.FromProcess = v.Value
+		case "Pushed-For":
+			p.PushedFor = v.Value
 		case "Data-Protocol", "Variant", "Type":
 			// skip tags in base
 			continue
@@ -296,7 +304,6 @@ func CheckDuplicateTag(tags []goarSchema.Tag) error {
 	for _, v := range tags {
 		if _, ok := tagMap[v.Name]; ok {
 			return errors.New("duplicate tag: " + v.Name)
-
 		}
 		tagMap[v.Name] = true
 	}

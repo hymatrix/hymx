@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
@@ -27,8 +28,9 @@ func (n *Node) handleProcess(
 		Pid:              pid,
 		AccId:            accid,
 		FromProcess:      proc.FromProcess,
+		PushedFor:        proc.PushedFor,
 		Nonce:            0,
-		Timestamp:        0,
+		Timestamp:        time.Now().UnixMilli(),
 		Params:           params,
 		Data:             item.Data,
 		DryRun:           dryRun,

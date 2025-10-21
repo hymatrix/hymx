@@ -152,10 +152,11 @@ func (n *Node) tryGetLocalAssign(item goarSchema.BundleItem) (assignItem goarSch
 		close(resultChan)
 	}()
 
-	for retry := 0; retry < 5; retry++ {
+	for retry := 0; retry < len(schema.TryAssignSleepTime); retry++ {
 		log.Debug("outbox try get assign retry", "retry", retry)
-		if retry > 0 {
-			time.Sleep(100 * time.Millisecond)
+
+		if schema.TryAssignSleepTime[retry] > 0 {
+			time.Sleep(schema.TryAssignSleepTime[retry])
 		}
 
 		err = n.Handle(item)
@@ -196,23 +197,11 @@ func (n *Node) tryGetAssign(msgId string, nodes []registrySchema.Node, itemBin [
 		cli = sdk.NewClient(nodes[0].URL)
 	}
 
-	sleepSchedule := []time.Duration{
-		0,
-		500 * time.Millisecond,
-		1 * time.Second,
-		3 * time.Second,
-		5 * time.Second,
-		10 * time.Second,
-		20 * time.Second,
-		50 * time.Second,
-		80 * time.Second,
-	}
-
-	for retry := 0; retry < len(sleepSchedule); retry++ {
+	for retry := 0; retry < len(schema.TryAssignSleepTime); retry++ {
 		cli.Send(itemBin)
 
-		if sleepSchedule[retry] > 0 {
-			time.Sleep(sleepSchedule[retry])
+		if schema.TryAssignSleepTime[retry] > 0 {
+			time.Sleep(schema.TryAssignSleepTime[retry])
 		}
 		assignItem, err = cli.GetAssignByMessage(msgId)
 		if err != nil {
