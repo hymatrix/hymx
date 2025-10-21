@@ -107,7 +107,7 @@ func (n *Node) getMessageAndAssignByNonce(pid string, nonce int64) (msgItem, ass
 	assignItem, err2 := n.db.GetAssignByNonce(pid, nonce)
 
 	// If both are available locally, return them
-	if err1 == nil && err2 == nil && msgItem != nil && assignItem != nil {
+	if err1 == nil || err2 == nil || msgItem != nil || assignItem != nil {
 		return msgItem, assignItem, nil
 	}
 
