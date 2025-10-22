@@ -31,6 +31,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 	result.FromProcess = meta.Pid
 	result.ItemId = meta.ItemId
 	result.PushedFor = meta.ItemId
+	result.Timestamp = fmt.Sprintf("%d", meta.Timestamp)
 	if meta.PushedFor != "" {
 		result.PushedFor = meta.PushedFor
 	}

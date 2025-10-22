@@ -148,6 +148,10 @@ func (n *Node) GetMessage(msgid string) (msg *goarSchema.BundleItem, err error) 
 }
 
 func (n *Node) GetResult(pid, msgid string) (result *vmmSchema.Result, err error) {
+	if n.vmm.RegistryId() == "" {
+		return n.getLocalResult(msgid)
+	}
+
 	// get nodes info, if need redirect
 	isRedirect, nodes, err := n.isRedirect(pid)
 	if err != nil {

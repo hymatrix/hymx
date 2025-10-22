@@ -11,13 +11,13 @@ const (
 	registryModule = "MVTil0kn5SRiJELW7W2jLZ6cBr3QUGj1nJ67I2Wi4Ps"
 )
 
-func initToken() string {
+func initToken() (string, error) {
 	res, err := s.SpawnAndWait(
 		tokenModule,
 		s.GetAddress(),
 		[]schema.Tag{})
 	fmt.Println(res, err)
-	return res.Id
+	return res.Id, err
 }
 
 func initRegistry(tokenPid string) {
