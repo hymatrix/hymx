@@ -60,15 +60,15 @@ func run(c *cli.Context) (err error) {
 		return err
 	}
 
+	gin.SetMode(ginMode)
+	if ginMode == "release" {
+		log15.Root().SetHandler(log15.LvlFilterHandler(log15.LvlInfo, log15.StderrHandler))
+	}
+
 	// pay config
 	pay, err := LoadPayConfig()
 	if err != nil {
 		return err
-	}
-
-	gin.SetMode(ginMode)
-	if ginMode == "release" {
-		log15.Root().SetHandler(log15.LvlFilterHandler(log15.LvlInfo, log15.StderrHandler))
 	}
 
 	chainkit, err := LoadChainkitConfig()
