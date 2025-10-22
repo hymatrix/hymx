@@ -1,5 +1,5 @@
 port: :8080
-ginMode: debug # debug or release
+ginMode: release # debug or release
 
 redisURL: redis://@localhost:6379/0
 
@@ -13,5 +13,12 @@ nodeName: test1
 nodeDesc: first test node
 nodeURL: http://127.0.0.1:8080
 
-joinNetwork: false
+joinNetwork: true
+
+enableChainkit: true
+chainkit:
+  redisURL: redis://@localhost:6379/10
+  keyfilePath: ./arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json
+  optType: goar
+
 
