@@ -90,5 +90,22 @@ func (s *SDK) SpawnAndWait(module, scheduler string, params []goarSchema.Tag) (*
 
 	// merge params -> processTags
 	processTags = utils.MergeTags(processTags, params)
-	return s.SendAndWait("", strconv.Itoa(int(time.Now().UnixNano())), processTags)
+	data := strconv.Itoa(int(time.Now().UnixNano()))
+
+	res, _, err := s.Send("", data, processTags)
+	if err != nil {
+		return nil, err
+	}
+	result, err := s.ResultAndWait(res.Id, res.Id)
+	if err != nil {
+		return nil, err
+	}
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+	return &serverSchema.Response{
+		Id:      res.Id,
+		Message: string(jsonResult),
+	}, nil
 }
