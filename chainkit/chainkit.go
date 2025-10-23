@@ -21,9 +21,9 @@ import (
 var log = common.NewLog("chainkit")
 
 type Chainkit struct {
-	db       nodeSchema.IDBChainkit // chainkit local db
-	nodeDB   nodeSchema.IDBTool     // node db, readonly functions
-	operator schema.IOperator       // interfaces with different blockchains
+	db       schema.IDBChainkit // chainkit local db
+	nodeDB   schema.IDBTool     // node db, readonly functions
+	operator schema.IOperator   // interfaces with different blockchains
 
 	scheduler gocron.Scheduler
 
