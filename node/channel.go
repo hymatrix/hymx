@@ -1,9 +1,6 @@
 package node
 
 import (
-	"fmt"
-	"time"
-
 	"github.com/hymatrix/hymx/node/schema"
 )
 
@@ -101,7 +98,6 @@ func (n *Node) runResultChan() {
 
 			// save result to db, remove cache in result
 			result.Cache = nil
-			result.Timestamp = fmt.Sprintf("%d", time.Now().UnixMilli())
 			if err := n.db.SaveResult(result); err != nil {
 				log.Error("save result failed", "msgid", result.ItemId, "err", err)
 			}

@@ -15,11 +15,6 @@ nodeURL: http://127.0.0.1:8082
 
 joinNetwork: true
 
-chainkit:
-  redisURL: redis://@localhost:6379/10
-  keyfilePath: ./arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json
-  optType: goar
-
 # ---- Payment Configuration ----
 # only support evm address
 enablePayment: true # toggle payment system on/off

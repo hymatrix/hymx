@@ -44,19 +44,19 @@ type Meta struct {
 }
 
 type Result struct {
-	Nonce        string            `json:"Nonce"`
-	Timestamp    string            `json:"Timestamp"`
-	ItemId       string            `json:"Item-Id"`
-	FromProcess  string            `json:"From-Process"` // FromProcess is the source process (Pid) that produced this Result
-	PushedFor    string            `json:"Pushed-For"`
-	Messages     []*ResMessage     `json:"Messages"`
-	Spawns       []*ResSpawn       `json:"Spawns"`
-	Assignmengts []interface{}     `json:"Assignmengts"`
-	Output       interface{}       `json:"Output"`
-	Data         string            `json:"Data"`
-	Cache        map[string]string `json:"Cache,omitempty"` // Cache contains the generated cache entries for users to read and query latest state
-	DryRun       bool              `json:"-"`
-	Error        string            `json:"Error"`
+	Nonce       string            `json:"Nonce"`
+	Timestamp   string            `json:"Timestamp"`
+	ItemId      string            `json:"Item-Id"`
+	FromProcess string            `json:"From-Process"` // FromProcess is the source process (Pid) that produced this Result
+	PushedFor   string            `json:"Pushed-For"`
+	Messages    []*ResMessage     `json:"Messages"`
+	Spawns      []*ResSpawn       `json:"Spawns"`
+	Assignments []interface{}     `json:"Assignments"`
+	Output      interface{}       `json:"Output"`
+	Data        string            `json:"Data"`
+	Cache       map[string]string `json:"Cache,omitempty"` // Cache contains the generated cache entries for users to read and query latest state
+	DryRun      bool              `json:"-"`
+	Error       string            `json:"Error"`
 }
 
 type ResMessage struct {
@@ -67,7 +67,7 @@ type ResMessage struct {
 }
 
 type ResSpawn struct {
-	Sequance string           `json:"Sequance"`
+	Sequence string           `json:"Sequence"`
 	Data     string           `json:"Data,omitempty"`
 	Tags     []goarSchema.Tag `json:"Tags"`
 }

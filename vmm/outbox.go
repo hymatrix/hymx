@@ -54,7 +54,7 @@ func (v *Vmm) outbox(env *schema.Env, result *schema.Result) {
 
 		v.vmsLockMu.Lock()
 		env.Sequence += 1
-		spawn.Sequance = fmt.Sprintf("%d", env.Sequence)
+		spawn.Sequence = fmt.Sprintf("%d", env.Sequence)
 		v.vmsLockMu.Unlock()
 
 		if result.DryRun {
@@ -68,7 +68,7 @@ func (v *Vmm) outbox(env *schema.Env, result *schema.Result) {
 		})
 		tags = utils.MergeTags([]goarSchema.Tag{
 			{Name: "From-Process", Value: result.FromProcess},
-			{Name: "Sequence", Value: spawn.Sequance},
+			{Name: "Sequence", Value: spawn.Sequence},
 			{Name: "Pushed-For", Value: result.PushedFor},
 		}, tags)
 		tags = utils.MergeTags(tags, proc.Tags)

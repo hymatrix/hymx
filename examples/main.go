@@ -17,7 +17,8 @@ var (
 	// url = "https://hymatrix.ai"
 	url = "http://127.0.0.1:8080"
 
-	prvKey     = "0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b"
+	prvKey = "0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b"
+	// prvKey     = "0xbf9cdeced304f1ef845362c4527fe4ddaecb3fa36fa9ed615447abdffdd16418"
 	signer, _  = goether.NewSigner(prvKey)
 	bundler, _ = goar.NewBundler(signer)
 	s          = sdk.NewFromBundler(url, bundler)
@@ -33,7 +34,12 @@ func main() {
 	cmd := os.Args[1]
 	switch cmd {
 	case "init":
-		initRegistry(initToken())
+		tokenPid, err := initToken()
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		initRegistry(tokenPid)
 	case "transfer":
 		// transfer(s, s2.GetAddress(), schema.StakeMinAmount)
 		transfer(s, s2.GetAddress(), big.NewInt(1000))
