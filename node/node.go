@@ -110,6 +110,11 @@ func New(
 }
 
 func (n *Node) Run() {
+	if n.chainkit != nil {
+		n.chainkit.Run()
+		n.AddAssignResHandler(n.chainkit.AssignmentHandler)
+	}
+
 	n.vmm.Run()
 	go n.runMsgChan()
 	go n.runProcChan()
@@ -133,6 +138,10 @@ func (n *Node) Close() {
 
 	n.runCheckpoint()
 	n.vmm.Close()
+
+	if n.chainkit != nil {
+		n.chainkit.Close()
+	}
 
 	log.Info("node has been shut down")
 }

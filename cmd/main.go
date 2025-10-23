@@ -78,7 +78,7 @@ func run(c *cli.Context) (err error) {
 
 	node := node.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo, chainkit)
 
-	s := server.New(node, pay, chainkit)
+	s := server.New(node, pay)
 
 	// mount your vm here.....
 	// ex:

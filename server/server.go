@@ -3,7 +3,6 @@ package server
 import (
 	"net/http"
 
-	"github.com/hymatrix/hymx/chainkit"
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/node"
 	"github.com/hymatrix/hymx/node/schema"
@@ -14,18 +13,16 @@ import (
 var log = common.NewLog("server")
 
 type Server struct {
-	node     *node.Node
-	pay      *pay.Pay
-	chainkit *chainkit.Chainkit
+	node *node.Node
+	pay  *pay.Pay
 
 	apiServer *http.Server
 }
 
-func New(node *node.Node, pay *pay.Pay, chainkit *chainkit.Chainkit) *Server {
+func New(node *node.Node, pay *pay.Pay) *Server {
 	return &Server{
-		node:     node,
-		pay:      pay,
-		chainkit: chainkit,
+		node: node,
+		pay:  pay,
 	}
 }
 
@@ -35,11 +32,6 @@ func (s *Server) Run(endpoint string) {
 		s.pay.Run()
 		s.AddResultHandler(s.pay.HymxDepositHandler)
 		s.AddItemHandler(s.pay.HymxFeeHandler)
-	}
-
-	if s.chainkit != nil {
-		s.chainkit.Run()
-		s.AddAssignResHandler(s.chainkit.AssignmentHandler)
 	}
 
 	go s.runAPI(endpoint)
@@ -57,9 +49,7 @@ func (s *Server) Close() {
 		s.pay.Close()
 		s.pay.SaveCheckpoint()
 	}
-	if s.chainkit != nil {
-		s.chainkit.Close()
-	}
+
 	log.Info("server has been shut down")
 }
 

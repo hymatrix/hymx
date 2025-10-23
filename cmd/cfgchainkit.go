@@ -10,6 +10,10 @@ import (
 )
 
 func LoadChainkitConfig() (*chainkit.Chainkit, error) {
+	if !viper.GetBool("enableChainkit") {
+		return nil, nil
+	}
+
 	cfg := chainkitSchema.Config{
 		RedisUrl:     viper.GetString("chainkit.redisURL"),
 		NodeRedisUrl: viper.GetString("chainkit.nodeRedisURL"),
