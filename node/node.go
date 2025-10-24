@@ -152,6 +152,12 @@ func (n *Node) GetResult(pid, msgid string) (result *vmmSchema.Result, err error
 		return n.getLocalResult(msgid)
 	}
 
+	// try get from local db first
+	result, err = n.getLocalResult(msgid)
+	if err == nil && result != nil {
+		return
+	}
+
 	// get nodes info, if need redirect
 	isRedirect, nodes, err := n.isRedirect(pid)
 	if err != nil {
@@ -164,6 +170,7 @@ func (n *Node) GetResult(pid, msgid string) (result *vmmSchema.Result, err error
 		return nil, err
 	}
 	// return local result
+
 	return n.getLocalResult(msgid)
 }
 
