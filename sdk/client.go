@@ -249,7 +249,7 @@ func (c *Client) GetResult(pid, msgid string) (result vmmSchema.Result, err erro
 	return
 }
 
-func (c *Client) GetResults(pid string, limit int64) (results []vmmSchema.Result, err error) {
+func (c *Client) GetResults(pid string, limit int64) (results serverSchema.ResponseResults, err error) {
 	path := fmt.Sprintf("/results/%s?sort=DESC&limit=%d", pid, limit)
 	url, err := c.buildURL(path)
 	if err != nil {
