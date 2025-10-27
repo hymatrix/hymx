@@ -579,7 +579,256 @@ func TestGetResultRedirectWithMultipleNodes(t *testing.T) {
 
 // ========================================
 // Test Main Function
+// ========================================}
+
 // ========================================
+// GetResults Method Tests
+// ========================================
+
+// TestGetResultsSuccess tests the GetResults method with successful response
+func TestGetResultsSuccess(t *testing.T) {
+	// Create mock server that returns ResponseResults
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request method and path
+		if r.Method != "GET" {
+			t.Errorf("Expected GET method, got %s", r.Method)
+		}
+		expectedPath := "/results/test-process-id"
+		if r.URL.Path != expectedPath {
+			t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+		}
+		
+		// Verify query parameters
+		if r.URL.Query().Get("sort") != "DESC" {
+			t.Errorf("Expected sort=DESC, got %s", r.URL.Query().Get("sort"))
+		}
+		if r.URL.Query().Get("limit") != "10" {
+			t.Errorf("Expected limit=10, got %s", r.URL.Query().Get("limit"))
+		}
+
+		// Create mock response data
+		mockResults := serverSchema.ResponseResults{
+			Edges: []serverSchema.ResultsEdge{
+				{
+					Cursor: "eyJ0aW1lc3RhbXAiOjE2MzQ1Njc4OTAsIm9yZGluYXRlIjoxLCJjcm9uIjoiMS0xMC1taW51dGVzIiwic29ydCI6IkFTQyJ9",
+					Node: vmmSchema.Result{
+						Nonce:       "1",
+						Timestamp:   "1634567890",
+						ItemId:      "test-item-1",
+						FromProcess: "test-process-id",
+						PushedFor:   "test-item-1",
+						Messages:    []*vmmSchema.ResMessage{},
+						Spawns:      []*vmmSchema.ResSpawn{},
+						Assignments: []interface{}{},
+						Output:      map[string]interface{}{"result": "success"},
+						Data:        "test-data-1",
+						Error:       "",
+					},
+				},
+				{
+					Cursor: "eyJ0aW1lc3RhbXAiOjE2MzQ1Njc4OTEsIm9yZGluYXRlIjoyLCJjcm9uIjoiMS0xMC1taW51dGVzIiwic29ydCI6IkFTQyJ9",
+					Node: vmmSchema.Result{
+						Nonce:       "2",
+						Timestamp:   "1634567891",
+						ItemId:      "test-item-2",
+						FromProcess: "test-process-id",
+						PushedFor:   "test-item-2",
+						Messages:    []*vmmSchema.ResMessage{},
+						Spawns:      []*vmmSchema.ResSpawn{},
+						Assignments: []interface{}{},
+						Output:      map[string]interface{}{"result": "success"},
+						Data:        "test-data-2",
+						Error:       "",
+					},
+				},
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(mockResults)
+	}))
+	defer server.Close()
+
+	// Create client
+	client := NewClient(server.URL)
+
+	// Call GetResults
+	results, err := client.GetResults("test-process-id", 10)
+	if err != nil {
+		t.Fatalf("GetResults failed: %v", err)
+	}
+
+	// Verify results
+	if len(results.Edges) != 2 {
+		t.Errorf("Expected 2 edges, got %d", len(results.Edges))
+	}
+
+	// Verify first result
+	firstEdge := results.Edges[0]
+	if firstEdge.Node.Nonce != "1" {
+		t.Errorf("Expected first result nonce '1', got '%s'", firstEdge.Node.Nonce)
+	}
+	if firstEdge.Node.ItemId != "test-item-1" {
+		t.Errorf("Expected first result ItemId 'test-item-1', got '%s'", firstEdge.Node.ItemId)
+	}
+	if firstEdge.Cursor == "" {
+		t.Error("Expected non-empty cursor for first result")
+	}
+
+	// Verify second result
+	secondEdge := results.Edges[1]
+	if secondEdge.Node.Nonce != "2" {
+		t.Errorf("Expected second result nonce '2', got '%s'", secondEdge.Node.Nonce)
+	}
+	if secondEdge.Node.ItemId != "test-item-2" {
+		t.Errorf("Expected second result ItemId 'test-item-2', got '%s'", secondEdge.Node.ItemId)
+	}
+
+	t.Log("✅ GetResults method works correctly with successful response")
+}
+
+// TestGetResultsEmptyResponse tests the GetResults method with empty results
+func TestGetResultsEmptyResponse(t *testing.T) {
+	// Create mock server that returns empty ResponseResults
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mockResults := serverSchema.ResponseResults{
+			Edges: []serverSchema.ResultsEdge{},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(mockResults)
+	}))
+	defer server.Close()
+
+	// Create client
+	client := NewClient(server.URL)
+
+	// Call GetResults
+	results, err := client.GetResults("empty-process-id", 5)
+	if err != nil {
+		t.Fatalf("GetResults failed: %v", err)
+	}
+
+	// Verify empty results
+	if len(results.Edges) != 0 {
+		t.Errorf("Expected 0 edges, got %d", len(results.Edges))
+	}
+
+	t.Log("✅ GetResults method handles empty response correctly")
+}
+
+// TestGetResultsServerError tests the GetResults method with server error
+func TestGetResultsServerError(t *testing.T) {
+	// Create mock server that returns error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+	defer server.Close()
+
+	// Create client
+	client := NewClient(server.URL)
+
+	// Call GetResults
+	_, err := client.GetResults("error-process-id", 5)
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+
+	// Verify error message contains status code
+	expectedError := "invalid server response: 500"
+	if err.Error() != expectedError {
+		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+	}
+
+	t.Log("✅ GetResults method handles server error correctly")
+}
+
+// TestGetResultsInvalidJSON tests the GetResults method with invalid JSON response
+func TestGetResultsInvalidJSON(t *testing.T) {
+	// Create mock server that returns invalid JSON
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("invalid json"))
+	}))
+	defer server.Close()
+
+	// Create client
+	client := NewClient(server.URL)
+
+	// Call GetResults
+	_, err := client.GetResults("invalid-json-process-id", 5)
+	if err == nil {
+		t.Fatal("Expected JSON decode error, got nil")
+	}
+
+	t.Log("✅ GetResults method handles invalid JSON correctly")
+}
+
+// TestGetResultsNetworkError tests the GetResults method with network error
+func TestGetResultsNetworkError(t *testing.T) {
+	// Create client with invalid URL
+	client := NewClient("http://invalid-url-that-does-not-exist:9999")
+
+	// Call GetResults
+	_, err := client.GetResults("network-error-process-id", 5)
+	if err == nil {
+		t.Fatal("Expected network error, got nil")
+	}
+
+	t.Log("✅ GetResults method handles network error correctly")
+}
+
+// TestGetResultsURLBuilding tests the GetResults method URL building with different parameters
+func TestGetResultsURLBuilding(t *testing.T) {
+	var capturedURL string
+	
+	// Create mock server that captures the request URL
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURL = r.URL.String()
+		
+		mockResults := serverSchema.ResponseResults{
+			Edges: []serverSchema.ResultsEdge{},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(mockResults)
+	}))
+	defer server.Close()
+
+	// Create client
+	client := NewClient(server.URL)
+
+	// Test with different parameters
+	testCases := []struct {
+		pid           string
+		limit         int64
+		expectedPath  string
+	}{
+		{"process-123", 5, "/results/process-123?sort=DESC&limit=5"},
+		{"another-process", 20, "/results/another-process?sort=DESC&limit=20"},
+		{"special-chars-process", 1, "/results/special-chars-process?sort=DESC&limit=1"},
+	}
+
+	for _, tc := range testCases {
+		// Call GetResults
+		_, err := client.GetResults(tc.pid, tc.limit)
+		if err != nil {
+			t.Fatalf("GetResults failed for pid %s: %v", tc.pid, err)
+		}
+
+		// Verify URL
+		if capturedURL != tc.expectedPath {
+			t.Errorf("Expected URL path '%s', got '%s'", tc.expectedPath, capturedURL)
+		}
+	}
+
+	t.Log("✅ GetResults method builds URLs correctly")
+}
 
 func TestMain(m *testing.M) {
 	fmt.Println("🧪 Running SDK Client Redirect Tests")
