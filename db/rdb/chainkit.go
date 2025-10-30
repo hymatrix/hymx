@@ -8,19 +8,8 @@ import (
 
 	goarSchema "github.com/permadao/goar/schema"
 	"github.com/redis/go-redis/v9"
-)
 
-const (
-	RdbPendingTxIds     = "chainkit:pending"              // List: Pending TxId FIFO queue
-	RdbUploadingTxIds   = "chainkit:uploading"            // Set: Uploading TxId pool
-	RdbCurrentBundledIn = "chainkit:current_bundledin_id" // String: current bundledIn id with 1 hour expiration
-	RdbUploadedTxIds    = "chainkit:uploaded_txids"       // Set: Uploaded TxId pool
-	RdbCache            = "chainkit:cache"                // key: TxId, value BundleItem
-)
-
-const (
-	// MaxUploadingCount is the maximum number of transactions allowed in uploading state
-	MaxUploadingCount = 100000 // 10w
+	"github.com/hymatrix/hymx/db/rdb/schema"
 )
 
 type Chainkit struct {
@@ -64,9 +53,9 @@ func (r *Chainkit) MoveToUploading() (int64, error) {
 		return 0, fmt.Errorf("failed to get uploading count: %w", err)
 	}
 
-	availableSlots := MaxUploadingCount - currentUploadingCount
+	availableSlots := schema.MaxUploadingCount - currentUploadingCount
 	if availableSlots <= 0 {
-		return 0, fmt.Errorf("uploading queue is full (max: %d, current: %d)", MaxUploadingCount, currentUploadingCount)
+		return 0, fmt.Errorf("uploading queue is full (max: %d, current: %d)", schema.MaxUploadingCount, currentUploadingCount)
 	}
 
 	// 3. Get pending transactions to move
@@ -86,7 +75,7 @@ func (r *Chainkit) MoveToUploading() (int64, error) {
 	}
 
 	// 4. Use LPopCount to get and remove transactions from pending
-	pendingTxids, err := r.redis.LPopCount(r.ctx, RdbPendingTxIds, int(toMove)).Result()
+	pendingTxids, err := r.redis.LPopCount(r.ctx, schema.RdbPendingTxIds, int(toMove)).Result()
 	if err != nil {
 		if err == redis.Nil {
 			return 0, fmt.Errorf("no pending transactions available")
@@ -100,7 +89,7 @@ func (r *Chainkit) MoveToUploading() (int64, error) {
 
 	// 5. Use pipeline to add popped transactions to uploading set
 	pipe := r.redis.Pipeline()
-	pipe.SAdd(r.ctx, RdbUploadingTxIds, pendingTxids)
+	pipe.SAdd(r.ctx, schema.RdbUploadingTxIds, pendingTxids)
 
 	// Execute pipeline
 	_, err = pipe.Exec(r.ctx)
@@ -126,7 +115,7 @@ func (r *Chainkit) EndUpload() error {
 	}
 
 	// Get all uploading txids
-	uploadingTxids, err := r.redis.SMembers(r.ctx, RdbUploadingTxIds).Result()
+	uploadingTxids, err := r.redis.SMembers(r.ctx, schema.RdbUploadingTxIds).Result()
 	if err != nil {
 		return fmt.Errorf("failed to get uploading txids: %w", err)
 	}
@@ -136,14 +125,14 @@ func (r *Chainkit) EndUpload() error {
 
 	// 1. Move all uploading txids to uploaded
 	if len(uploadingTxids) > 0 {
-		pipe.SAdd(r.ctx, RdbUploadedTxIds, uploadingTxids)
+		pipe.SAdd(r.ctx, schema.RdbUploadedTxIds, uploadingTxids)
 	}
 
 	// 2. Clear the uploading set (delete the key)
-	pipe.Del(r.ctx, RdbUploadingTxIds)
+	pipe.Del(r.ctx, schema.RdbUploadingTxIds)
 
 	// 3. Delete the current bundledIn
-	pipe.Del(r.ctx, RdbCurrentBundledIn)
+	pipe.Del(r.ctx, schema.RdbCurrentBundledIn)
 
 	// Execute pipeline
 	_, err = pipe.Exec(r.ctx)
@@ -156,30 +145,30 @@ func (r *Chainkit) EndUpload() error {
 
 // addPending adds a txid to pending txids queue (FIFO)
 func (r *Chainkit) AddPending(txid string) error {
-	return r.redis.RPush(r.ctx, RdbPendingTxIds, txid).Err()
+	return r.redis.RPush(r.ctx, schema.RdbPendingTxIds, txid).Err()
 }
 
 // pendingCount returns the number of pending transactions in the queue
 func (r *Chainkit) pendingCount() (int64, error) {
-	return r.redis.LLen(r.ctx, RdbPendingTxIds).Result()
+	return r.redis.LLen(r.ctx, schema.RdbPendingTxIds).Result()
 }
 
 // uploadingCount returns the current number of uploading transactions
 func (r *Chainkit) uploadingCount() (int64, error) {
-	return r.redis.SCard(r.ctx, RdbUploadingTxIds).Result()
+	return r.redis.SCard(r.ctx, schema.RdbUploadingTxIds).Result()
 }
 
 func (r *Chainkit) GetUploading() ([]string, error) {
-	return r.redis.SMembers(r.ctx, RdbUploadingTxIds).Result()
+	return r.redis.SMembers(r.ctx, schema.RdbUploadingTxIds).Result()
 }
 
 func (r *Chainkit) SetBundledIn(bundledInID string) error {
-	return r.redis.Set(r.ctx, RdbCurrentBundledIn, bundledInID, 1*time.Hour).Err()
+	return r.redis.Set(r.ctx, schema.RdbCurrentBundledIn, bundledInID, 1*time.Hour).Err()
 }
 
 // GetBundledIn returns the current bundledIn ID if it exists, or empty string if it doesn't exist
 func (r *Chainkit) GetBundledIn() (string, error) {
-	currentBundledIn, err := r.redis.Get(r.ctx, RdbCurrentBundledIn).Result()
+	currentBundledIn, err := r.redis.Get(r.ctx, schema.RdbCurrentBundledIn).Result()
 	if err != nil {
 		if err == redis.Nil {
 			return "", nil // No current bundledIn, return empty string
@@ -191,7 +180,7 @@ func (r *Chainkit) GetBundledIn() (string, error) {
 
 // IsUploaded checks if a transaction ID has already been uploaded
 func (r *Chainkit) IsUploaded(txid string) (bool, error) {
-	return r.redis.SIsMember(r.ctx, RdbUploadedTxIds, txid).Result()
+	return r.redis.SIsMember(r.ctx, schema.RdbUploadedTxIds, txid).Result()
 }
 
 // IsUploadedBatch checks if multiple transaction IDs have already been uploaded
@@ -206,7 +195,7 @@ func (r *Chainkit) IsUploadedBatch(txids []string) (map[string]bool, error) {
 	results := make([]*redis.BoolCmd, len(txids))
 
 	for i, txid := range txids {
-		results[i] = pipe.SIsMember(r.ctx, RdbUploadedTxIds, txid)
+		results[i] = pipe.SIsMember(r.ctx, schema.RdbUploadedTxIds, txid)
 	}
 
 	_, err := pipe.Exec(r.ctx)
@@ -228,7 +217,7 @@ func (r *Chainkit) IsUploadedBatch(txids []string) (map[string]bool, error) {
 
 func (r *Chainkit) Cache(txid string, item goarSchema.BundleItem) error {
 	// Create key: txid
-	key := fmt.Sprintf("%s:%s", RdbCache, txid)
+	key := fmt.Sprintf("%s:%s", schema.RdbChainkitCache, txid)
 
 	// Marshal item to JSON
 	itemBytes, err := json.Marshal(item)
@@ -247,7 +236,7 @@ func (r *Chainkit) Cache(txid string, item goarSchema.BundleItem) error {
 
 func (r *Chainkit) GetCache(txid string) (*goarSchema.BundleItem, error) {
 	// Create key: txid
-	key := fmt.Sprintf("%s:%s", RdbCache, txid)
+	key := fmt.Sprintf("%s:%s", schema.RdbChainkitCache, txid)
 
 	// Get item from cache
 	result, err := r.redis.Get(r.ctx, key).Result()

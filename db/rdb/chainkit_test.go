@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hymatrix/hymx/db/rdb/schema"
 	goarSchema "github.com/permadao/goar/schema"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -54,14 +55,14 @@ func (r *Chainkit) addUploaded(txids []string) error {
 	if len(txids) == 0 {
 		return nil
 	}
-	
+
 	// Convert []string to []interface{} for Redis SAdd
 	members := make([]interface{}, len(txids))
 	for i, txid := range txids {
 		members[i] = txid
 	}
-	
-	return r.redis.SAdd(r.ctx, RdbUploadedTxIds, members...).Err()
+
+	return r.redis.SAdd(r.ctx, schema.RdbUploadedTxIds, members...).Err()
 }
 
 func TestAddPending(t *testing.T) {
@@ -74,7 +75,7 @@ func TestAddPending(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify it was added
-	members, err := ck.redis.LRange(ck.ctx, RdbPendingTxIds, 0, -1).Result()
+	members, err := ck.redis.LRange(ck.ctx, schema.RdbPendingTxIds, 0, -1).Result()
 	assert.NoError(t, err)
 	assert.Contains(t, members, txid)
 }
@@ -100,7 +101,7 @@ func TestGetPendingTxs(t *testing.T) {
 	assert.Equal(t, int64(3), count)
 
 	// Get pending transactions from Redis directly to verify order
-	pendingTxs, err := ck.redis.LRange(ck.ctx, RdbPendingTxIds, 0, -1).Result()
+	pendingTxs, err := ck.redis.LRange(ck.ctx, schema.RdbPendingTxIds, 0, -1).Result()
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, testTxids, pendingTxs)
 }
@@ -117,7 +118,7 @@ func TestGetUploading(t *testing.T) {
 
 	// Add some transactions to uploading set
 	testTxids := []string{"txid1", "txid2", "txid3"}
-	err = ck.redis.SAdd(ck.ctx, RdbUploadingTxIds, testTxids).Err()
+	err = ck.redis.SAdd(ck.ctx, schema.RdbUploadingTxIds, testTxids).Err()
 	assert.NoError(t, err)
 
 	// Get uploading transactions
@@ -176,7 +177,7 @@ func TestUploadingCount(t *testing.T) {
 
 	// Add some transactions to uploading set
 	testTxids := []string{"txid1", "txid2", "txid3"}
-	err = ck.redis.SAdd(ck.ctx, RdbUploadingTxIds, testTxids).Err()
+	err = ck.redis.SAdd(ck.ctx, schema.RdbUploadingTxIds, testTxids).Err()
 	assert.NoError(t, err)
 
 	// Test count
@@ -196,7 +197,7 @@ func TestAddUploaded(t *testing.T) {
 
 	// Verify they were added
 	for _, txid := range txids {
-		isMember, err := ck.redis.SIsMember(ck.ctx, RdbUploadedTxIds, txid).Result()
+		isMember, err := ck.redis.SIsMember(ck.ctx, schema.RdbUploadedTxIds, txid).Result()
 		assert.NoError(t, err)
 		assert.True(t, isMember)
 	}
@@ -249,7 +250,7 @@ func TestErrorHandling(t *testing.T) {
 	assert.NoError(t, err) // Should not error, just add empty string to list
 
 	// Verify empty txid was added
-	members, err := ck.redis.LRange(ck.ctx, RdbPendingTxIds, 0, -1).Result()
+	members, err := ck.redis.LRange(ck.ctx, schema.RdbPendingTxIds, 0, -1).Result()
 	assert.NoError(t, err)
 	assert.Contains(t, members, "")
 
@@ -321,7 +322,7 @@ func TestEndUpload(t *testing.T) {
 
 	// Add transactions to uploading set
 	testTxids := []string{"txid1", "txid2", "txid3"}
-	err := ck.redis.SAdd(ck.ctx, RdbUploadingTxIds, testTxids).Err()
+	err := ck.redis.SAdd(ck.ctx, schema.RdbUploadingTxIds, testTxids).Err()
 	assert.NoError(t, err)
 
 	// Set a bundledIn
@@ -335,14 +336,14 @@ func TestEndUpload(t *testing.T) {
 
 	// Verify transactions were removed from uploading set
 	for _, txid := range testTxids {
-		isMember, err := ck.redis.SIsMember(ck.ctx, RdbUploadingTxIds, txid).Result()
+		isMember, err := ck.redis.SIsMember(ck.ctx, schema.RdbUploadingTxIds, txid).Result()
 		assert.NoError(t, err)
 		assert.False(t, isMember)
 	}
 
 	// Verify transactions were added to uploaded set
 	for _, txid := range testTxids {
-		isMember, err := ck.redis.SIsMember(ck.ctx, RdbUploadedTxIds, txid).Result()
+		isMember, err := ck.redis.SIsMember(ck.ctx, schema.RdbUploadedTxIds, txid).Result()
 		assert.NoError(t, err)
 		assert.True(t, isMember)
 	}
@@ -456,7 +457,7 @@ func TestUploadingCountLimit(t *testing.T) {
 	// Add a reasonable number of transactions to uploading set (close to but not exceeding a smaller test limit)
 	testUploadingCount := int64(8)
 	for i := int64(0); i < testUploadingCount; i++ {
-		err := ck.redis.SAdd(ck.ctx, RdbUploadingTxIds, fmt.Sprintf("txid%d", i)).Err()
+		err := ck.redis.SAdd(ck.ctx, schema.RdbUploadingTxIds, fmt.Sprintf("txid%d", i)).Err()
 		assert.NoError(t, err)
 	}
 
