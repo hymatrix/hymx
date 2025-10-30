@@ -23,9 +23,8 @@ func (s *Server) runAPI(endpoint string) {
 	engine.GET("/info", s.Info)
 	engine.GET("/callback", s.Callback)
 
-	// api post message
-	engine.POST("/", s.Submit)
-	engine.GET("/result/:pid/:msgid", s.GetResult)
+	engine.POST("/", common.RedirectErrorMiddleware(), s.Submit)
+	engine.GET("/result/:pid/:msgid", common.RedirectErrorMiddleware(), s.GetResult)
 	engine.GET("/results/:pid", s.GetResults)
 
 	// api for get message and assignment by nonce
@@ -122,8 +121,9 @@ func (s *Server) Submit(c *gin.Context) {
 	err = s.node.Handle(item)
 	if err != nil {
 		// Check if it's a redirect error
-		if redirectErr, ok := err.(*nodeSchema.RedirectError); ok {
-			s.handleRedirectError(c, redirectErr)
+		if _, ok := err.(*nodeSchema.RedirectError); ok {
+			// Add error to gin context for middleware to handle
+			c.Error(err)
 			return
 		}
 		log.Error("handle item failed", "err", err)
@@ -143,8 +143,9 @@ func (s *Server) GetResult(c *gin.Context) {
 	dbResult, err := s.node.GetResult(pid, msgid)
 	if err != nil {
 		// Check if it's a redirect error
-		if redirectErr, ok := err.(*nodeSchema.RedirectError); ok {
-			s.handleRedirectError(c, redirectErr)
+		if _, ok := err.(*nodeSchema.RedirectError); ok {
+			// Add error to gin context for middleware to handle
+			c.Error(err)
 			return
 		}
 		schema.ErrorResponse(c, err.Error())
@@ -366,15 +367,4 @@ func (s *Server) TrySend(c *gin.Context) {
 func (s *Server) GetModules(c *gin.Context) {
 	names := s.node.GetModuleNames()
 	c.JSON(http.StatusOK, names)
-}
-
-// handleRedirectError handles redirect errors by setting appropriate headers and response
-func (s *Server) handleRedirectError(c *gin.Context, redirectErr *nodeSchema.RedirectError) {
-	// Return 308 Permanent Redirect with Location header and nodes information
-	if len(redirectErr.Nodes) > 0 {
-		// Set Location header to the first available node URL for browser auto-redirect
-		c.Header("Location", redirectErr.Nodes[0].URL)
-	}
-	// Also return nodes information in response body for client SDK usage
-	c.JSON(http.StatusPermanentRedirect, redirectErr.Nodes)
 }
