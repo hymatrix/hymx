@@ -16,7 +16,7 @@ func LoadChainkitConfig() (*chainkit.Chainkit, error) {
 
 	cfg := chainkitSchema.Config{
 		RedisUrl:     viper.GetString("chainkit.redisURL"),
-		NodeRedisUrl: viper.GetString("chainkit.nodeRedisURL"),
+		NodeRedisUrl: viper.GetString("redisURL"),
 		Keyfile:      viper.GetString("chainkit.keyfilePath"),
 		OptType:      viper.GetString("chainkit.optType"),
 	}
@@ -26,7 +26,7 @@ func LoadChainkitConfig() (*chainkit.Chainkit, error) {
 		missing = append(missing, "chainkit.redisURL")
 	}
 	if cfg.NodeRedisUrl == "" {
-		missing = append(missing, "chainkit.nodeRedisURL")
+		missing = append(missing, "redisURL")
 	}
 	if cfg.Keyfile == "" {
 		missing = append(missing, "chainkit.keyfilePath")
