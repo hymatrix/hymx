@@ -6,17 +6,11 @@ import (
 	"github.com/hymatrix/hymx/chainkit"
 	chainkitSchema "github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/db/rdb"
-	goarSchema "github.com/permadao/goar/schema"
 )
 
-type INodeDB interface {
-	GetNonce(pid string) (nonce int64, err error)
-	GetMessageByNonce(pid string, nonce int64) (msg *goarSchema.BundleItem, err error)
-}
-
 func Upload(pid string, conf chainkitSchema.Config) error {
-	var nodeDB INodeDB
-	nodeDB = rdb.New(conf.NodeRedisUrl)
+
+	nodeDB := rdb.New(conf.NodeRedisUrl)
 
 	chainkit := chainkit.New(conf)
 	chainkit.Run()
