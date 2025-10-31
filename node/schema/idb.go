@@ -1,15 +1,15 @@
 package schema
 
 import (
-	"github.com/hymatrix/hymx/vmm/schema"
+	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
 )
 
 type IDB interface {
 	// result
-	SaveResult(result schema.Result) error
-	GetResult(msgid string) (result *schema.Result, err error)
-	GetResults(pid string, limit int64) (results []schema.Result, err error)
+	SaveResult(result vmmSchema.Result) error
+	GetResult(msgid string) (result *vmmSchema.Result, err error)
+	GetResults(pid string, limit int64) (results []vmmSchema.Result, err error)
 
 	// assignment
 	IsExist(pid string) (ok bool, err error)

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/hymatrix/hymx/chainkit"
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/db/cache"
 	"github.com/hymatrix/hymx/db/rdb"
@@ -54,6 +55,8 @@ type Node struct {
 	db       schema.IDB
 	outboxDB schema.IDBOutbox
 
+	chainkit *chainkit.Chainkit
+
 	recoveryTaskPool *ants.Pool
 }
 
@@ -63,6 +66,7 @@ func New(
 	arweaveURL string,
 	hymxURL string,
 	nodeInfo *schema.Info,
+	chainkit *chainkit.Chainkit,
 ) *Node {
 	outboxChan := make(chan vmmSchema.Outbox, 1000)
 	resultChan := make(chan vmmSchema.Result, 1000)
@@ -101,10 +105,16 @@ func New(
 		db:               rdb.New(redisURL),
 		outboxDB:         cache.NewOutbox(),
 		recoveryTaskPool: taskPool,
+		chainkit:         chainkit,
 	}
 }
 
 func (n *Node) Run() {
+	if n.chainkit != nil {
+		n.chainkit.Run()
+		n.AddAssignResHandler(n.chainkit.AssignmentHandler)
+	}
+
 	n.vmm.Run()
 	go n.runMsgChan()
 	go n.runProcChan()
@@ -128,6 +138,10 @@ func (n *Node) Close() {
 
 	n.runCheckpoint()
 	n.vmm.Close()
+
+	if n.chainkit != nil {
+		n.chainkit.Close()
+	}
 
 	log.Info("node has been shut down")
 }

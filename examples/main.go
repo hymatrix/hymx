@@ -6,9 +6,11 @@ import (
 	"os"
 
 	"github.com/everFinance/goether"
+	chainkitSchema "github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/sdk"
 	"github.com/hymatrix/hymx/vmm/core/token/schema"
 	"github.com/permadao/goar"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -47,6 +49,26 @@ func main() {
 		deposit(s, "0xc2835a6caa18CCD33a79C62D104FEA817d715149", "UB0yJx53xBo_rFA4CvKP-WKO25M7kIGrqm2caarghkc", big.NewInt(100000000000))
 	case "module":
 		module()
+	case "upload":
+		if len(os.Args) < 3 {
+			fmt.Println("please input pid, ex: go run ./ upload <pid>")
+			os.Exit(1)
+		}
+		pid := os.Args[2]
+		configPath := "./config_chainkit.yaml"
+		viper.SetConfigFile(configPath)
+		viper.SetConfigType("yaml")
+		if err := viper.ReadInConfig(); err != nil {
+			fmt.Printf("read config file %s failed, err: %v\n", configPath, err)
+			os.Exit(1)
+		}
+		cfg := chainkitSchema.Config{
+			RedisUrl:     viper.GetString("chainkit.redisURL"),
+			NodeRedisUrl: viper.GetString("chainkit.nodeRedisURL"),
+			Keyfile:      viper.GetString("chainkit.keyfilePath"),
+			OptType:      viper.GetString("chainkit.optType"),
+		}
+		Upload(pid, cfg)
 	default:
 		fmt.Printf("unknown cmd: %s\n", cmd)
 		os.Exit(1)

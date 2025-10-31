@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hymatrix/hymx/db/rdb/schema"
+	goarSchema "github.com/permadao/goar/schema"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,6 +50,21 @@ func setupTest(t *testing.T) *Chainkit {
 	return ck
 }
 
+// addUploaded is a helper function for testing that adds txids to the uploaded set
+func (r *Chainkit) addUploaded(txids []string) error {
+	if len(txids) == 0 {
+		return nil
+	}
+
+	// Convert []string to []interface{} for Redis SAdd
+	members := make([]interface{}, len(txids))
+	for i, txid := range txids {
+		members[i] = txid
+	}
+
+	return r.redis.SAdd(r.ctx, schema.RdbUploadedTxIds, members...).Err()
+}
+
 func TestAddPending(t *testing.T) {
 	ck := setupTest(t)
 
@@ -58,7 +75,7 @@ func TestAddPending(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify it was added
-	members, err := ck.redis.LRange(ck.ctx, RdbPendingTxIds, 0, -1).Result()
+	members, err := ck.redis.LRange(ck.ctx, schema.RdbPendingTxIds, 0, -1).Result()
 	assert.NoError(t, err)
 	assert.Contains(t, members, txid)
 }
@@ -84,7 +101,7 @@ func TestGetPendingTxs(t *testing.T) {
 	assert.Equal(t, int64(3), count)
 
 	// Get pending transactions from Redis directly to verify order
-	pendingTxs, err := ck.redis.LRange(ck.ctx, RdbPendingTxIds, 0, -1).Result()
+	pendingTxs, err := ck.redis.LRange(ck.ctx, schema.RdbPendingTxIds, 0, -1).Result()
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, testTxids, pendingTxs)
 }
@@ -101,7 +118,7 @@ func TestGetUploading(t *testing.T) {
 
 	// Add some transactions to uploading set
 	testTxids := []string{"txid1", "txid2", "txid3"}
-	err = ck.redis.SAdd(ck.ctx, RdbUploadingTxIds, testTxids).Err()
+	err = ck.redis.SAdd(ck.ctx, schema.RdbUploadingTxIds, testTxids).Err()
 	assert.NoError(t, err)
 
 	// Get uploading transactions
@@ -160,7 +177,7 @@ func TestUploadingCount(t *testing.T) {
 
 	// Add some transactions to uploading set
 	testTxids := []string{"txid1", "txid2", "txid3"}
-	err = ck.redis.SAdd(ck.ctx, RdbUploadingTxIds, testTxids).Err()
+	err = ck.redis.SAdd(ck.ctx, schema.RdbUploadingTxIds, testTxids).Err()
 	assert.NoError(t, err)
 
 	// Test count
@@ -180,7 +197,7 @@ func TestAddUploaded(t *testing.T) {
 
 	// Verify they were added
 	for _, txid := range txids {
-		isMember, err := ck.redis.SIsMember(ck.ctx, RdbUploadedTxIds, txid).Result()
+		isMember, err := ck.redis.SIsMember(ck.ctx, schema.RdbUploadedTxIds, txid).Result()
 		assert.NoError(t, err)
 		assert.True(t, isMember)
 	}
@@ -192,16 +209,16 @@ func TestIsUploaded(t *testing.T) {
 	txid := "test-txid-123"
 
 	// Test non-uploaded transaction
-	uploaded, err := ck.isUploaded(txid)
+	uploaded, err := ck.IsUploaded(txid)
 	assert.NoError(t, err)
 	assert.False(t, uploaded)
 
-	// Add transaction to uploaded set
+	// Add the transaction to uploaded set
 	err = ck.addUploaded([]string{txid})
 	assert.NoError(t, err)
 
 	// Test uploaded transaction
-	uploaded, err = ck.isUploaded(txid)
+	uploaded, err = ck.IsUploaded(txid)
 	assert.NoError(t, err)
 	assert.True(t, uploaded)
 }
@@ -233,7 +250,7 @@ func TestErrorHandling(t *testing.T) {
 	assert.NoError(t, err) // Should not error, just add empty string to list
 
 	// Verify empty txid was added
-	members, err := ck.redis.LRange(ck.ctx, RdbPendingTxIds, 0, -1).Result()
+	members, err := ck.redis.LRange(ck.ctx, schema.RdbPendingTxIds, 0, -1).Result()
 	assert.NoError(t, err)
 	assert.Contains(t, members, "")
 
@@ -305,7 +322,7 @@ func TestEndUpload(t *testing.T) {
 
 	// Add transactions to uploading set
 	testTxids := []string{"txid1", "txid2", "txid3"}
-	err := ck.redis.SAdd(ck.ctx, RdbUploadingTxIds, testTxids).Err()
+	err := ck.redis.SAdd(ck.ctx, schema.RdbUploadingTxIds, testTxids).Err()
 	assert.NoError(t, err)
 
 	// Set a bundledIn
@@ -319,14 +336,14 @@ func TestEndUpload(t *testing.T) {
 
 	// Verify transactions were removed from uploading set
 	for _, txid := range testTxids {
-		isMember, err := ck.redis.SIsMember(ck.ctx, RdbUploadingTxIds, txid).Result()
+		isMember, err := ck.redis.SIsMember(ck.ctx, schema.RdbUploadingTxIds, txid).Result()
 		assert.NoError(t, err)
 		assert.False(t, isMember)
 	}
 
 	// Verify transactions were added to uploaded set
 	for _, txid := range testTxids {
-		isMember, err := ck.redis.SIsMember(ck.ctx, RdbUploadedTxIds, txid).Result()
+		isMember, err := ck.redis.SIsMember(ck.ctx, schema.RdbUploadedTxIds, txid).Result()
 		assert.NoError(t, err)
 		assert.True(t, isMember)
 	}
@@ -440,7 +457,7 @@ func TestUploadingCountLimit(t *testing.T) {
 	// Add a reasonable number of transactions to uploading set (close to but not exceeding a smaller test limit)
 	testUploadingCount := int64(8)
 	for i := int64(0); i < testUploadingCount; i++ {
-		err := ck.redis.SAdd(ck.ctx, RdbUploadingTxIds, fmt.Sprintf("txid%d", i)).Err()
+		err := ck.redis.SAdd(ck.ctx, schema.RdbUploadingTxIds, fmt.Sprintf("txid%d", i)).Err()
 		assert.NoError(t, err)
 	}
 
@@ -475,4 +492,145 @@ func TestUploadingCountLimit(t *testing.T) {
 	finalPending, err := ck.pendingCount()
 	assert.NoError(t, err)
 	assert.Equal(t, pendingToAdd-moved, finalPending) // Should decrease by the number moved
+}
+
+func TestCacheAndGetCache(t *testing.T) {
+	ck := setupTest(t)
+
+	// Test data
+	txid := "test-txid-123"
+
+	// Create test BundleItem
+	testItem := goarSchema.BundleItem{
+		Id:   "item-123",
+		Tags: []goarSchema.Tag{{Name: "test", Value: "value"}},
+	}
+
+	// Test Cache function
+	err := ck.Cache(txid, testItem)
+	assert.NoError(t, err)
+
+	// Test GetCache function
+	retrievedItem, err := ck.GetCache(txid)
+	assert.NoError(t, err)
+	assert.NotNil(t, retrievedItem)
+	assert.Equal(t, testItem.Id, retrievedItem.Id)
+}
+
+func TestCacheNonExistent(t *testing.T) {
+	ck := setupTest(t)
+
+	// Test GetCache for non-existent data
+	txid := "non-existent-txid"
+
+	retrievedItem, err := ck.GetCache(txid)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "item not found")
+	// The function should return nil pointer when there's an error
+	assert.Nil(t, retrievedItem)
+}
+
+func TestCacheMultipleEntries(t *testing.T) {
+	ck := setupTest(t)
+
+	// Test multiple cache entries
+	entries := []struct {
+		txid   string
+		itemID string
+	}{
+		{"txid-1", "item-1"},
+		{"txid-2", "item-2"},
+		{"txid-3", "item-3"},
+		{"txid-4", "item-4"},
+	}
+
+	// Cache all entries
+	for _, entry := range entries {
+		testItem := goarSchema.BundleItem{
+			Id:   entry.itemID,
+			Tags: []goarSchema.Tag{{Name: "test", Value: entry.itemID}},
+		}
+
+		err := ck.Cache(entry.txid, testItem)
+		assert.NoError(t, err)
+	}
+
+	// Verify all entries can be retrieved
+	for _, entry := range entries {
+		retrievedItem, err := ck.GetCache(entry.txid)
+		assert.NoError(t, err)
+		assert.NotNil(t, retrievedItem)
+		assert.Equal(t, entry.itemID, retrievedItem.Id)
+	}
+}
+
+func TestCacheOverwrite(t *testing.T) {
+	ck := setupTest(t)
+
+	txid := "test-txid"
+
+	// First cache entry
+	firstItem := goarSchema.BundleItem{
+		Id:   "first-item",
+		Tags: []goarSchema.Tag{{Name: "version", Value: "1"}},
+	}
+
+	err := ck.Cache(txid, firstItem)
+	assert.NoError(t, err)
+
+	// Second cache entry (should overwrite)
+	secondItem := goarSchema.BundleItem{
+		Id:   "second-item",
+		Tags: []goarSchema.Tag{{Name: "version", Value: "2"}},
+	}
+
+	err = ck.Cache(txid, secondItem)
+	assert.NoError(t, err)
+
+	// Verify the second entry overwrote the first
+	retrievedItem, err := ck.GetCache(txid)
+	assert.NoError(t, err)
+	assert.NotNil(t, retrievedItem)
+	assert.Equal(t, secondItem.Id, retrievedItem.Id)
+}
+
+func TestCacheConcurrentAccess(t *testing.T) {
+	ck := setupTest(t)
+
+	numGoroutines := 10
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	// Concurrent cache operations
+	for i := 0; i < numGoroutines; i++ {
+		go func(idx int) {
+			defer wg.Done()
+
+			txid := fmt.Sprintf("concurrent-txid-%d", idx)
+			testItem := goarSchema.BundleItem{
+				Id:   fmt.Sprintf("concurrent-item-%d", idx),
+				Tags: []goarSchema.Tag{{Name: "index", Value: fmt.Sprintf("%d", idx)}},
+			}
+
+			err := ck.Cache(txid, testItem)
+			assert.NoError(t, err)
+
+			// Also try to retrieve
+			retrievedItem, err := ck.GetCache(txid)
+			assert.NoError(t, err)
+			assert.NotNil(t, retrievedItem)
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify all entries exist
+	for i := 0; i < numGoroutines; i++ {
+		txid := fmt.Sprintf("concurrent-txid-%d", i)
+		retrievedItem, err := ck.GetCache(txid)
+		assert.NoError(t, err)
+		assert.NotNil(t, retrievedItem)
+		assert.Equal(t, fmt.Sprintf("concurrent-item-%d", i), retrievedItem.Id)
+	}
 }

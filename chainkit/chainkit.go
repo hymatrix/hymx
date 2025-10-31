@@ -12,33 +12,37 @@ import (
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/db/rdb"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
+	hymxSchema "github.com/hymatrix/hymx/schema"
 	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
+	goarUtils "github.com/permadao/goar/utils"
 )
 
 var log = common.NewLog("chainkit")
 
 type Chainkit struct {
-	node      schema.INode
-	operator  schema.IOperator
+	db       schema.IDBChainkit // chainkit local db
+	nodeDB   schema.IDBTool     // node db, readonly functions
+	operator schema.IOperator   // interfaces with different blockchains
+
 	scheduler gocron.Scheduler
-	db        schema.IDB
 
 	ctx    context.Context
 	cancel context.CancelFunc
 	mu     sync.Mutex // Mutex to prevent concurrent execution
 }
 
-func New(node schema.INode, config schema.Config) *Chainkit {
+func New(config schema.Config) *Chainkit {
 	ctx, cancel := context.WithCancel(context.Background())
 	var op schema.IOperator
-	if config.OptType == "goar" {
+	switch config.OptType {
+	case "goar":
 		wallet, err := goar.NewWalletFromPath(config.Keyfile, "https://arweave.net")
 		if err != nil {
 			panic(err)
 		}
 		op = optgoar.New(wallet, ctx)
-	} else {
+	default:
 		panic("unsupported opt type")
 	}
 
@@ -48,7 +52,7 @@ func New(node schema.INode, config schema.Config) *Chainkit {
 	}
 
 	return &Chainkit{
-		node:      node,
+		nodeDB:    rdb.New(config.NodeRedisUrl),
 		db:        rdb.NewChainkitDB(config.RedisUrl),
 		operator:  op,
 		scheduler: scheduler,
@@ -58,9 +62,9 @@ func New(node schema.INode, config schema.Config) *Chainkit {
 }
 
 func (c *Chainkit) Run() {
-	log.Info("chainkit running")
 	c.scheduler.Start()
 	c.runJobs()
+	log.Info("chainkit running")
 }
 
 func (c *Chainkit) Close() {
@@ -85,18 +89,62 @@ func (c *Chainkit) Upload(tx goarSchema.BundleItem) error {
 		return errors.New("invalid bundle item: empty id")
 	}
 
+	// Check if transaction is already uploaded
+	uploaded, err := c.db.IsUploaded(tx.Id)
+	if err != nil {
+		log.Error("IsUploaded failed", "txid", tx.Id, "err", err)
+		return err
+	}
+	if uploaded {
+		log.Debug("txid already uploaded", "txid", tx.Id)
+		return nil
+	}
+
 	// Use Redis Set to deduplicate and record pending upload txids
 	return c.db.AddPending(tx.Id)
 }
 
 // Download a transaction
 func (c *Chainkit) DownloadByTxid(txid string) (*goarSchema.BundleItem, error) {
-	return c.operator.Download(txid)
+	return c.downloadByTxid(txid)
 }
 
 // Download all transactions of a process, from specified Nonce to latest transaction
 func (c *Chainkit) DownloadByPid(pid string, beginNonce, endNonce int64) (results []*schema.DownloadResult, err error) {
-	return nil, nil
+	log.Debug("DownloadByPid", "pid", pid, "beginNonce", beginNonce, "endNonce", endNonce)
+	// 1. download spawn transaction, txid = pid, nonce=0
+	log.Debug("download spawn transaction", "pid", pid)
+	spawnItem, err := c.downloadByTxid(pid)
+	if err != nil {
+		log.Error("DownloadByPid failed", "pid", pid, "err", err)
+		return nil, err
+	}
+	if spawnItem == nil {
+		log.Error("DownloadByPid failed, spawnMsg is nil", "pid", pid)
+		return nil, schema.ErrSpawnTxNotFound
+	}
+	log.Debug("verify spawn transaction success", "pid", pid, "txid", spawnItem.Id)
+	// 2. verify spawn message
+	if err = c.verifyMessage(spawnItem, hymxSchema.TypeProcess); err != nil {
+		log.Error("verifyProcessMsg failed", "pid", pid, "err", err)
+		return nil, err
+	}
+
+	// 3. download transactions range [beginNonce, endNonce]
+	arAddressOwner, err := goarUtils.OwnerToAddress(spawnItem.Owner)
+	if err != nil {
+		log.Error("OwnerToAddress failed", "pid", pid, "err", err)
+		return nil, err
+	}
+	log.Debug("OwnerToAddress ", "owner", arAddressOwner)
+	items, err := c.downloadByNonce(arAddressOwner, pid, beginNonce, endNonce)
+	if err != nil {
+		log.Error("downloadByNonce failed", "pid", pid, "err", err)
+		return nil, err
+	}
+	log.Debug("items count", "count", len(items))
+
+	return items, nil
 }
 
 // Execute a GraphQL query

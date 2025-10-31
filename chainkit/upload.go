@@ -1,6 +1,9 @@
 package chainkit
 
 import (
+	"fmt"
+	"strconv"
+
 	goarSchema "github.com/permadao/goar/schema"
 	goarUtils "github.com/permadao/goar/utils"
 )
@@ -17,7 +20,7 @@ func (c *Chainkit) uploadToChain(txids []string) (bundledInId string, uploaded [
 
 	items := c.getBundleItems(filteredTxids)
 	if len(items) == 0 {
-		return "", filteredTxids, nil
+		return "", filteredTxids, fmt.Errorf("no valid bundle items found")
 	}
 
 	// gen binary
@@ -64,10 +67,10 @@ func (c *Chainkit) getBundleItems(txids []string) []goarSchema.BundleItem {
 	// items := make([]goarSchema.BundleItem, 0, len(txids)*2)
 	items := []goarSchema.BundleItem{}
 	for _, txid := range txids {
-		if msg, err := c.node.GetMessage(txid); err == nil && msg != nil {
+		if msg, err := c.nodeDB.GetMessage(txid); err == nil && msg != nil {
 			items = append(items, *msg)
 		}
-		if assign, err := c.node.GetAssignByMessage(txid); err == nil && assign != nil {
+		if assign, err := c.getAssignByMessage(txid); err == nil && assign != nil {
 			items = append(items, *assign)
 		}
 	}
@@ -157,4 +160,19 @@ func (c *Chainkit) tryUpload() error {
 	}
 
 	return nil
+}
+
+func (n *Chainkit) getAssignByMessage(msgid string) (assign *goarSchema.BundleItem, err error) {
+	res, err := n.nodeDB.GetResult(msgid)
+	if err != nil {
+		return
+	}
+	if res == nil {
+		return
+	}
+	nonce, err := strconv.ParseInt(res.Nonce, 10, 64)
+	if err != nil {
+		return
+	}
+	return n.nodeDB.GetAssignByNonce(res.FromProcess, nonce)
 }
