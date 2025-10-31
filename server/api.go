@@ -176,13 +176,13 @@ func (s *Server) GetResults(c *gin.Context) {
 
 		timestamp, err := strconv.ParseInt(dbResult.Timestamp, 10, 64)
 		if err != nil {
-			schema.ErrorResponse(c, err.Error())
-			return
+			log.Warn("failed to parse timestamp, using default value -1", "timestamp", dbResult.Timestamp, "err", err)
+			timestamp = -1
 		}
 		nonce, err := strconv.ParseInt(dbResult.Nonce, 10, 64)
 		if err != nil {
-			schema.ErrorResponse(c, err.Error())
-			return
+			log.Warn("failed to parse nonce, using default value -1", "nonce", dbResult.Nonce, "err", err)
+			nonce = -1
 		}
 		cursor := schema.Cursor{
 			Timestamp: timestamp,
