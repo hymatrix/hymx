@@ -218,7 +218,14 @@ func (c *Client) Callback(targetURL string) (res string, err error) {
 }
 
 func (c *Client) GetResult(pid, msgid string) (result vmmSchema.Result, err error) {
-	url, err := c.buildURL(fmt.Sprintf("/result/%s/%s", pid, msgid))
+	var url string
+	if msgid == "" {
+		// Compatible with old version
+		url, err = c.buildURL(fmt.Sprintf("/result/%s", pid))
+	} else {
+		url, err = c.buildURL(fmt.Sprintf("/result/%s/%s", pid, msgid))
+	}
+
 	if err != nil {
 		return
 	}

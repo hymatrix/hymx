@@ -65,6 +65,7 @@ func (v *Vmm) genSpawnResult(env *schema.Env) (result *schema.Result) {
 		PushedFor:   env.Meta.ItemId,
 		Messages:    []*schema.ResMessage{},
 		Data:        "",
+		Timestamp:   fmt.Sprintf("%d", env.Meta.Timestamp),
 		Error:       "",
 	}
 	if env.Meta.PushedFor != "" {
