@@ -32,7 +32,7 @@ func TestRedirectResponse(t *testing.T) {
 	}
 
 	// Create redirect error
-	redirectErr := schema.NewRedirectError(nodes)
+    redirectErr := schema.NewRedirectError("test-pid", nodes)
 
 	// Setup test server
 	gin.SetMode(gin.TestMode)
@@ -70,7 +70,7 @@ func TestRedirectResponse(t *testing.T) {
 // TestEmptyNodesRedirect tests redirect with empty nodes list
 func TestEmptyNodesRedirect(t *testing.T) {
 	// Create redirect error with empty nodes
-	redirectErr := schema.NewRedirectError([]registrySchema.Node{})
+    redirectErr := schema.NewRedirectError("test-pid", []registrySchema.Node{})
 
 	// Setup test server
 	gin.SetMode(gin.TestMode)
@@ -117,7 +117,7 @@ func TestSingleNodeRedirect(t *testing.T) {
 	}
 
 	// Create redirect error
-	redirectErr := schema.NewRedirectError(nodes)
+    redirectErr := schema.NewRedirectError("test-pid", nodes)
 
 	// Setup test server
 	gin.SetMode(gin.TestMode)

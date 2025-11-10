@@ -142,14 +142,11 @@ func (s *Server) GetResult(c *gin.Context) {
 
 	dbResult, err := s.node.GetResult(pid, msgid)
 	if err != nil {
-		// Check if it's a redirect error
-		if _, ok := err.(*nodeSchema.RedirectError); ok {
-			// Add error to gin context for middleware to handle
-			c.Error(err)
+		isRedirect, nodes, _ := s.node.IsRedirect(pid)
+		if isRedirect {
+			c.Error(nodeSchema.NewRedirectError(pid, nodes))
 			return
 		}
-		schema.ErrorResponse(c, err.Error())
-		return
 	}
 	if dbResult == nil {
 		c.JSON(http.StatusOK, nil)

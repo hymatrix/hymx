@@ -52,12 +52,6 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 		return
 	}
 
-	// get nodes info, if need redirect
-	isRedirect, nodes, err := n.isRedirect(pid)
-	if err != nil {
-		return err
-	}
-
 	switch v := instance.(type) {
 	case hymxSchema.Process:
 		// check if scheduler is not node accid
@@ -67,6 +61,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 			return
 		}
 		// check if process already register
+		nodes, _ := n.vmm.GetNodesByProcess(pid)
 		if len(nodes) != 0 {
 			err = schema.ErrProcessAlreadyExists
 			log.Error("handle process failed", "pid", pid, "err", err)
@@ -89,16 +84,21 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 		}
 	case hymxSchema.Message:
 		// check if need redirect
+		isRedirect, nodes, e := n.IsRedirect(pid)
+		if e != nil {
+			err = e
+			return
+		}
 		if isRedirect {
 			// return nodes with redirect error for 308 redirect
-			err = schema.NewRedirectError(nodes)
+			err = schema.NewRedirectError(pid, nodes)
 			log.Warn("message redirect", "pid", pid, "err", err)
 			return
 		}
 
 		// check if the process not found before assignment
 		if !n.vmm.IsExists(pid) {
-			err = schema.ErrProcessNotFound
+			err = schema.NewProcessNotFoundError(pid)
 			log.Error("handle message failed", "pid", pid, "err", err)
 			return
 		}
@@ -164,7 +164,7 @@ func (n *Node) HandleDryRun(item goarSchema.BundleItem, assign hymxSchema.Assign
 	}
 }
 
-func (n *Node) isRedirect(pid string) (ok bool, nodes []registrySchema.Node, err error) {
+func (n *Node) IsRedirect(pid string) (ok bool, nodes []registrySchema.Node, err error) {
 	ok = true
 	nodes, err = n.vmm.GetNodesByProcess(pid)
 	if err != nil {
