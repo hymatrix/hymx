@@ -56,7 +56,13 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	case hymxSchema.Process:
 		// check if scheduler is not node accid
 		if v.Scheduler != n.bundler.Address {
-			err = schema.ErrRedirect
+			// Build redirect info; guard against nil node
+			redirectNodes := []registrySchema.Node{}
+			node, _ := n.vmm.GetNode(v.Scheduler)
+			if node != nil {
+				redirectNodes = append(redirectNodes, *node)
+			}
+			err = schema.NewRedirectError(pid, redirectNodes)
 			log.Warn("handle process failed", "pid", pid, "scheduler", v.Scheduler, "nodeAccId", n.bundler.Address, "err", err)
 			return
 		}
