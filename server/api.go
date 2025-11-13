@@ -12,6 +12,7 @@ import (
 	"github.com/hymatrix/hymx/common"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/server/schema"
+	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	goarUtils "github.com/permadao/goar/utils"
 )
 
@@ -121,11 +122,25 @@ func (s *Server) Submit(c *gin.Context) {
 	err = s.node.Handle(item)
 	if err != nil {
 		// Check if it's a redirect error
-		if _, ok := err.(*nodeSchema.RedirectError); ok {
+		if redirectErr, ok := err.(*nodeSchema.RedirectError); ok {
 			// Add error to gin context for middleware to handle
-			c.Error(err)
+			redirectErr.Nodes, _ = s.node.GetNodesByProcess(redirectErr.Pid)
+			c.Error(redirectErr)
 			return
 		}
+
+		// Check if it's a scheduler wrong error
+		if schedulerErr, ok := err.(*nodeSchema.SchedulerWrongError); ok {
+			scheduler := schedulerErr.Scheduler
+			node, _ := s.node.GetNode(scheduler)
+			redirectNodes := []registrySchema.Node{}
+			if node != nil {
+				redirectNodes = append(redirectNodes, *node)
+			}
+			c.Error(nodeSchema.NewRedirectError("", redirectNodes))
+			return
+		}
+
 		log.Error("handle item failed", "err", err)
 		schema.ErrorResponse(c, err.Error())
 		return
@@ -142,8 +157,9 @@ func (s *Server) GetResult(c *gin.Context) {
 
 	dbResult, err := s.node.GetResult(pid, msgid)
 	if err != nil {
-		isRedirect, nodes, _ := s.node.IsRedirect(pid)
+		isRedirect, _ := s.node.IsRedirect(pid)
 		if isRedirect {
+			nodes, _ := s.node.GetNodesByProcess(pid)
 			c.Error(nodeSchema.NewRedirectError(pid, nodes))
 			return
 		}
