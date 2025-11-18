@@ -11,6 +11,7 @@ import (
 	"time"
 
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
+	hymxSchema "github.com/hymatrix/hymx/schema"
 	serverSchema "github.com/hymatrix/hymx/server/schema"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
@@ -428,5 +429,31 @@ func (c *Client) StakeOf(accid string) (amt *big.Int, err error) {
 		return
 	}
 
+	return
+}
+
+func (c *Client) GetModule(moduleId string) (module hymxSchema.Module, err error) {
+	url, err := c.buildURL("/module/" + moduleId)
+	if err != nil {
+		return
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		return
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&module)
 	return
 }

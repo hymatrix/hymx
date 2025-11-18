@@ -54,6 +54,8 @@ func (s *Server) runAPI(endpoint string) {
 
 	// get all supported modules
 	engine.GET("/modules", s.GetModules)
+	// get module detail
+	engine.GET("/module/:mid", s.GetModule)
 
 	// inject pay api
 	s.injectPayApi(engine)
@@ -366,6 +368,17 @@ func (s *Server) TrySend(c *gin.Context) {
 func (s *Server) GetModules(c *gin.Context) {
 	names := s.node.GetModuleNames()
 	c.JSON(http.StatusOK, names)
+}
+
+func (s *Server) GetModule(c *gin.Context) {
+	moduleId := c.Param("mid")
+	res, err := s.node.LoadModule(moduleId)
+	if err != nil {
+		schema.ErrorResponse(c, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
 }
 
 // handleRedirectError handles redirect errors by setting appropriate headers and response
