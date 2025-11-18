@@ -65,7 +65,11 @@ func (r *Registry) Register(node registrySchema.Node) error {
 	defer r.rwlock.Unlock()
 
 	if _, ok := r.registered[node.AccId]; ok {
-		r.nodes[node.AccId] = &node
+		r.nodes[node.AccId].Name = node.Name
+		r.nodes[node.AccId].Role = node.Role
+		r.nodes[node.AccId].Desc = node.Desc
+		r.nodes[node.AccId].URL = node.URL
+
 		r.registered[node.AccId] = true
 		return nil
 	}
