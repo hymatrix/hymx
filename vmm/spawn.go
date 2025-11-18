@@ -18,8 +18,6 @@ func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.
 
 	env := &schema.Env{
 		Meta:        meta,
-		Id:          pid,
-		AccId:       meta.AccId,
 		Process:     process,
 		Module:      module,
 		Nonce:       0,
@@ -78,7 +76,7 @@ func (v *Vmm) genSpawnResult(env *schema.Env) (result *schema.Result) {
 			Target: v.registry.GetId(),
 			Tags: []goarSchema.Tag{
 				{Name: "Action", Value: "RegisterProcess"},
-				{Name: "Pid", Value: env.Id},
+				{Name: "Pid", Value: env.Meta.Pid},
 				{Name: "Acc-Id", Value: env.Process.Scheduler},
 			},
 		}
@@ -93,7 +91,7 @@ func (v *Vmm) genSpawnResult(env *schema.Env) (result *schema.Result) {
 			Target: env.Meta.FromProcess,
 			Tags: []goarSchema.Tag{
 				{Name: "Action", Value: "Spawned"},
-				{Name: "Process", Value: env.Id},
+				{Name: "Process", Value: env.Meta.Pid},
 				{Name: "Reference", Value: ref},
 			},
 		}

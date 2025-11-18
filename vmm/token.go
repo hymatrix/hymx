@@ -43,7 +43,7 @@ func (v *Vmm) spawnToken(env schema.Env) (vm schema.Vm, err error) {
 
 	db := cache.NewToken(
 		tokenSchema.Info{
-			Id:        env.Id,
+			Id:        env.Meta.Pid,
 			Name:      tokenSchema.TokenName,
 			Ticker:    tokenSchema.TokenTicker,
 			Decimals:  tokenSchema.TokenDecimals,

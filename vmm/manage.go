@@ -141,7 +141,7 @@ func (v *Vmm) Checkpoint(pid string) (snap schema.Snapshot, err error) {
 }
 
 func (v *Vmm) Restore(snap schema.Snapshot) error {
-	vm, _, err := v.GetVm(snap.Env.Id)
+	vm, _, err := v.GetVm(snap.Env.Meta.Pid)
 	if err != nil {
 		if vm, err = v.spawn(snap.Env); err != nil {
 			return err
@@ -182,6 +182,6 @@ func (v *Vmm) addVm(vm schema.Vm, env *schema.Env) {
 	v.vmsLockMu.Lock()
 	defer v.vmsLockMu.Unlock()
 
-	v.vms[env.Id] = vm
-	v.vmsEnv[env.Id] = env
+	v.vms[env.Meta.Pid] = vm
+	v.vmsEnv[env.Meta.Pid] = env
 }
