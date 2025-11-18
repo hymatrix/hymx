@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	NodeVersion  = "v0.3.1"
+	NodeVersion  = "v0.3.2"
 	GenesisAccId = "0x18b4bA4c118279b3eB60a2DB1E794Bc41AFC1D37"
 	// GenesisAccId = "0x972AeD684D6f817e1b58AF70933dF1b4a75bfA51"
 )
