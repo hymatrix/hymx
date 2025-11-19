@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/hymatrix/hymx/db/cache"
-	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/vmm/core/token"
 	tokenSchema "github.com/hymatrix/hymx/vmm/core/token/schema"
 	"github.com/hymatrix/hymx/vmm/schema"
@@ -51,10 +50,10 @@ func (v *Vmm) spawnToken(env schema.Env) (vm schema.Vm, err error) {
 			MinAmount: tokenSchema.StakeMinAmount,
 		},
 		map[string]*big.Int{
-			nodeSchema.GenesisAccId: genesisBalance,
+			env.Meta.AccId: genesisBalance,
 		},
 		map[string]*big.Int{
-			nodeSchema.GenesisAccId: genesisStake,
+			env.Meta.AccId: genesisStake,
 		},
 	)
 	tkvm, err := token.New(db)
