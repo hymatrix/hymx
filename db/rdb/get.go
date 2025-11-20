@@ -61,7 +61,7 @@ func (r *RDB) GetMessageByNonce(pid string, nonce int64) (msg *goarSchema.Bundle
 	}
 	// Unmarshal message
 	msg = &goarSchema.BundleItem{}
-	err = json.Unmarshal([]byte(msgStr), &msg)
+	err = json.Unmarshal([]byte(msgStr), msg)
 	return
 }
 

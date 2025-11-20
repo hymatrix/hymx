@@ -80,7 +80,7 @@ func (n *Node) Checkpoint(pid string) (ckpItem goarSchema.BundleItem, err error)
 func (n *Node) signCheckpoint(snap vmmSchema.Snapshot) (ckpItem goarSchema.BundleItem, err error) {
 	ckp := hymxSchema.Checkpoint{
 		Base:    hymxSchema.DefaultCheckpoint,
-		Process: snap.Env.Id,
+		Process: snap.Env.Meta.Pid,
 		Nonce:   fmt.Sprintf("%d", snap.Env.Nonce),
 	}
 

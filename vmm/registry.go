@@ -57,7 +57,8 @@ func (v *Vmm) spawnRegistry(env schema.Env) (vm schema.Vm, err error) {
 		v.info.JoinNetwork = true
 	}
 
-	db := cache.NewRegistry(env.Meta.ItemId, tokenPid, nodeSchema.GenesisNode)
+	mainNode := genMainNode(env.Meta.AccId, env.Meta.Params)
+	db := cache.NewRegistry(env.Meta.ItemId, tokenPid, mainNode)
 	regVm, err := registry.New(db)
 	if err != nil {
 		return
@@ -78,4 +79,19 @@ func (v *Vmm) spawnRegistry(env schema.Env) (vm schema.Vm, err error) {
 		}})
 
 	return regVm, nil
+}
+
+func genMainNode(accid string, params map[string]string) (mainNode registrySchema.Node) {
+	mainNode = registrySchema.Node{
+		AccId: accid,
+		Name:  params["Name"],
+		Role:  registrySchema.RoleMain,
+		Desc:  params["Desc"],
+		URL:   params["URL"],
+	}
+
+	if mainNode.URL == "" {
+		mainNode = nodeSchema.GenesisNode
+	}
+	return
 }

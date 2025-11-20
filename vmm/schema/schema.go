@@ -75,9 +75,6 @@ type ResSpawn struct {
 type Env struct {
 	Meta Meta `json:"Meta"`
 
-	Id    string `json:"Id"`
-	AccId string `json:"Acc-Id"`
-
 	Process schema.Process `json:"Process"`
 	Module  schema.Module  `json:"Module"`
 

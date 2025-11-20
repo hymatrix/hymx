@@ -8,6 +8,7 @@ import (
 	"github.com/everFinance/goether"
 	chainkitSchema "github.com/hymatrix/hymx/chainkit/schema"
 	"github.com/hymatrix/hymx/sdk"
+	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	"github.com/hymatrix/hymx/vmm/core/token/schema"
 	"github.com/permadao/goar"
 	"github.com/spf13/viper"
@@ -23,6 +24,12 @@ var (
 	bundler, _ = goar.NewBundler(signer)
 	s          = sdk.NewFromBundler(url, bundler)
 	s2         = sdk.New(url, "./test_keyfile2.json")
+
+	mainNode = registrySchema.Node{
+		Name: "test",
+		Desc: "test node",
+		URL:  url,
+	}
 )
 
 func main() {
@@ -39,7 +46,7 @@ func main() {
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		initRegistry(tokenPid)
+		initRegistry(tokenPid, mainNode)
 	case "transfer":
 		// transfer(s, s2.GetAddress(), schema.StakeMinAmount)
 		transfer(s, s2.GetAddress(), big.NewInt(1000))
