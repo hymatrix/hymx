@@ -16,7 +16,7 @@ const (
 type VmSpawnFunc func(Env) (Vm, error)
 
 type Vm interface {
-	Apply(from string, meta Meta) (res *Result, err error)
+	Apply(from string, meta Meta) (res Result)
 	Checkpoint() (data string, err error)
 	Restore(data string) error
 	Close() error

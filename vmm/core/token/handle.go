@@ -12,49 +12,45 @@ import (
 	goarSchema "github.com/permadao/goar/schema"
 )
 
-func (h *Token) handleInfo(from string) (res *vmmSchema.Result, err error) {
+func (h *Token) handleInfo(from string) (res vmmSchema.Result, err error) {
 	info := h.Info()
 	decimals := fmt.Sprintf("%v", info.Decimals)
 
-	res = &vmmSchema.Result{
-		Messages: []*vmmSchema.ResMessage{
-			{
-				Target: from,
-				Tags: []goarSchema.Tag{
-					{Name: "Name", Value: info.Name},
-					{Name: "Ticker", Value: info.Ticker},
-					{Name: "Logo", Value: info.Logo},
-					{Name: "Denomination", Value: decimals},
-					{Name: "Decimals", Value: decimals},
-				},
+	res.Messages = []*vmmSchema.ResMessage{
+		{
+			Target: from,
+			Tags: []goarSchema.Tag{
+				{Name: "Name", Value: info.Name},
+				{Name: "Ticker", Value: info.Ticker},
+				{Name: "Logo", Value: info.Logo},
+				{Name: "Denomination", Value: decimals},
+				{Name: "Decimals", Value: decimals},
 			},
 		},
 	}
 	return
 }
 
-func (h *Token) handleTotalSupply(from string) (res *vmmSchema.Result, err error) {
+func (h *Token) handleTotalSupply(from string) (res vmmSchema.Result, err error) {
 	totalSupply, err := h.db.GetTotalSupply()
 	if err != nil {
 		return
 	}
 
-	res = &vmmSchema.Result{
-		Messages: []*vmmSchema.ResMessage{
-			{
-				Target: from,
-				Data:   totalSupply.String(),
-				Tags: []goarSchema.Tag{
-					{Name: "Action", Value: "Total-Supply"},
-					{Name: "Ticker", Value: h.Info().Ticker},
-				},
+	res.Messages = []*vmmSchema.ResMessage{
+		{
+			Target: from,
+			Data:   totalSupply.String(),
+			Tags: []goarSchema.Tag{
+				{Name: "Action", Value: "Total-Supply"},
+				{Name: "Ticker", Value: h.Info().Ticker},
 			},
 		},
 	}
 	return
 }
 
-func (h *Token) handleBalanceOf(from string, params map[string]string) (res *vmmSchema.Result, err error) {
+func (h *Token) handleBalanceOf(from string, params map[string]string) (res vmmSchema.Result, err error) {
 	accid := from
 	if recipient, ok := params["Recipient"]; ok {
 		accid = recipient
@@ -66,23 +62,21 @@ func (h *Token) handleBalanceOf(from string, params map[string]string) (res *vmm
 		return
 	}
 
-	res = &vmmSchema.Result{
-		Messages: []*vmmSchema.ResMessage{
-			{
-				Target: from,
-				Data:   bal.String(),
-				Tags: []goarSchema.Tag{
-					{Name: "Balance", Value: bal.String()},
-					{Name: "Ticker", Value: h.Info().Ticker},
-					{Name: "Account", Value: accid},
-				},
+	res.Messages = []*vmmSchema.ResMessage{
+		{
+			Target: from,
+			Data:   bal.String(),
+			Tags: []goarSchema.Tag{
+				{Name: "Balance", Value: bal.String()},
+				{Name: "Ticker", Value: h.Info().Ticker},
+				{Name: "Account", Value: accid},
 			},
 		},
 	}
 	return
 }
 
-func (h *Token) handleBalances(from string) (res *vmmSchema.Result, err error) {
+func (h *Token) handleBalances(from string) (res vmmSchema.Result, err error) {
 	balances := make(map[string]string)
 	bals, err := h.db.Balances()
 	if err != nil {
@@ -96,21 +90,19 @@ func (h *Token) handleBalances(from string) (res *vmmSchema.Result, err error) {
 	if err != nil {
 		return
 	}
-	res = &vmmSchema.Result{
-		Messages: []*vmmSchema.ResMessage{
-			{
-				Target: from,
-				Data:   string(balancesJs),
-				Tags: []goarSchema.Tag{
-					{Name: "Ticker", Value: h.Info().Ticker},
-				},
+	res.Messages = []*vmmSchema.ResMessage{
+		{
+			Target: from,
+			Data:   string(balancesJs),
+			Tags: []goarSchema.Tag{
+				{Name: "Ticker", Value: h.Info().Ticker},
 			},
 		},
 	}
 	return
 }
 
-func (h *Token) handleTransfer(from string, params map[string]string) (res *vmmSchema.Result, err error) {
+func (h *Token) handleTransfer(from string, params map[string]string) (res vmmSchema.Result, err error) {
 	recipient, ok := params["Recipient"]
 	if !ok {
 		err = schema.ErrMissingRecipient
@@ -151,13 +143,11 @@ func (h *Token) handleTransfer(from string, params map[string]string) (res *vmmS
 			{Name: "Quantity", Value: qty},
 		},
 	}
-	res = &vmmSchema.Result{
-		Messages: []*vmmSchema.ResMessage{debitNotice, creditNotice},
-	}
+	res.Messages = []*vmmSchema.ResMessage{debitNotice, creditNotice}
 	return
 }
 
-func (h *Token) handleStake(from string, params map[string]string) (res *vmmSchema.Result, err error) {
+func (h *Token) handleStake(from string, params map[string]string) (res vmmSchema.Result, err error) {
 	registry, ok := params["Registry"]
 	if !ok {
 		err = schema.ErrMissingQuantity
@@ -197,13 +187,11 @@ func (h *Token) handleStake(from string, params map[string]string) (res *vmmSche
 			{Name: "Quantity", Value: qty},
 		},
 	}
-	res = &vmmSchema.Result{
-		Messages: []*vmmSchema.ResMessage{stakeNotice, nodeNotice},
-	}
+	res.Messages = []*vmmSchema.ResMessage{stakeNotice, nodeNotice}
 	return
 }
 
-func (h *Token) handleUnstake(from string, params map[string]string) (res *vmmSchema.Result, err error) {
+func (h *Token) handleUnstake(from string, params map[string]string) (res vmmSchema.Result, err error) {
 	registry, ok := params["Registry"]
 	if !ok {
 		err = schema.ErrMissingQuantity
@@ -243,13 +231,11 @@ func (h *Token) handleUnstake(from string, params map[string]string) (res *vmmSc
 			{Name: "Quantity", Value: qty},
 		},
 	}
-	res = &vmmSchema.Result{
-		Messages: []*vmmSchema.ResMessage{unstakeNotice, nodeNotice},
-	}
+	res.Messages = []*vmmSchema.ResMessage{unstakeNotice, nodeNotice}
 	return
 }
 
-func (h *Token) handleSlash() (res *vmmSchema.Result, err error) {
+func (h *Token) handleSlash() (res vmmSchema.Result, err error) {
 	// todo
 	return
 }

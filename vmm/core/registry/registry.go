@@ -16,7 +16,8 @@ func New(db schema.IDB) (*Registry, error) {
 	return &Registry{db}, nil
 }
 
-func (r *Registry) Apply(from string, meta vmmSchema.Meta) (res *vmmSchema.Result, err error) {
+func (r *Registry) Apply(from string, meta vmmSchema.Meta) (res vmmSchema.Result) {
+	var err error
 	switch meta.Action {
 	case "Register":
 		// only accept messages from the Token process
@@ -32,6 +33,9 @@ func (r *Registry) Apply(from string, meta vmmSchema.Meta) (res *vmmSchema.Resul
 		res, err = r.handleUnregisterProcess(from, meta.Params)
 	default:
 		err = schema.ErrInvalidAction
+	}
+	if err != nil {
+		res.Error = err.Error()
 	}
 
 	return

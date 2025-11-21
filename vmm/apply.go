@@ -17,16 +17,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		return err
 	}
 
-	result, err := vm.Apply(from, meta)
-	if err != nil {
-		return err
-	}
-
-	// set result
-	if result == nil {
-		log.Debug("no result response from process", "meta", meta)
-		result = &schema.Result{}
-	}
+	result := vm.Apply(from, meta)
 	result.Nonce = fmt.Sprintf("%d", env.Nonce)
 	result.FromProcess = meta.Pid
 	result.ItemId = meta.ItemId
@@ -37,7 +28,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 	}
 	result.DryRun = meta.DryRun
 	// send message outbox
-	v.outbox(env, result)
+	v.outbox(env, &result)
 	if meta.DryRun && meta.Nonce == meta.RecoveryMaxNonce {
 		v.RecoveryUnlock(meta.Pid)
 	}

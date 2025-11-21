@@ -19,27 +19,33 @@ func New(db schema.IDB) (*Token, error) {
 	return &Token{db}, nil
 }
 
-func (h *Token) Apply(from string, meta vmmSchema.Meta) (res *vmmSchema.Result, err error) {
+func (h *Token) Apply(from string, meta vmmSchema.Meta) (res vmmSchema.Result) {
+	var err error
 	switch meta.Action {
 	case "Info":
-		return h.handleInfo(from)
+		res, err = h.handleInfo(from)
 	case "Total-Supply":
-		return h.handleTotalSupply(from)
+		res, err = h.handleTotalSupply(from)
 	case "Balance":
-		return h.handleBalanceOf(from, meta.Params)
+		res, err = h.handleBalanceOf(from, meta.Params)
 	case "Balances":
-		return h.handleBalances(from)
+		res, err = h.handleBalances(from)
 	case "Transfer":
-		return h.handleTransfer(from, meta.Params)
+		res, err = h.handleTransfer(from, meta.Params)
 	case "Stake":
-		return h.handleStake(from, meta.Params)
+		res, err = h.handleStake(from, meta.Params)
 	case "Unstake":
-		return h.handleUnstake(from, meta.Params)
+		res, err = h.handleUnstake(from, meta.Params)
 	case "Slash":
-		return h.handleSlash()
+		res, err = h.handleSlash()
 	default:
-		return
+		err = schema.ErrInvalidAction
 	}
+	if err != nil {
+		res.Error = err.Error()
+	}
+
+	return
 }
 
 func (h *Token) Checkpoint() (string, error) {
