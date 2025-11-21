@@ -128,7 +128,7 @@ func (r *RDB) GetAllProcess() (processIds []string, curNonces []int64, err error
 	return processIds, curNonces, nil
 }
 
-func (r *RDB) GetResult(msgid string) (result *vmmSchema.Result, err error) {
+func (r *RDB) GetResult(msgid string) (result *vmmSchema.VmmResult, err error) {
 	resultBytes, err := r.rdb.HGet(r.ctx, schema.RdbMsgResult, msgid).Bytes()
 	if err != nil {
 		if err == redis.Nil {
@@ -137,12 +137,12 @@ func (r *RDB) GetResult(msgid string) (result *vmmSchema.Result, err error) {
 		}
 		return
 	}
-	result = &vmmSchema.Result{}
+	result = &vmmSchema.VmmResult{}
 	err = json.Unmarshal(resultBytes, result)
 	return
 }
 
-func (r *RDB) GetResults(pid string, limit int64) (results []vmmSchema.Result, err error) {
+func (r *RDB) GetResults(pid string, limit int64) (results []vmmSchema.VmmResult, err error) {
 	msgids, err := r.rdb.LRange(r.ctx, schema.RdbMsgResultsPrefix+pid, -limit, -1).Result()
 	if err != nil {
 		if err == redis.Nil {

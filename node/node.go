@@ -38,7 +38,7 @@ type Node struct {
 	assignMesChan  chan schema.AssignMessage
 	assignProcChan chan schema.AssignProcess
 	assignResChan  chan schema.AssignmentResult
-	resultChan     <-chan vmmSchema.Result
+	resultChan     <-chan vmmSchema.VmmResult
 
 	// handler
 	itemHandlers           []schema.ItemHandler
@@ -69,7 +69,7 @@ func New(
 	chainkit *chainkit.Chainkit,
 ) *Node {
 	outboxChan := make(chan vmmSchema.Outbox, 1000)
-	resultChan := make(chan vmmSchema.Result, 1000)
+	resultChan := make(chan vmmSchema.VmmResult, 1000)
 
 	taskPool, err := ants.NewPool(1000)
 	if err != nil {
@@ -161,7 +161,7 @@ func (n *Node) GetMessage(msgid string) (msg *goarSchema.BundleItem, err error) 
 	return n.db.GetMessage(msgid)
 }
 
-func (n *Node) GetResult(pid, msgid string) (result *vmmSchema.Result, err error) {
+func (n *Node) GetResult(pid, msgid string) (result *vmmSchema.VmmResult, err error) {
 	if n.vmm.RegistryId() == "" {
 		return n.getLocalResult(msgid)
 	}
@@ -188,7 +188,7 @@ func (n *Node) GetResult(pid, msgid string) (result *vmmSchema.Result, err error
 	return n.getLocalResult(msgid)
 }
 
-func (n *Node) GetResults(pid string, limit int64) (results []vmmSchema.Result, err error) {
+func (n *Node) GetResults(pid string, limit int64) (results []vmmSchema.VmmResult, err error) {
 	return n.db.GetResults(pid, limit)
 }
 
@@ -293,6 +293,6 @@ func (n *Node) isSelf(node registrySchema.Node) bool {
 	return false
 }
 
-func (n *Node) getLocalResult(msgid string) (result *vmmSchema.Result, err error) {
+func (n *Node) getLocalResult(msgid string) (result *vmmSchema.VmmResult, err error) {
 	return n.db.GetResult(msgid)
 }

@@ -13,7 +13,7 @@ import (
 	goarSchema "github.com/permadao/goar/schema"
 )
 
-func (s *SDK) ResultAndWait(pid, msgid string) (result vmmSchema.Result, err error) {
+func (s *SDK) ResultAndWait(pid, msgid string) (result vmmSchema.VmmResult, err error) {
 	timeout := time.After(2 * time.Minute)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()

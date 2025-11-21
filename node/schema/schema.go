@@ -37,4 +37,4 @@ type AssignmentResult struct {
 
 type AssignResHandler func(AssignmentResult)
 
-type ResultHandler func(vmmSchema.Result)
+type ResultHandler func(vmmSchema.VmmResult)

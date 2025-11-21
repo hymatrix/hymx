@@ -55,8 +55,8 @@ func (v *Vmm) spawn(env schema.Env) (vm schema.Vm, err error) {
 	return vmFunc(env)
 }
 
-func (v *Vmm) genSpawnResult(env *schema.Env) (result *schema.Result) {
-	result = &schema.Result{
+func (v *Vmm) genSpawnResult(env *schema.Env) (result *schema.VmmResult) {
+	result = &schema.VmmResult{
 		Nonce:       fmt.Sprintf("%d", env.Nonce),
 		ItemId:      env.Meta.ItemId,
 		FromProcess: env.Meta.Pid,

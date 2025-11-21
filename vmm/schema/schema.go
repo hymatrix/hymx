@@ -44,19 +44,13 @@ type Meta struct {
 }
 
 type Result struct {
-	Nonce       string            `json:"Nonce"`
-	Timestamp   string            `json:"Timestamp"`
-	ItemId      string            `json:"Item-Id"`
-	FromProcess string            `json:"From-Process"` // FromProcess is the source process (Pid) that produced this Result
-	PushedFor   string            `json:"Pushed-For"`
-	Messages    []*ResMessage     `json:"Messages"`
-	Spawns      []*ResSpawn       `json:"Spawns"`
-	Assignments []interface{}     `json:"Assignments"`
-	Output      interface{}       `json:"Output"`
-	Data        string            `json:"Data"`
-	Cache       map[string]string `json:"Cache,omitempty"` // Cache contains the generated cache entries for users to read and query latest state
-	DryRun      bool              `json:"-"`
-	Error       string            `json:"Error"`
+	Messages    []*ResMessage
+	Spawns      []*ResSpawn
+	Assignments []interface{}
+	Output      interface{}
+	Data        string
+	Cache       map[string]string // Cache contains the generated cache entries for users to read and query latest state
+	Error       error
 }
 
 type ResMessage struct {
@@ -82,6 +76,22 @@ type Env struct {
 	Sequence int64 `json:"Sequence"` // outbox sequence
 
 	ReceivedSeq map[string]int64 `json:"Received-Sequence"` // Received msg from other address/process, addr -> sequence number
+}
+
+type VmmResult struct {
+	Nonce       string            `json:"Nonce"`
+	Timestamp   string            `json:"Timestamp"`
+	ItemId      string            `json:"Item-Id"`
+	FromProcess string            `json:"From-Process"` // FromProcess is the source process (Pid) that produced this Result
+	PushedFor   string            `json:"Pushed-For"`
+	Messages    []*ResMessage     `json:"Messages"`
+	Spawns      []*ResSpawn       `json:"Spawns"`
+	Assignments []interface{}     `json:"Assignments"`
+	Output      interface{}       `json:"Output"`
+	Data        string            `json:"Data"`
+	Cache       map[string]string `json:"Cache,omitempty"`
+	DryRun      bool              `json:"-"`
+	Error       string            `json:"Error"`
 }
 
 type Outbox struct {

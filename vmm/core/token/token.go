@@ -42,7 +42,7 @@ func (h *Token) Apply(from string, meta vmmSchema.Meta) (res vmmSchema.Result) {
 		err = schema.ErrInvalidAction
 	}
 	if err != nil {
-		res.Error = err.Error()
+		res.Error = err
 	}
 
 	return

@@ -17,18 +17,28 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		return err
 	}
 
-	result := vm.Apply(from, meta)
-	result.Nonce = fmt.Sprintf("%d", env.Nonce)
-	result.FromProcess = meta.Pid
-	result.ItemId = meta.ItemId
-	result.PushedFor = meta.ItemId
-	result.Timestamp = fmt.Sprintf("%d", meta.Timestamp)
-	if meta.PushedFor != "" {
-		result.PushedFor = meta.PushedFor
+	res := vm.Apply(from, meta)
+	vmmRes := schema.VmmResult{
+		// from meta info and vmm env
+		Nonce:       fmt.Sprintf("%d", env.Nonce),
+		Timestamp:   fmt.Sprintf("%d", meta.Timestamp),
+		ItemId:      meta.ItemId,
+		FromProcess: meta.Pid,
+		// from vm result
+		Messages:    res.Messages,
+		Spawns:      res.Spawns,
+		Assignments: res.Assignments,
+		Output:      res.Output,
+		Data:        res.Data,
+		Cache:       res.Cache,
+		Error:       res.Error.Error(),
 	}
-	result.DryRun = meta.DryRun
+	if meta.PushedFor != "" {
+		vmmRes.PushedFor = meta.PushedFor
+	}
+	vmmRes.DryRun = meta.DryRun
 	// send message outbox
-	v.outbox(env, &result)
+	v.outbox(env, &vmmRes)
 	if meta.DryRun && meta.Nonce == meta.RecoveryMaxNonce {
 		v.RecoveryUnlock(meta.Pid)
 	}

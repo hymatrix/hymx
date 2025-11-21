@@ -45,7 +45,7 @@ func (r *RDB) Commit(pid string, nonce int64, msg, assign goarSchema.BundleItem)
 	return
 }
 
-func (r *RDB) SaveResult(result vmmSchema.Result) (err error) {
+func (r *RDB) SaveResult(result vmmSchema.VmmResult) (err error) {
 	pipe := r.rdb.Pipeline()
 
 	// save result

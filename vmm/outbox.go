@@ -10,7 +10,7 @@ import (
 )
 
 // outbox, manage out msg, sequence
-func (v *Vmm) outbox(env *schema.Env, result *schema.Result) {
+func (v *Vmm) outbox(env *schema.Env, result *schema.VmmResult) {
 	for _, msg := range result.Messages {
 		if _, err := utils.TagsToMessage(msg.Tags); err != nil {
 			log.Error("invalid msg tags", "err", err)

@@ -218,7 +218,7 @@ func (c *Client) Callback(targetURL string) (res string, err error) {
 	return string(body), nil
 }
 
-func (c *Client) GetResult(pid, msgid string) (result vmmSchema.Result, err error) {
+func (c *Client) GetResult(pid, msgid string) (result vmmSchema.VmmResult, err error) {
 	var url string
 	if msgid == "" {
 		// Compatible with old version
