@@ -30,13 +30,13 @@ type Vmm struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	resultChan chan<- schema.Result
+	resultChan chan<- schema.VmmResult
 	outboxChan chan<- schema.Outbox
 	applyChan  chan schema.Meta
 	ckpChan    chan schema.Checkpoint
 }
 
-func New(info *nodeSchema.Info, resultChan chan<- schema.Result, outboxChan chan<- schema.Outbox) *Vmm {
+func New(info *nodeSchema.Info, resultChan chan<- schema.VmmResult, outboxChan chan<- schema.Outbox) *Vmm {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Vmm{
 		info: info,

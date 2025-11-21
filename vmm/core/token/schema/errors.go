@@ -9,4 +9,5 @@ var (
 	ErrInsufficientBalance   = errors.New("err_insufficient_balance")
 	ErrInsufficientStake     = errors.New("err_insufficient_stake")
 	ErrUnauthorized          = errors.New("err_unauthorized")
+	ErrInvalidAction         = errors.New("err_invalid_action")
 )

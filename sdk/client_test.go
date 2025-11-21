@@ -302,7 +302,7 @@ func TestGetResultRedirectHandling(t *testing.T) {
 		}
 
 		// Return a successful result response
-		result := vmmSchema.Result{
+		result := vmmSchema.VmmResult{
 			ItemId:      "test-item-id",
 			FromProcess: "test-process-id",
 			Output:      "test-output",
@@ -420,7 +420,7 @@ func TestGetResultWithoutRedirect(t *testing.T) {
 		}
 
 		// Return successful result response
-		result := vmmSchema.Result{
+		result := vmmSchema.VmmResult{
 			ItemId:      "direct-item-id",
 			FromProcess: "direct-process-id",
 			Output:      "direct-output",
@@ -465,7 +465,7 @@ func TestGetResultRedirectPreservesURLPath(t *testing.T) {
 		}
 
 		// Return successful result response
-		result := vmmSchema.Result{
+		result := vmmSchema.VmmResult{
 			ItemId:      "path-test-id",
 			FromProcess: "path-process-id",
 			Output:      "path-preserved",
@@ -521,7 +521,7 @@ func TestGetResultRedirectWithMultipleNodes(t *testing.T) {
 
 	// Create a mock successful server (second alternative node)
 	successServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		result := vmmSchema.Result{
+		result := vmmSchema.VmmResult{
 			ItemId:      "multi-node-item-id",
 			FromProcess: "multi-node-process-id",
 			Output:      "multi-node-success",
@@ -597,7 +597,7 @@ func TestGetResultsSuccess(t *testing.T) {
 		if r.URL.Path != expectedPath {
 			t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
 		}
-		
+
 		// Verify query parameters
 		if r.URL.Query().Get("sort") != "DESC" {
 			t.Errorf("Expected sort=DESC, got %s", r.URL.Query().Get("sort"))
@@ -611,7 +611,7 @@ func TestGetResultsSuccess(t *testing.T) {
 			Edges: []serverSchema.ResultsEdge{
 				{
 					Cursor: "eyJ0aW1lc3RhbXAiOjE2MzQ1Njc4OTAsIm9yZGluYXRlIjoxLCJjcm9uIjoiMS0xMC1taW51dGVzIiwic29ydCI6IkFTQyJ9",
-					Node: vmmSchema.Result{
+					Node: vmmSchema.VmmResult{
 						Nonce:       "1",
 						Timestamp:   "1634567890",
 						ItemId:      "test-item-1",
@@ -627,7 +627,7 @@ func TestGetResultsSuccess(t *testing.T) {
 				},
 				{
 					Cursor: "eyJ0aW1lc3RhbXAiOjE2MzQ1Njc4OTEsIm9yZGluYXRlIjoyLCJjcm9uIjoiMS0xMC1taW51dGVzIiwic29ydCI6IkFTQyJ9",
-					Node: vmmSchema.Result{
+					Node: vmmSchema.VmmResult{
 						Nonce:       "2",
 						Timestamp:   "1634567891",
 						ItemId:      "test-item-2",
@@ -785,11 +785,11 @@ func TestGetResultsNetworkError(t *testing.T) {
 // TestGetResultsURLBuilding tests the GetResults method URL building with different parameters
 func TestGetResultsURLBuilding(t *testing.T) {
 	var capturedURL string
-	
+
 	// Create mock server that captures the request URL
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedURL = r.URL.String()
-		
+
 		mockResults := serverSchema.ResponseResults{
 			Edges: []serverSchema.ResultsEdge{},
 		}
@@ -805,9 +805,9 @@ func TestGetResultsURLBuilding(t *testing.T) {
 
 	// Test with different parameters
 	testCases := []struct {
-		pid           string
-		limit         int64
-		expectedPath  string
+		pid          string
+		limit        int64
+		expectedPath string
 	}{
 		{"process-123", 5, "/results/process-123?sort=DESC&limit=5"},
 		{"another-process", 20, "/results/another-process?sort=DESC&limit=20"},

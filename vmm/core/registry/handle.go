@@ -8,7 +8,7 @@ import (
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 )
 
-func (r *Registry) handleRegister(from string, params map[string]string) (res *vmmSchema.Result, err error) {
+func (r *Registry) handleRegister(from string, params map[string]string) (res vmmSchema.Result, err error) {
 	if err = r.authToken(from); err != nil {
 		return
 	}
@@ -22,13 +22,11 @@ func (r *Registry) handleRegister(from string, params map[string]string) (res *v
 		return
 	}
 
-	res = &vmmSchema.Result{
-		Data: fmt.Sprintf("Node registered successfully, Acc-Id:%v", node.AccId),
-	}
+	res.Data = fmt.Sprintf("Node registered successfully, Acc-Id:%v", node.AccId)
 	return
 }
 
-func (r *Registry) handleUnregister(from string, params map[string]string) (res *vmmSchema.Result, err error) {
+func (r *Registry) handleUnregister(from string, params map[string]string) (res vmmSchema.Result, err error) {
 	if err = r.authToken(from); err != nil {
 		return
 	}
@@ -43,13 +41,11 @@ func (r *Registry) handleUnregister(from string, params map[string]string) (res 
 		return
 	}
 
-	res = &vmmSchema.Result{
-		Data: fmt.Sprintf("Node unregistered successfully, Acc-Id:%v", accid),
-	}
+	res.Data = fmt.Sprintf("Node unregistered successfully, Acc-Id:%v", accid)
 	return
 }
 
-func (r *Registry) handleRegisterProcess(from string, params map[string]string) (res *vmmSchema.Result, err error) {
+func (r *Registry) handleRegisterProcess(from string, params map[string]string) (res vmmSchema.Result, err error) {
 	pid, accid, err := r.authProc(from, params)
 	if err != nil {
 		return
@@ -59,13 +55,11 @@ func (r *Registry) handleRegisterProcess(from string, params map[string]string) 
 		return
 	}
 
-	res = &vmmSchema.Result{
-		Data: fmt.Sprintf("Process registered successfully, Acc-Id:%v, Pid:%v", accid, pid),
-	}
+	res.Data = fmt.Sprintf("Process registered successfully, Acc-Id:%v, Pid:%v", accid, pid)
 	return
 }
 
-func (r *Registry) handleUnregisterProcess(from string, params map[string]string) (res *vmmSchema.Result, err error) {
+func (r *Registry) handleUnregisterProcess(from string, params map[string]string) (res vmmSchema.Result, err error) {
 	pid, accid, err := r.authProc(from, params)
 	if err != nil {
 		return
@@ -75,9 +69,7 @@ func (r *Registry) handleUnregisterProcess(from string, params map[string]string
 		return
 	}
 
-	res = &vmmSchema.Result{
-		Data: fmt.Sprintf("Process unregistered successfully, Acc-Id:%v, Pid:%v", accid, pid),
-	}
+	res.Data = fmt.Sprintf("Process unregistered successfully, Acc-Id:%v, Pid:%v", accid, pid)
 	return
 }
 

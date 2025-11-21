@@ -40,7 +40,7 @@ func (p *Pay) HymxFeeHandler(itemMeta nodeSchema.ItemMeta) (err error) {
 }
 
 // hmxy Deposit
-func (p *Pay) HymxDepositHandler(res vmmSchema.Result) {
+func (p *Pay) HymxDepositHandler(res vmmSchema.VmmResult) {
 	if res.FromProcess != p.config.AxToken {
 		return
 	}

@@ -14,8 +14,8 @@ type ResponseResults struct {
 }
 
 type ResultsEdge struct {
-	Cursor string           `json:"cursor"`
-	Node   vmmSchema.Result `json:"node"`
+	Cursor string              `json:"cursor"`
+	Node   vmmSchema.VmmResult `json:"node"`
 }
 
 type Cursor struct {

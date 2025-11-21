@@ -22,7 +22,7 @@ type IDBTool interface {
 	// DB
 	GetMessage(msgid string) (msg *goarSchema.BundleItem, err error)
 	GetAssignByNonce(pid string, nonce int64) (assign *goarSchema.BundleItem, err error)
-	GetResult(msgid string) (result *vmmSchema.Result, err error)
+	GetResult(msgid string) (result *vmmSchema.VmmResult, err error)
 }
 
 type IDBChainkit interface {

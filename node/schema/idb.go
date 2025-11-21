@@ -7,9 +7,9 @@ import (
 
 type IDB interface {
 	// result
-	SaveResult(result vmmSchema.Result) error
-	GetResult(msgid string) (result *vmmSchema.Result, err error)
-	GetResults(pid string, limit int64) (results []vmmSchema.Result, err error)
+	SaveResult(result vmmSchema.VmmResult) error
+	GetResult(msgid string) (result *vmmSchema.VmmResult, err error)
+	GetResults(pid string, limit int64) (results []vmmSchema.VmmResult, err error)
 
 	// assignment
 	IsExist(pid string) (ok bool, err error)
