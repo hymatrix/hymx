@@ -31,7 +31,9 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		Output:      res.Output,
 		Data:        res.Data,
 		Cache:       res.Cache,
-		Error:       res.Error.Error(),
+	}
+	if res.Error != nil {
+		vmmRes.Error = res.Error.Error()
 	}
 	if meta.PushedFor != "" {
 		vmmRes.PushedFor = meta.PushedFor
