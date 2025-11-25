@@ -44,6 +44,10 @@ func (s *Server) runAPI(endpoint string) {
 	engine.GET("/balanceOf/:accid", s.BalanceOf)
 	engine.GET("/stakeOf/:accid", s.StakeOf)
 
+	// for compatibility
+	engine.GET("/balanceof/:accid", s.BalanceOf)
+	engine.GET("/stakeof/:accid", s.StakeOf)
+
 	// cache for status query
 	engine.GET("/cache/:pid/:key", s.GetCache)
 
