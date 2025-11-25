@@ -283,6 +283,506 @@ func TestSendRedirectPreservesRequestBody(t *testing.T) {
 }
 
 // ========================================
+// GetNodes Method Tests
+// ========================================
+
+// TestGetNodesSuccess tests successful retrieval of nodes map
+func TestGetNodesSuccess(t *testing.T) {
+	// Prepare mock nodes
+	nodes := map[string]registrySchema.Node{
+		"acc1": {AccId: "acc1", Name: "node-1", Role: "main", Desc: "desc-1", URL: "http://127.0.0.1:8080"},
+		"acc2": {AccId: "acc2", Name: "node-2", Role: "follower", Desc: "desc-2", URL: "http://127.0.0.1:8081"},
+	}
+
+	// Create mock server
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/nodes" {
+			t.Errorf("expected path /nodes, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(nodes)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetNodes()
+	if err != nil {
+		t.Fatalf("GetNodes failed: %v", err)
+	}
+
+	if len(got) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(got))
+	}
+	if got["acc1"].URL != "http://127.0.0.1:8080" {
+		t.Errorf("acc1 URL mismatch: %s", got["acc1"].URL)
+	}
+	if got["acc2"].Role != "follower" {
+		t.Errorf("acc2 Role mismatch: %s", got["acc2"].Role)
+	}
+
+	t.Log("✅ GetNodes method returns nodes map correctly")
+}
+
+// TestGetNodesErrorStatus tests non-2xx status handling
+func TestGetNodesErrorStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetNodes()
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+	if got != nil {
+		t.Errorf("expected nil nodes on error, got: %+v", got)
+	}
+
+	t.Log("✅ GetNodes method handles non-2xx status correctly")
+}
+
+// TestGetNodesNullResponse tests decoding of null response body
+func TestGetNodesNullResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("null"))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetNodes()
+	if err != nil {
+		t.Fatalf("GetNodes failed: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil map for null JSON, got: %+v", got)
+	}
+
+	t.Log("✅ GetNodes method decodes null response to nil map")
+}
+
+// ========================================
+// GetNode Method Tests
+// ========================================
+
+// TestGetNodeSuccess verifies /node/:accid returns a single node
+func TestGetNodeSuccess(t *testing.T) {
+	want := registrySchema.Node{AccId: "acc123", Name: "node-main", Role: "main", Desc: "desc", URL: "http://127.0.0.1:8080"}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/node/acc123" {
+			t.Errorf("expected path /node/acc123, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(want)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetNode("acc123")
+	if err != nil {
+		t.Fatalf("GetNode failed: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected non-nil node, got nil")
+	}
+	if got.URL != want.URL || got.Role != want.Role {
+		t.Errorf("field mismatch: got=%+v want=%+v", got, want)
+	}
+
+	t.Log("✅ GetNode method returns single node correctly")
+}
+
+// TestGetNodeErrorStatus verifies non-2xx status handling
+func TestGetNodeErrorStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetNode("acc500")
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+	if got != nil {
+		t.Errorf("expected nil node on error, got: %+v", got)
+	}
+
+	t.Log("✅ GetNode method handles non-2xx status correctly")
+}
+
+// TestGetNodeNullResponse verifies null body yields nil pointer
+func TestGetNodeNullResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("null"))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetNode("accnull")
+	if err != nil {
+		t.Fatalf("GetNode failed: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil for null JSON, got: %+v", got)
+	}
+
+	t.Log("✅ GetNode method decodes null response to nil pointer")
+}
+
+// ========================================
+// GetNodesByProcess Method Tests
+// ========================================
+
+// TestGetNodesByProcessSuccess tests retrieval of nodes by process
+func TestGetNodesByProcessSuccess(t *testing.T) {
+	want := []registrySchema.Node{
+		{AccId: "acc1", Name: "node-1", Role: "main", Desc: "d1", URL: "http://127.0.0.1:8080"},
+		{AccId: "acc2", Name: "node-2", Role: "candidate", Desc: "d2", URL: "http://127.0.0.1:8081"},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/nodesByProcess/p123" {
+			t.Errorf("expected path /nodesByProcess/p123, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(want)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetNodesByProcess("p123")
+	if err != nil {
+		t.Fatalf("GetNodesByProcess failed: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(got))
+	}
+	if got[0].AccId != "acc1" || got[1].Role != "candidate" {
+		t.Errorf("field mismatch: got=%+v", got)
+	}
+
+	t.Log("✅ GetNodesByProcess returns node list correctly")
+}
+
+// TestGetNodesByProcessErrorStatus tests non-2xx status
+func TestGetNodesByProcessErrorStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetNodesByProcess("p500")
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+	if got != nil {
+		t.Errorf("expected nil slice on error, got: %+v", got)
+	}
+
+	t.Log("✅ GetNodesByProcess handles non-2xx status correctly")
+}
+
+// TestGetNodesByProcessNullResponse tests decoding of null to nil slice
+func TestGetNodesByProcessNullResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("null"))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetNodesByProcess("pnull")
+	if err != nil {
+		t.Fatalf("GetNodesByProcess failed: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil slice for null JSON, got: %+v", got)
+	}
+
+	t.Log("✅ GetNodesByProcess decodes null to nil slice")
+}
+
+// ========================================
+// GetProcesses Method Tests
+// ========================================
+
+// TestGetProcessesSuccess tests retrieval of processes by accid
+func TestGetProcessesSuccess(t *testing.T) {
+	want := []string{"p1", "p2", "p3"}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/processes/accX" {
+			t.Errorf("expected path /processes/accX, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(want)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetProcesses("accX")
+	if err != nil {
+		t.Fatalf("GetProcesses failed: %v", err)
+	}
+	if len(got) != 3 || got[0] != "p1" || got[2] != "p3" {
+		t.Errorf("value mismatch: got=%+v want=%+v", got, want)
+	}
+
+	t.Log("✅ GetProcesses returns process list correctly")
+}
+
+// TestGetProcessesErrorStatus tests non-2xx status handling
+func TestGetProcessesErrorStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetProcesses("acc500")
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+	if got != nil {
+		t.Errorf("expected nil slice on error, got: %+v", got)
+	}
+
+	t.Log("✅ GetProcesses handles non-2xx status correctly")
+}
+
+// TestGetProcessesNullResponse tests null body decoding to nil slice
+func TestGetProcessesNullResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("null"))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetProcesses("accnull")
+	if err != nil {
+		t.Fatalf("GetProcesses failed: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil slice for null JSON, got: %+v", got)
+	}
+
+	t.Log("✅ GetProcesses decodes null to nil slice")
+}
+
+// ========================================
+// GetCache Method Tests
+// ========================================
+
+// TestGetCacheSuccess tests successful retrieval of cache value
+func TestGetCacheSuccess(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/cache/p123/k456" {
+			t.Errorf("expected path /cache/p123/k456, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode("cached-value")
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetCache("p123", "k456")
+	if err != nil {
+		t.Fatalf("GetCache failed: %v", err)
+	}
+	if got != "cached-value" {
+		t.Errorf("expected 'cached-value', got: %s", got)
+	}
+
+	t.Log("✅ GetCache returns string value correctly")
+}
+
+// TestGetCacheErrorStatus tests non-2xx status handling
+func TestGetCacheErrorStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetCache("p500", "k500")
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+	if got != "" {
+		t.Errorf("expected empty string on error, got: %q", got)
+	}
+
+	t.Log("✅ GetCache handles non-2xx status correctly")
+}
+
+// TestGetCacheEmptyString tests decoding of JSON empty string
+func TestGetCacheEmptyString(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/cache/p123/k456" {
+			t.Errorf("expected path /cache/p123/k456, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("\"\"")) // JSON empty string ""
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetCache("p123", "k456")
+	if err != nil {
+		t.Fatalf("GetCache failed: %v", err)
+	}
+	if got != "" {
+		t.Errorf("expected empty string, got: %q", got)
+	}
+
+	t.Log("✅ GetCache decodes empty string correctly")
+}
+
+// ========================================
+// GetModules Method Tests
+// ========================================
+
+// TestGetModulesSuccess tests retrieval of module names
+func TestGetModulesSuccess(t *testing.T) {
+	want := []string{"token", "scheduler", "example"}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/modules" {
+			t.Errorf("expected path /modules, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(want)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetModules()
+	if err != nil {
+		t.Fatalf("GetModules failed: %v", err)
+	}
+	if len(got) != len(want) || got[0] != "token" || got[2] != "example" {
+		t.Errorf("value mismatch: got=%+v want=%+v", got, want)
+	}
+
+	t.Log("✅ GetModules returns module names correctly")
+}
+
+// TestGetModulesErrorStatus tests non-2xx status handling
+func TestGetModulesErrorStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetModules()
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+	if got != nil {
+		t.Errorf("expected nil slice on error, got: %+v", got)
+	}
+
+	t.Log("✅ GetModules handles non-2xx status correctly")
+}
+
+// TestGetModulesNullResponse tests decoding of null to nil slice
+func TestGetModulesNullResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("null"))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	got, err := client.GetModules()
+	if err != nil {
+		t.Fatalf("GetModules failed: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil slice for null JSON, got: %+v", got)
+	}
+
+	t.Log("✅ GetModules decodes null to nil slice")
+}
+
+// ========================================
+// TrySend Method Tests
+// ========================================
+
+// TestTrySendSuccess tests successful POST /trysend
+func TestTrySendSuccess(t *testing.T) {
+	var received serverSchema.TrySendRequest
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/trysend" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
+			t.Fatalf("expected Content-Type application/json, got %s", ct)
+		}
+		// Read and decode body
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
+		if received.Pid != "p123" || received.Target != "t456" {
+			t.Fatalf("body mismatch: %+v", received)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	if err := client.TrySend("p123", "t456"); err != nil {
+		t.Fatalf("TrySend failed: %v", err)
+	}
+
+	t.Log("✅ TrySend posts JSON and returns on 2xx")
+}
+
+// TestTrySendErrorStatus tests non-2xx status handling
+func TestTrySendErrorStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	if err := client.TrySend("p500", "t500"); err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+
+	t.Log("✅ TrySend handles non-2xx status correctly")
+}
+
+// ========================================
 // GetResult Method Redirect Tests
 // ========================================
 
