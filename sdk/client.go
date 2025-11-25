@@ -258,8 +258,7 @@ func (c *Client) GetResult(pid, msgid string) (result vmmSchema.VmmResult, err e
 }
 
 func (c *Client) GetResults(pid string, limit int64) (results serverSchema.ResponseResults, err error) {
-	path := fmt.Sprintf("/results/%s?sort=DESC&limit=%d", pid, limit)
-	url, err := c.buildURL(path)
+	url, err := c.buildURL(fmt.Sprintf("/results/%s?sort=DESC&limit=%d", pid, limit))
 	if err != nil {
 		return
 	}
@@ -309,8 +308,7 @@ func (c *Client) GetMessage(msgid string) (item goarSchema.BundleItem, err error
 }
 
 func (c *Client) GetMessageByNonce(pid string, nonce int64) (item goarSchema.BundleItem, err error) {
-	path := fmt.Sprintf("/messageByNonce/%s/%d", pid, nonce)
-	url, err := c.buildURL(path)
+	url, err := c.buildURL(fmt.Sprintf("/messageByNonce/%s/%d", pid, nonce))
 	if err != nil {
 		return
 	}
@@ -330,8 +328,7 @@ func (c *Client) GetMessageByNonce(pid string, nonce int64) (item goarSchema.Bun
 }
 
 func (c *Client) GetAssignByNonce(pid string, nonce int64) (item goarSchema.BundleItem, err error) {
-	path := fmt.Sprintf("/assignmentByNonce/%s/%d", pid, nonce)
-	url, err := c.buildURL(path)
+	url, err := c.buildURL(fmt.Sprintf("/assignmentByNonce/%s/%d", pid, nonce))
 	if err != nil {
 		return
 	}
@@ -456,4 +453,195 @@ func (c *Client) GetModule(moduleId string) (module hymxSchema.Module, err error
 
 	err = json.NewDecoder(resp.Body).Decode(&module)
 	return
+}
+
+func (c *Client) GetModules() (names []string, err error) {
+	url, err := c.buildURL("/modules")
+	if err != nil {
+		return
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		return
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&names)
+	return
+}
+
+func (c *Client) GetNodes() (nodes map[string]registrySchema.Node, err error) {
+	url, err := c.buildURL("/nodes")
+	if err != nil {
+		return
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		return
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&nodes)
+	return
+}
+
+func (c *Client) GetNode(accid string) (node *registrySchema.Node, err error) {
+	url, err := c.buildURL("/node/" + accid)
+	if err != nil {
+		return
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		return
+	}
+
+	// Decode into pointer; null JSON becomes nil
+	err = json.NewDecoder(resp.Body).Decode(&node)
+	return
+}
+
+func (c *Client) GetNodesByProcess(pid string) (nodes []registrySchema.Node, err error) {
+	url, err := c.buildURL("/nodesByProcess/" + pid)
+	if err != nil {
+		return
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		return
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&nodes)
+	return
+}
+
+func (c *Client) GetProcesses(accid string) (processes []string, err error) {
+	url, err := c.buildURL("/processes/" + accid)
+	if err != nil {
+		return
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		return
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&processes)
+	return
+}
+
+func (c *Client) GetCache(pid, key string) (value string, err error) {
+	url, err := c.buildURL(fmt.Sprintf("/cache/%s/%s", pid, key))
+	if err != nil {
+		return
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		return
+	}
+
+	// Response is a JSON string like "value"; empty string is valid
+	err = json.NewDecoder(resp.Body).Decode(&value)
+	return
+}
+
+// TrySend triggers outbox sending for a given pid and target.
+// It posts JSON {pid, target} to /trysend and expects 2xx with empty body.
+func (c *Client) TrySend(pid, target string) (err error) {
+	url, err := c.buildURL("/trysend")
+	if err != nil {
+		return
+	}
+
+	payload, err := json.Marshal(serverSchema.TrySendRequest{Pid: pid, Target: target})
+	if err != nil {
+		return
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		return
+	}
+
+	return nil
 }

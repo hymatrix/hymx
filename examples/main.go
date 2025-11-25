@@ -34,7 +34,7 @@ var (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("please input cmd, ex: pingpong, sendMessage, spawn, eval, eval2, receive, receive2, reply, inbox, result, checkpoint, ollama, recover1, recover2")
+		fmt.Println("please input cmd, ex: init, transfer, stake, deposit, module, upload, modules, trysend <pid> <target>, getcache <pid> <key>, nodes, node <accid>, nodesByProcess <pid>, processes <accid>")
 		os.Exit(1)
 	}
 
@@ -76,6 +76,44 @@ func main() {
 			OptType:      viper.GetString("chainkit.optType"),
 		}
 		Upload(pid, cfg)
+	case "modules":
+		modulesCmd()
+	case "nodes":
+		nodesCmd()
+	case "node":
+		if len(os.Args) < 3 {
+			fmt.Println("usage: node <accid>")
+			os.Exit(1)
+		}
+		nodeCmd(os.Args[2])
+	case "nodesByProcess":
+		if len(os.Args) < 3 {
+			fmt.Println("usage: nodesByProcess <pid>")
+			os.Exit(1)
+		}
+		nodesByProcessCmd(os.Args[2])
+	case "processes":
+		if len(os.Args) < 3 {
+			fmt.Println("usage: processes <accid>")
+			os.Exit(1)
+		}
+		processesCmd(os.Args[2])
+	case "trysend":
+		if len(os.Args) < 4 {
+			fmt.Println("usage: trysend <pid> <target>")
+			os.Exit(1)
+		}
+		pid := os.Args[2]
+		target := os.Args[3]
+		trySendCmd(pid, target)
+	case "getcache":
+		if len(os.Args) < 4 {
+			fmt.Println("usage: getcache <pid> <key>")
+			os.Exit(1)
+		}
+		pid := os.Args[2]
+		key := os.Args[3]
+		getCacheCmd(pid, key)
 	default:
 		fmt.Printf("unknown cmd: %s\n", cmd)
 		os.Exit(1)
