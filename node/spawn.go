@@ -14,6 +14,45 @@ import (
 )
 
 func (n *Node) handleProcess(
+	pid, accid string, item goarSchema.BundleItem,
+	proc hymxSchema.Process,
+) (err error) {
+	// check if scheduler is not node accid
+	if proc.Scheduler != n.bundler.Address {
+		err = schema.ErrSpawnRedirect
+		log.Warn("handle process failed", "pid", pid, "scheduler", proc.Scheduler, "nodeAccId", n.bundler.Address, "err", err)
+		return
+	}
+
+	// check if process already register
+	_, nodes, err := n.IsRedirect(pid)
+	if err != nil {
+		return
+	}
+	if len(nodes) != 0 {
+		err = schema.ErrProcessAlreadyExists
+		log.Error("handle process failed", "pid", pid, "err", err)
+		return
+	}
+
+	// check if the process already exists before assignment
+	// assigning to an invalid (already spawned) process may result in a non-contiguous nonce sequence.
+	if n.vmm.IsExists(pid) {
+		err = schema.ErrProcessAlreadyExists
+		log.Error("handle process failed", "pid", pid, "err", err)
+		return
+	}
+
+	n.assignProcChan <- schema.AssignProcess{
+		Pid:     pid,
+		AccId:   accid,
+		Process: proc,
+		Item:    item,
+	}
+	return nil
+}
+
+func (n *Node) applyProcess(
 	pid, accid string,
 	item goarSchema.BundleItem, proc hymxSchema.Process,
 	dryRun bool, maxNonce int64,

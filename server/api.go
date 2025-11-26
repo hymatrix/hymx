@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -11,7 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hymatrix/hymx/common"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
+	paySchema "github.com/hymatrix/hymx/pay/schema"
 	"github.com/hymatrix/hymx/server/schema"
+	"github.com/hymatrix/hymx/utils"
+	goarSchema "github.com/permadao/goar/schema"
 	goarUtils "github.com/permadao/goar/utils"
 )
 
@@ -125,9 +129,7 @@ func (s *Server) Submit(c *gin.Context) {
 
 	err = s.node.Handle(item)
 	if err != nil {
-		// Check if it's a redirect error
-		if redirectErr, ok := err.(*nodeSchema.RedirectError); ok {
-			s.handleRedirectError(c, redirectErr)
+		if s.handleSubmitErr(err, item, c) {
 			return
 		}
 		log.Error("handle item failed", "err", err)
@@ -144,21 +146,26 @@ func (s *Server) GetResult(c *gin.Context) {
 	pid := c.Param("pid")
 	msgid := c.Param("msgid")
 
-	dbResult, err := s.node.GetResult(pid, msgid)
+	dbResult, err := s.node.GetResult(msgid)
 	if err != nil {
-		// Check if it's a redirect error
-		if redirectErr, ok := err.(*nodeSchema.RedirectError); ok {
-			s.handleRedirectError(c, redirectErr)
-			return
-		}
 		schema.ErrorResponse(c, err.Error())
 		return
 	}
+
 	if dbResult == nil {
+		ok, nodes, err := s.node.IsRedirect(pid)
+		if err != nil {
+			schema.ErrorResponse(c, err.Error())
+			return
+		}
+		if ok && len(nodes) > 0 {
+			c.Header("Location", nodes[0].URL)
+			c.JSON(http.StatusPermanentRedirect, nodes)
+			return
+		}
 		c.JSON(http.StatusOK, nil)
 		return
 	}
-
 	c.JSON(http.StatusOK, dbResult)
 }
 
@@ -383,13 +390,54 @@ func (s *Server) GetModule(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
-// handleRedirectError handles redirect errors by setting appropriate headers and response
-func (s *Server) handleRedirectError(c *gin.Context, redirectErr *nodeSchema.RedirectError) {
-	// Return 308 Permanent Redirect with Location header and nodes information
-	if len(redirectErr.Nodes) > 0 {
-		// Set Location header to the first available node URL for browser auto-redirect
-		c.Header("Location", redirectErr.Nodes[0].URL)
+func (s *Server) handleSubmitErr(err error, item goarSchema.BundleItem, c *gin.Context) (ok bool) {
+	switch err {
+	case paySchema.ErrPaymentFailed:
+		url := getFullURL(c)
+		if s.pay != nil {
+			x402 := s.pay.X402(url)
+			c.JSON(http.StatusPaymentRequired, x402)
+			ok = true
+		}
+	case nodeSchema.ErrSpawnRedirect:
+		proc, errDecode := utils.DecodeItemToProcess(item)
+		if errDecode != nil {
+			log.Error("decode item failed", "item", item, "err", errDecode)
+			return
+		}
+
+		node, errNode := s.node.GetNode(proc.Scheduler)
+		if errNode != nil {
+			log.Error("get node failed", "item", item, "scheduler", proc.Scheduler, "err", errNode)
+			return
+		}
+
+		if node != nil {
+			c.Header("Location", node.URL)
+		}
+		c.JSON(http.StatusPermanentRedirect, node)
+		ok = true
+	case nodeSchema.ErrMessageRedirect:
+		_, nodes, errRedir := s.node.IsRedirect(item.Id)
+		if errRedir != nil {
+			log.Error("is redirect failed", "item", item, "err", errRedir)
+			return
+		}
+		if len(nodes) > 0 {
+			c.Header("Location", nodes[0].URL)
+		}
+		c.JSON(http.StatusPermanentRedirect, nodes)
+		ok = true
 	}
-	// Also return nodes information in response body for client SDK usage
-	c.JSON(http.StatusPermanentRedirect, redirectErr.Nodes)
+
+	return
+}
+
+func getFullURL(c *gin.Context) string {
+	scheme := "http"
+	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+
+	return fmt.Sprintf("%s://%s%s", scheme, c.Request.Host, c.Request.URL.String())
 }
