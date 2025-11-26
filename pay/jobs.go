@@ -21,6 +21,10 @@ func (p *Pay) runJobs() {
 		gocron.DailyJob(1, gocron.NewAtTimes(gocron.NewAtTime(1, 1, 1))),
 		gocron.NewTask(p.residencyAll),
 	)
+	p.scheduler.NewJob(
+		gocron.DailyJob(1, gocron.NewAtTimes(gocron.NewAtTime(0, 0, 0))),
+		gocron.NewTask(p.db.ResetDailyUsage),
+	)
 
 	p.scheduler.Start()
 }

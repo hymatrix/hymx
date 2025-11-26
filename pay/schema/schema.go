@@ -16,5 +16,7 @@ type Config struct {
 	SpawnFee     *big.Int `json:"Spawn-Fee"`
 	ResidencyFee *big.Int `json:"Residency-Fee"`
 
+	DailyLimit int64 `json:"Daily-Limit"`
+
 	DeveloperShareRatio *big.Int `json:"Developer-Share-Ratio"`
 }
