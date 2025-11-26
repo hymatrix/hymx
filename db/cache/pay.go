@@ -22,12 +22,13 @@ import (
 // For production environments, replace this with a persistent and transactional
 // implementation (e.g. backed by a database).
 type Pay struct {
-	whitelist        map[string]bool
+	whitelist        map[string]bool                //accid->whitelist
 	executed         map[string]bool                // txHash -> executed?
 	ledger           map[string]map[string]*big.Int // sponsor -> beneficiary -> amount
 	txPending        map[string]map[string]*big.Int // beneficiary -> pid -> amount
 	spawnPending     map[string]map[string]*big.Int // beneficiary -> pid -> amount
 	residencyPending map[string]*big.Int            // benficiary(pid) -> amount
+	dailyUsage       map[string]int64               // accid -> count
 
 	mu sync.RWMutex
 }
@@ -40,6 +41,7 @@ func NewPay() *Pay {
 		txPending:        map[string]map[string]*big.Int{},
 		spawnPending:     map[string]map[string]*big.Int{},
 		residencyPending: map[string]*big.Int{},
+		dailyUsage:       map[string]int64{},
 	}
 }
 
@@ -446,6 +448,26 @@ func (p *Pay) AllPending() map[string]*big.Int {
 	return out
 }
 
+func (p *Pay) DailyUsage(accid string) int64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.dailyUsage[accid]
+}
+
+func (p *Pay) IncrDailyUsage(accid string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.dailyUsage[accid]++
+	return nil
+}
+
+func (p *Pay) ResetDailyUsage() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.dailyUsage = make(map[string]int64)
+	return nil
+}
+
 func (p *Pay) Checkpoint() (data string, err error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -457,6 +479,7 @@ func (p *Pay) Checkpoint() (data string, err error) {
 		TxPending:        p.txPending,
 		SpawnPending:     p.spawnPending,
 		ResidencyPending: p.residencyPending,
+		DailyUsage:       p.dailyUsage,
 	}
 
 	by, err := json.Marshal(sp)
@@ -481,6 +504,7 @@ func (p *Pay) Restore(data string) error {
 	p.txPending = sp.TxPending
 	p.spawnPending = sp.SpawnPending
 	p.residencyPending = sp.ResidencyPending
+	p.dailyUsage = sp.DailyUsage
 	return nil
 }
 

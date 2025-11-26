@@ -13,7 +13,7 @@ import (
 )
 
 // hymx fee
-func (p *Pay) HymxFeeHandler(itemMeta nodeSchema.ItemMeta) (err error) {
+func (p *Pay) HymxFeeHandler(itemMeta nodeSchema.ItemMeta) error {
 	payer := itemMeta.Signer
 	if itemMeta.FromProcess != "" {
 		payer = itemMeta.FromProcess
@@ -23,6 +23,15 @@ func (p *Pay) HymxFeeHandler(itemMeta nodeSchema.ItemMeta) (err error) {
 		return nil
 	}
 
+	if p.config.DailyLimit > 0 && p.db.DailyUsage(payer) < p.config.DailyLimit {
+		if err := p.db.IncrDailyUsage(payer); err != nil {
+			log.Warn("unable to process payment for this transaction", "payer", payer, "itemMeta", itemMeta, "err", err)
+			return schema.ErrPaymentFailed
+		}
+		return nil
+	}
+
+	var err error
 	switch itemMeta.Instance.(type) {
 	case hymxSchema.Process:
 		err = p.db.SpawnFee(payer, itemMeta.Pid, p.config.SpawnFee)

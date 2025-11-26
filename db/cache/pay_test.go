@@ -197,6 +197,35 @@ func TestUseOnce_Spawn_Residency_CoverChecks(t *testing.T) {
 	assert.Contains(t, err.Error(), "insufficient")
 }
 
+func TestDailyUsage(t *testing.T) {
+	p := NewPay()
+
+	// 1. Initial usage should be 0 for a new user
+	assert.Equal(t, int64(0), p.DailyUsage("user1"))
+
+	// 2. Increment usage count
+	require.NoError(t, p.IncrDailyUsage("user1"))
+	assert.Equal(t, int64(1), p.DailyUsage("user1"))
+
+	// 3. Increment usage count again
+	require.NoError(t, p.IncrDailyUsage("user1"))
+	assert.Equal(t, int64(2), p.DailyUsage("user1"))
+
+	// 4. Verify that another user is unaffected
+	assert.Equal(t, int64(0), p.DailyUsage("user2"))
+	require.NoError(t, p.IncrDailyUsage("user2"))
+	assert.Equal(t, int64(1), p.DailyUsage("user2"))
+	// user1 should still be 2
+	assert.Equal(t, int64(2), p.DailyUsage("user1"))
+
+	// 5. Reset all daily usage counts
+	require.NoError(t, p.ResetDailyUsage())
+
+	// 6. Verify that all users' usage counts are reset to 0
+	assert.Equal(t, int64(0), p.DailyUsage("user1"))
+	assert.Equal(t, int64(0), p.DailyUsage("user2"))
+}
+
 func TestWithdraw_CleansUpEmptyMaps(t *testing.T) {
 	p := NewPay()
 	require.NoError(t, p.Deposit("s", "b", bi(10)))

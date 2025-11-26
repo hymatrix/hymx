@@ -26,6 +26,10 @@ type IDB interface {
 	// devFees pid -> fee
 	SettleTxFee(beneficiary string, devShareRatio *big.Int) (nodeFee *big.Int, devFees map[string]*big.Int, err error)
 
+	DailyUsage(accid string) int64
+	IncrDailyUsage(accid string) error
+	ResetDailyUsage() error
+
 	//////////////////////
 	Checkpoint() (data string, err error)
 	Restore(data string) error

@@ -44,4 +44,5 @@ type PaySnapshot struct {
 	TxPending        map[string]map[string]*big.Int `json:"tp"`
 	SpawnPending     map[string]map[string]*big.Int `json:"sp"`
 	ResidencyPending map[string]*big.Int            `json:"rp"`
+	DailyUsage       map[string]int64               `json:"du"`
 }

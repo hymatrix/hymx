@@ -34,6 +34,7 @@ func LoadPayConfig() (*pay.Pay, error) {
 	txFeeStr := viper.GetString("payment.txFee")
 	spawnFeeStr := viper.GetString("payment.spawnFee")
 	residencyFeeStr := viper.GetString("payment.residencyFee")
+	dailyLimit := viper.GetInt64("payment.dailyLimit")
 	devRatioStr := viper.GetString("payment.developerShareRatio")
 
 	cfg := &schema.Config{
@@ -42,6 +43,7 @@ func LoadPayConfig() (*pay.Pay, error) {
 		TxFee:               mustBigInt(txFeeStr),
 		SpawnFee:            mustBigInt(spawnFeeStr),
 		ResidencyFee:        mustBigInt(residencyFeeStr),
+		DailyLimit:          dailyLimit,
 		DeveloperShareRatio: mustBigInt(devRatioStr),
 	}
 
