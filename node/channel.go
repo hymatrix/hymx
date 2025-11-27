@@ -28,7 +28,7 @@ func (n *Node) runMsgChan() {
 				continue
 			}
 
-			if err := n.handleMessage(i.Pid, i.AccId, i.Item, i.Message, assign, false, 0); err != nil {
+			if err := n.applyMessage(i.Pid, i.AccId, i.Item, i.Message, assign, false, 0); err != nil {
 				log.Error("handle item failed", "pid", i.Pid, "itemId", i.Item.Id, "err", err)
 			}
 
@@ -47,7 +47,7 @@ func (n *Node) runProcChan() {
 
 		case i := <-n.assignProcChan:
 
-			if err := n.handleProcess(i.Pid, i.AccId, i.Item, i.Process, false, 0); err != nil {
+			if err := n.applyProcess(i.Pid, i.AccId, i.Item, i.Process, false, 0); err != nil {
 				log.Error("spawn failed", "pid", i.Pid, "itemId", i.Item.Id, "err", err)
 				continue
 			}

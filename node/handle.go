@@ -52,63 +52,11 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 		return
 	}
 
-	// get nodes info, if need redirect
-	isRedirect, nodes, err := n.isRedirect(pid)
-	if err != nil {
-		return err
-	}
-
 	switch v := instance.(type) {
 	case hymxSchema.Process:
-		// check if scheduler is not node accid
-		if v.Scheduler != n.bundler.Address {
-			err = schema.ErrRedirect
-			log.Warn("handle process failed", "pid", pid, "scheduler", v.Scheduler, "nodeAccId", n.bundler.Address, "err", err)
-			return
-		}
-		// check if process already register
-		if len(nodes) != 0 {
-			err = schema.ErrProcessAlreadyExists
-			log.Error("handle process failed", "pid", pid, "err", err)
-			return
-		}
-
-		// check if the process already exists before assignment
-		// assigning to an invalid (already spawned) process may result in a non-contiguous nonce sequence.
-		if n.vmm.IsExists(pid) {
-			err = schema.ErrProcessAlreadyExists
-			log.Error("handle process failed", "pid", pid, "err", err)
-			return
-		}
-
-		n.assignProcChan <- schema.AssignProcess{
-			Pid:     pid,
-			AccId:   signer,
-			Process: v,
-			Item:    item,
-		}
+		err = n.handleProcess(pid, signer, item, v)
 	case hymxSchema.Message:
-		// check if need redirect
-		if isRedirect {
-			// return nodes with redirect error for 308 redirect
-			err = schema.NewRedirectError(nodes)
-			log.Warn("message redirect", "pid", pid, "err", err)
-			return
-		}
-
-		// check if the process not found before assignment
-		if !n.vmm.IsExists(pid) {
-			err = schema.ErrProcessNotFound
-			log.Error("handle message failed", "pid", pid, "err", err)
-			return
-		}
-
-		n.assignMesChan <- schema.AssignMessage{
-			Pid:     pid,
-			AccId:   signer,
-			Message: v,
-			Item:    item,
-		}
+		err = n.handleMessage(pid, signer, item, v)
 	default:
 		err = schema.ErrInvalidType
 	}
@@ -156,28 +104,12 @@ func (n *Node) HandleDryRun(item goarSchema.BundleItem, assign hymxSchema.Assign
 
 	switch v := instance.(type) {
 	case hymxSchema.Process:
-		return n.handleProcess(pid, accid, item, v, true, maxNonce)
+		return n.applyProcess(pid, accid, item, v, true, maxNonce)
 	case hymxSchema.Message:
-		return n.handleMessage(pid, accid, item, v, assign, true, maxNonce)
+		return n.applyMessage(pid, accid, item, v, assign, true, maxNonce)
 	default:
 		return schema.ErrInvalidType
 	}
-}
-
-func (n *Node) isRedirect(pid string) (ok bool, nodes []registrySchema.Node, err error) {
-	ok = true
-	nodes, err = n.vmm.GetNodesByProcess(pid)
-	if err != nil {
-		return
-	}
-
-	for _, node := range nodes {
-		if node.AccId == n.bundler.Address {
-			ok = false
-			return
-		}
-	}
-	return
 }
 
 func (n *Node) authNode(accid, fromProcess string) (err error) {

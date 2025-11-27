@@ -161,31 +161,8 @@ func (n *Node) GetMessage(msgid string) (msg *goarSchema.BundleItem, err error) 
 	return n.db.GetMessage(msgid)
 }
 
-func (n *Node) GetResult(pid, msgid string) (result *vmmSchema.VmmResult, err error) {
-	if n.vmm.RegistryId() == "" {
-		return n.getLocalResult(msgid)
-	}
-
-	// try get from local db first
-	result, err = n.getLocalResult(msgid)
-	if err == nil && result != nil {
-		return
-	}
-
-	// get nodes info, if need redirect
-	isRedirect, nodes, err := n.isRedirect(pid)
-	if err != nil {
-		return nil, err
-	}
-	if isRedirect {
-		// return nodes with redirect error for 308 redirect
-		err = schema.NewRedirectError(nodes)
-		log.Warn("message redirect", "pid", pid, "err", err)
-		return nil, err
-	}
-	// return local result
-
-	return n.getLocalResult(msgid)
+func (n *Node) GetResult(msgid string) (result *vmmSchema.VmmResult, err error) {
+	return n.db.GetResult(msgid)
 }
 
 func (n *Node) GetResults(pid string, limit int64) (results []vmmSchema.VmmResult, err error) {
@@ -284,6 +261,22 @@ func (n *Node) RemoveAssignResHandler(handler schema.AssignResHandler) {
 	}
 }
 
+func (n *Node) IsRedirect(pid string) (ok bool, nodes []registrySchema.Node, err error) {
+	ok = true
+	nodes, err = n.vmm.GetNodesByProcess(pid)
+	if err != nil {
+		return
+	}
+
+	for _, node := range nodes {
+		if node.AccId == n.bundler.Address {
+			ok = false
+			return
+		}
+	}
+	return
+}
+
 func (n *Node) isSelf(node registrySchema.Node) bool {
 	if n.Info().Node.AccId == node.AccId {
 		if n.Info().Node.URL == node.URL {
@@ -291,8 +284,4 @@ func (n *Node) isSelf(node registrySchema.Node) bool {
 		}
 	}
 	return false
-}
-
-func (n *Node) getLocalResult(msgid string) (result *vmmSchema.VmmResult, err error) {
-	return n.db.GetResult(msgid)
 }
