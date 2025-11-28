@@ -83,12 +83,12 @@ func (p *Pay) SaveCheckpoint() error {
 		return err
 	}
 
-	filename := filepath.Join("ckp", "ckp-pay.dump")
+	filename := filepath.Join("ckp", "ckp-pay.json")
 	return os.WriteFile(filename, []byte(data), 0644)
 }
 
 func (p *Pay) LoadCheckpoint() error {
-	filename := filepath.Join("ckp", "ckp-pay.dump")
+	filename := filepath.Join("ckp", "ckp-pay.json")
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return nil
