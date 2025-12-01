@@ -118,6 +118,10 @@ func (h *Token) handleTransfer(from string, params map[string]string) (res vmmSc
 		err = schema.ErrInvalidQuantityFormat
 		return
 	}
+	if amt.Sign() < 0 {
+		err = schema.ErrNegativeQuantity
+		return
+	}
 
 	if err = h.transfer(from, recipient, amt); err != nil {
 		return
@@ -170,6 +174,10 @@ func (h *Token) handleStake(from string, params map[string]string) (res vmmSchem
 	amt, ok := new(big.Int).SetString(qty, 10)
 	if !ok {
 		err = schema.ErrInvalidQuantityFormat
+		return
+	}
+	if amt.Sign() < 0 {
+		err = schema.ErrNegativeQuantity
 		return
 	}
 
