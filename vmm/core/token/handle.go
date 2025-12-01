@@ -114,9 +114,8 @@ func (h *Token) handleTransfer(from string, params map[string]string) (res vmmSc
 		err = schema.ErrMissingQuantity
 		return
 	}
-	amt, ok := new(big.Int).SetString(qty, 10)
-	if !ok {
-		err = schema.ErrInvalidQuantityFormat
+	amt, err := h.parseAndCheckAmount(qty)
+	if err != nil {
 		return
 	}
 
@@ -176,9 +175,8 @@ func (h *Token) handleStake(from string, params map[string]string) (res vmmSchem
 		err = schema.ErrMissingQuantity
 		return
 	}
-	amt, ok := new(big.Int).SetString(qty, 10)
-	if !ok {
-		err = schema.ErrInvalidQuantityFormat
+	amt, err := h.parseAndCheckAmount(qty)
+	if err != nil {
 		return
 	}
 
@@ -220,9 +218,8 @@ func (h *Token) handleUnstake(from string, params map[string]string) (res vmmSch
 		err = schema.ErrMissingQuantity
 		return
 	}
-	amt, ok := new(big.Int).SetString(qty, 10)
-	if !ok {
-		err = schema.ErrInvalidQuantityFormat
+	amt, err := h.parseAndCheckAmount(qty)
+	if err != nil {
 		return
 	}
 
@@ -280,4 +277,15 @@ func (h *Token) genNodeNotice(from, registry string, node registrySchema.Node) (
 			{Name: "URL", Value: node.URL},
 		},
 	}
+}
+
+func (h *Token) parseAndCheckAmount(qty string) (*big.Int, error) {
+	amt, ok := new(big.Int).SetString(qty, 10)
+	if !ok {
+		return nil, schema.ErrInvalidQuantityFormat
+	}
+	if amt.Sign() < 0 {
+		return nil, schema.ErrNegativeQuantity
+	}
+	return amt, nil
 }
