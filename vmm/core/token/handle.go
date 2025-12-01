@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
 
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	registryUtils "github.com/hymatrix/hymx/vmm/core/registry/utils"
@@ -143,6 +144,14 @@ func (h *Token) handleTransfer(from string, params map[string]string) (res vmmSc
 			{Name: "Quantity", Value: qty},
 		},
 	}
+	// Forward X- prefixed tags to both messages
+	for key, value := range params {
+		if strings.HasPrefix(key, "X-") {
+			debitNotice.Tags = append(debitNotice.Tags, goarSchema.Tag{Name: key, Value: value})
+			creditNotice.Tags = append(creditNotice.Tags, goarSchema.Tag{Name: key, Value: value})
+		}
+	}
+
 	res.Messages = []*vmmSchema.ResMessage{debitNotice, creditNotice}
 	return
 }
