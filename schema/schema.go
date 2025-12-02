@@ -88,7 +88,7 @@ type Assignment struct {
 	Process   string `json:"Process"`
 	Message   string `json:"Message"`
 	Nonce     string `json:"Nonce"`
-	Timestamp string `json:"Timestamp"`
+	Timestamp string `json:"Timestamp"` // UnixMilli
 }
 
 type Checkpoint struct {

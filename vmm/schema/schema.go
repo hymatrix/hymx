@@ -34,7 +34,7 @@ type Meta struct {
 	Sequence    int64  `json:"Sequence"`
 	// from assignment
 	Nonce     int64 `json:"Nonce"`
-	Timestamp int64 `json:"Timestamp"`
+	Timestamp int64 `json:"Timestamp"` // UnixMilli
 	// input params
 	Params map[string]string `json:"Params"`
 	Data   string            `json:"Data"`
