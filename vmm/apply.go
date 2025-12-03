@@ -24,6 +24,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		Timestamp:   fmt.Sprintf("%d", meta.Timestamp),
 		ItemId:      meta.ItemId,
 		FromProcess: meta.Pid,
+		PushedFor:   meta.ItemId,
 		// from vm result
 		Messages:    res.Messages,
 		Spawns:      res.Spawns,
