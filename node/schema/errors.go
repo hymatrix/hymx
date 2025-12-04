@@ -17,4 +17,5 @@ var (
 	ErrNotFoundMod               = errors.New("err_not_found_mod")
 	ErrUnrecognizedSignatureType = errors.New("err_unrecognized_signature_type")
 	ErrUnauthorizedNode          = errors.New("err_unauthorized_node")
+	ErrChainkitNotInitialized    = errors.New("err_chainkit_not_initialized")
 )
