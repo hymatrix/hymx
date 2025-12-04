@@ -24,6 +24,21 @@ func New(wallet *goar.Wallet, ctx context.Context) *OptGoar {
 }
 
 func (o *OptGoar) Upload(items []goarSchema.BundleItem) (txid string, err error) {
+	if len(items) == 0 {
+		return "", fmt.Errorf("items is empty")
+	}
+
+	// gen binary
+	for i := range items {
+		if len(items[i].Binary) == 0 {
+			bin, err1 := goarUtils.GenerateItemBinary(items[i])
+			if err1 != nil {
+				return "", fmt.Errorf("failed to generate item binary, bundleId: %s, err: %w", items[i].Id, err)
+			}
+			items[i].Binary = bin
+		}
+	}
+
 	// create bundle
 	bundle, err := goarUtils.NewBundle(items...)
 	if err != nil {

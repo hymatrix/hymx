@@ -41,7 +41,6 @@ func (o *OptGoar) GetBundledInId(txid string) (parentTxid string, err error) {
 
 func (o *OptGoar) parseBundledInID(jsonStr string) (string, error) {
 	var response BundledInResponse
-	fmt.Println(jsonStr)
 	err := json.Unmarshal([]byte(jsonStr), &response)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse JSON: %w", err)
