@@ -33,7 +33,7 @@ func TestGenerateAndSaveModule_CreatesFile(t *testing.T) {
 		ModuleFormat: "hymx.test.mod",
 	}
 
-	id, err := s.GenerateAndSaveModule([]byte("module-bytes"), module)
+	id, err := s.SaveModule([]byte("module-bytes"), module)
 	require.NoError(t, err)
 	require.NotEmpty(t, id)
 

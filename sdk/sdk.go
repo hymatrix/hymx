@@ -100,7 +100,7 @@ func (s *SDK) Spawn(module, scheduler string, params []goarSchema.Tag) (resp *se
 	return
 }
 
-func (s *SDK) GenerateModule(moduleBytes []byte, module schema.Module) (item goarSchema.BundleItem, err error) {
+func (s *SDK) GenModule(moduleBytes []byte, module schema.Module) (item goarSchema.BundleItem, err error) {
 	tags, err := utils.ModuleToTags(module)
 	if err != nil {
 		return
@@ -109,8 +109,8 @@ func (s *SDK) GenerateModule(moduleBytes []byte, module schema.Module) (item goa
 	return s.Bundler.CreateAndSignItem(moduleBytes, "", "", tags)
 }
 
-func (s *SDK) GenerateAndSaveModule(moduleBytes []byte, module schema.Module) (itemId string, err error) {
-	item, err := s.GenerateModule(moduleBytes, module)
+func (s *SDK) SaveModule(moduleBytes []byte, module schema.Module) (itemId string, err error) {
+	item, err := s.GenModule(moduleBytes, module)
 	if err != nil {
 		return "", err
 	}

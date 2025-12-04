@@ -8,7 +8,7 @@ import (
 )
 
 func genModule() {
-	itemId, err := s.GenerateAndSaveModule([]byte{}, schema.Module{
+	itemId, err := s.SaveModule([]byte{}, schema.Module{
 		Base:         schema.DefaultBaseModule,
 		ModuleFormat: vmmSchema.ModuleFormatRegistry,
 	})
