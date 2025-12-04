@@ -447,7 +447,8 @@ func (c *Client) GetModule(moduleId string) (module hymxSchema.Module, err error
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		err = fmt.Errorf("invalid server response: %d, body: %s", resp.StatusCode, string(bodyBytes))
 		return
 	}
 

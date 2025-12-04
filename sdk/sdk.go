@@ -1,10 +1,15 @@
 package sdk
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
+	"github.com/hymatrix/hymx/chainkit/optgoar"
 	"github.com/hymatrix/hymx/common"
+	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/schema"
 	serverSchema "github.com/hymatrix/hymx/server/schema"
 	"github.com/hymatrix/hymx/utils"
@@ -102,4 +107,49 @@ func (s *SDK) GenerateModule(moduleBytes []byte, module schema.Module) (item goa
 	}
 
 	return s.Bundler.CreateAndSignItem(moduleBytes, "", "", tags)
+}
+
+func (s *SDK) GenerateAndSaveModule(moduleBytes []byte, module schema.Module) (itemId string, err error) {
+	item, err := s.GenerateModule(moduleBytes, module)
+	if err != nil {
+		return "", err
+	}
+
+	itemBin, err := json.Marshal(item)
+	if err != nil {
+		return "", err
+	}
+	filename := fmt.Sprintf("mod-%s.json", item.Id)
+	err = os.WriteFile(filename, itemBin, 0644)
+	return item.Id, err
+}
+
+func (s *SDK) UploadModuleToArweave(filePath, keyfile string) (txid string, err error) {
+	wallet, err := goar.NewWalletFromPath(keyfile, "https://arweave.net")
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	opt := optgoar.New(wallet, ctx)
+
+	_, err = os.Stat(filePath)
+	if os.IsNotExist(err) {
+		err = nodeSchema.ErrNotFoundMod
+		return "", err
+	} else if err != nil {
+		return "", err
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	var item goarSchema.BundleItem
+	if err = json.Unmarshal(data, &item); err != nil {
+		return "", err
+	}
+
+	return opt.Upload([]goarSchema.BundleItem{item})
 }
