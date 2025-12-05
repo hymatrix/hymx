@@ -162,3 +162,5 @@ Reference implementations are available in the `examples` directory.
 ### Documentation
 
 For comprehensive guides, API references, and advanced topics, refer to the [official documentation](https://docs.hymatrix.com/).
+
+- Local API Reference: [HyMatrix HTTP API](docs/api.md)
