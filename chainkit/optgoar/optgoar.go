@@ -59,73 +59,17 @@ func (o *OptGoar) Upload(items []goarSchema.BundleItem) (txid string, err error)
 }
 
 func (o *OptGoar) Download(itemID string) (*goarSchema.BundleItem, error) {
-	parentTxID, err := o.GetBundledInId(itemID)
-	if err != nil {
-		return nil, err
-	}
-	item, err := o.wallet.Client.GetBundleItems(parentTxID, []string{itemID})
-	if err != nil {
-		return nil, err
-	}
-	if len(item) == 0 {
-		return nil, fmt.Errorf("download failed")
-	}
-	return item[0], nil
+	return Download(itemID, o.wallet.Client)
 }
 
 func (o *OptGoar) Downloads(itemsIds []string) (items []*goarSchema.BundleItem, err error) {
-	if len(itemsIds) == 0 {
-		return []*goarSchema.BundleItem{}, nil
-	}
-
-	// Map to group itemIDs by their parentTxid
-	parentToItems := make(map[string][]string)
-
-	// Get parentTxid for each itemID
-	for _, itemID := range itemsIds {
-		parentTxID, err := o.GetBundledInId(itemID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get parent txid for item %s: %w", itemID, err)
-		}
-		parentToItems[parentTxID] = append(parentToItems[parentTxID], itemID)
-	}
-
-	// Download items grouped by parentTxid
-	var allItems []*goarSchema.BundleItem
-	for parentTxID, itemIDs := range parentToItems {
-		bundleItems, err := o.wallet.Client.GetBundleItems(parentTxID, itemIDs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get bundle items for parent %s: %w", parentTxID, err)
-		}
-		allItems = append(allItems, bundleItems...)
-	}
-
-	return allItems, nil
+	return Downloads(itemsIds, o.wallet.Client)
 }
 
-func (o *OptGoar) GraphQL(query string) ([]byte, error) {
-	return o.wallet.Client.GraphQL(query)
+func (o *OptGoar) GraphQL(query string) (result []byte, err error) {
+	return GraphQL(query, o.wallet.Client)
 }
 
 func (o *OptGoar) CheckTransaction(txid string) (bool, error) {
-	state, err := o.wallet.Client.GetTransactionStatus(txid)
-	if err != nil {
-		return false, err
-	}
-	if state.NumberOfConfirmations <= 1 {
-		return false, nil
-	}
-
-	// check data
-	itemBytes, err := o.wallet.Client.GetTransactionData(txid, "json")
-	if err != nil {
-		return false, err
-	}
-
-	_, err = goarUtils.DecodeBundle(itemBytes)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
+	return CheckTransaction(txid, o.wallet.Client)
 }
