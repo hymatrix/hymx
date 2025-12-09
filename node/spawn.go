@@ -2,6 +2,7 @@ package node
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -120,11 +121,11 @@ func (n *Node) loadModuleByLocal(itemId string) (module hymxSchema.Module, err e
 }
 
 func (n *Node) loadModuleByChainkit(itemId string) (module hymxSchema.Module, err error) {
-	if n.chainkit == nil {
-		return module, schema.ErrChainkitNotInitialized
+	if n.sdk == nil {
+		return module, errors.New("sdk not initialized")
 	}
 
-	bundleItem, err := n.chainkit.DownloadByTxid(itemId)
+	bundleItem, err := n.sdk.DownloadModuleFromArweave(itemId)
 	if err != nil {
 		return module, err
 	}

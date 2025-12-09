@@ -125,14 +125,6 @@ func (s *SDK) SaveModule(moduleBytes []byte, module schema.Module) (itemId strin
 }
 
 func (s *SDK) UploadModuleToArweave(filePath, keyfile string) (txid string, err error) {
-	wallet, err := goar.NewWalletFromPath(keyfile, "https://arweave.net")
-	if err != nil {
-		return "", err
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	opt := optgoar.New(wallet, ctx)
-
 	_, err = os.Stat(filePath)
 	if os.IsNotExist(err) {
 		err = nodeSchema.ErrNotFoundMod
@@ -151,5 +143,17 @@ func (s *SDK) UploadModuleToArweave(filePath, keyfile string) (txid string, err 
 		return "", err
 	}
 
+	wallet, err := goar.NewWalletFromPath(keyfile, "https://arweave.net")
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	opt := optgoar.New(wallet, ctx)
+
 	return opt.Upload([]goarSchema.BundleItem{item})
+}
+
+func (s *SDK) DownloadModuleFromArweave(itemId string) (item *goarSchema.BundleItem, err error) {
+	return optgoar.Download(itemId, goar.NewClient("https://arweave.net"))
 }
