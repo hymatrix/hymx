@@ -162,3 +162,6 @@ Reference implementations are available in the `examples` directory.
 ### Documentation
 
 For comprehensive guides, API references, and advanced topics, refer to the [official documentation](https://docs.hymatrix.com/).
+
+- API Reference: [HyMatrix HTTP API](docs/api.md)
+- SDK Guide: [HyMatrix Go SDK Guide](docs/sdk.md)
