@@ -3,6 +3,8 @@ package optgoar
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/permadao/goar"
 )
 
 const (
@@ -24,14 +26,14 @@ type BundledInResponse struct {
 	} `json:"transaction"`
 }
 
-func (o *OptGoar) GetBundledInId(txid string) (parentTxid string, err error) {
+func GetBundledInId(txid string, client *goar.Client) (parentTxid string, err error) {
 	query := fmt.Sprintf(BundledInQueryTemplate, txid)
-	result, err := o.GraphQL(query)
+	result, err := GraphQL(query, client)
 	if err != nil {
 		return
 	}
 
-	parentTxid, err = o.parseBundledInID(string(result))
+	parentTxid, err = parseBundledInID(string(result))
 	if err != nil {
 		return "", fmt.Errorf("failed to parse parent txid: %w", err)
 	}
@@ -39,9 +41,8 @@ func (o *OptGoar) GetBundledInId(txid string) (parentTxid string, err error) {
 	return parentTxid, nil
 }
 
-func (o *OptGoar) parseBundledInID(jsonStr string) (string, error) {
+func parseBundledInID(jsonStr string) (string, error) {
 	var response BundledInResponse
-	fmt.Println(jsonStr)
 	err := json.Unmarshal([]byte(jsonStr), &response)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse JSON: %w", err)

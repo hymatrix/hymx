@@ -54,8 +54,26 @@ func main() {
 		stake(s, schema.StakeMinAmount)
 	case "deposit":
 		deposit(s, "0xc2835a6caa18CCD33a79C62D104FEA817d715149", "UB0yJx53xBo_rFA4CvKP-WKO25M7kIGrqm2caarghkc", big.NewInt(100000000000))
-	case "module":
-		module()
+	case "module_gen":
+		genModule()
+	case "module_load":
+		if len(os.Args) < 3 {
+			fmt.Println("please input module id, ex: go run ./ module_load <id>")
+			os.Exit(1)
+		}
+		loadModule(os.Args[2])
+	case "module_upload":
+		if len(os.Args) < 3 {
+			fmt.Println("please input module file, ex: go run ./ module_upload <modfile>")
+			os.Exit(1)
+		}
+		modFile := os.Args[2]
+		txid, err := uploadModule(modFile, "./test_keyfile.json")
+		if err != nil {
+			fmt.Println("upload module failed, ", "err", err)
+			return
+		}
+		fmt.Println("upload module success, ", "txid", txid)
 	case "upload":
 		if len(os.Args) < 3 {
 			fmt.Println("please input pid, ex: go run ./ upload <pid>")

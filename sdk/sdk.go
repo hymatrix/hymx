@@ -1,10 +1,15 @@
 package sdk
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
+	"github.com/hymatrix/hymx/chainkit/optgoar"
 	"github.com/hymatrix/hymx/common"
+	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/schema"
 	serverSchema "github.com/hymatrix/hymx/server/schema"
 	"github.com/hymatrix/hymx/utils"
@@ -95,11 +100,60 @@ func (s *SDK) Spawn(module, scheduler string, params []goarSchema.Tag) (resp *se
 	return
 }
 
-func (s *SDK) GenerateModule(moduleBytes []byte, module schema.Module) (item goarSchema.BundleItem, err error) {
+func (s *SDK) GenModule(moduleBytes []byte, module schema.Module) (item goarSchema.BundleItem, err error) {
 	tags, err := utils.ModuleToTags(module)
 	if err != nil {
 		return
 	}
 
 	return s.Bundler.CreateAndSignItem(moduleBytes, "", "", tags)
+}
+
+func (s *SDK) SaveModule(moduleBytes []byte, module schema.Module) (itemId string, err error) {
+	item, err := s.GenModule(moduleBytes, module)
+	if err != nil {
+		return "", err
+	}
+
+	itemBin, err := json.Marshal(item)
+	if err != nil {
+		return "", err
+	}
+	filename := fmt.Sprintf("mod-%s.json", item.Id)
+	err = os.WriteFile(filename, itemBin, 0644)
+	return item.Id, err
+}
+
+func (s *SDK) UploadModuleToArweave(filePath, keyfile string) (txid string, err error) {
+	_, err = os.Stat(filePath)
+	if os.IsNotExist(err) {
+		err = nodeSchema.ErrNotFoundMod
+		return "", err
+	} else if err != nil {
+		return "", err
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	var item goarSchema.BundleItem
+	if err = json.Unmarshal(data, &item); err != nil {
+		return "", err
+	}
+
+	wallet, err := goar.NewWalletFromPath(keyfile, "https://arweave.net")
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	opt := optgoar.New(wallet, ctx)
+
+	return opt.Upload([]goarSchema.BundleItem{item})
+}
+
+func (s *SDK) DownloadModuleFromArweave(itemId string) (item *goarSchema.BundleItem, err error) {
+	return optgoar.Download(itemId, goar.NewClient("https://arweave.net"))
 }

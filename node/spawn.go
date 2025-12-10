@@ -2,6 +2,7 @@ package node
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -85,13 +86,22 @@ func (n *Node) applyProcess(
 }
 
 func (n *Node) LoadModule(itemId string) (module hymxSchema.Module, err error) {
-	// todo: download from arweave network
+	// try load from local first
+	module, err = n.loadModuleByLocal(itemId)
+	if err == nil {
+		return
+	}
+	// try load from chainkit if not found in local
+	return n.downloadModule(itemId)
+}
+
+func (n *Node) loadModuleByLocal(itemId string) (module hymxSchema.Module, err error) {
 	filename := filepath.Join("mod", fmt.Sprintf("mod-%s.json", itemId))
 
 	_, err = os.Stat(filename)
 	if os.IsNotExist(err) {
+		log.Info("load module from local failed", "id", itemId)
 		err = schema.ErrNotFoundMod
-		log.Error("load module failed, ", "id", itemId)
 		return
 	} else if err != nil {
 		return
@@ -108,4 +118,17 @@ func (n *Node) LoadModule(itemId string) (module hymxSchema.Module, err error) {
 	}
 
 	return utils.TagsToModule(item.Tags)
+}
+
+func (n *Node) downloadModule(itemId string) (module hymxSchema.Module, err error) {
+	if n.sdk == nil {
+		return module, errors.New("sdk not initialized")
+	}
+
+	bundleItem, err := n.sdk.DownloadModuleFromArweave(itemId)
+	if err != nil {
+		return module, err
+	}
+
+	return utils.TagsToModule(bundleItem.Tags)
 }
