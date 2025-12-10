@@ -92,7 +92,7 @@ func (n *Node) LoadModule(itemId string) (module hymxSchema.Module, err error) {
 		return
 	}
 	// try load from chainkit if not found in local
-	return n.loadModuleByChainkit(itemId)
+	return n.downloadModule(itemId)
 }
 
 func (n *Node) loadModuleByLocal(itemId string) (module hymxSchema.Module, err error) {
@@ -120,7 +120,7 @@ func (n *Node) loadModuleByLocal(itemId string) (module hymxSchema.Module, err e
 	return utils.TagsToModule(item.Tags)
 }
 
-func (n *Node) loadModuleByChainkit(itemId string) (module hymxSchema.Module, err error) {
+func (n *Node) downloadModule(itemId string) (module hymxSchema.Module, err error) {
 	if n.sdk == nil {
 		return module, errors.New("sdk not initialized")
 	}
