@@ -2,6 +2,7 @@ package vmm
 
 import (
 	"fmt"
+	"strings"
 
 	hySchema "github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/utils"
@@ -95,6 +96,13 @@ func (v *Vmm) genSpawnResult(env *schema.Env) (result *schema.VmmResult) {
 				{Name: "Reference", Value: ref},
 			},
 		}
+		// Forward X- prefixed tags to message
+		for key, value := range env.Meta.Params {
+			if strings.HasPrefix(key, "X-") {
+				spawnedMsg.Tags = append(spawnedMsg.Tags, goarSchema.Tag{Name: key, Value: value})
+			}
+		}
+
 		result.Messages = append(result.Messages, spawnedMsg)
 	}
 	return
