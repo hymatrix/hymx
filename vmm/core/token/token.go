@@ -1,12 +1,11 @@
 package token
 
 import (
-	"math/big"
-
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/vmm/core/token/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	"github.com/hymatrix/hymx/vmm/utils"
+	"math/big"
 )
 
 var log = common.NewLog("token")
@@ -22,6 +21,8 @@ func New(db schema.IDB) (*Token, error) {
 func (h *Token) Apply(from string, meta vmmSchema.Meta) (res vmmSchema.Result) {
 	var err error
 	switch meta.Action {
+	case "Cache-Initial":
+		res, err = h.handleCacheInitial()
 	case "Info":
 		res, err = h.handleInfo(from)
 	case "Total-Supply":
