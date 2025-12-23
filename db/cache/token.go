@@ -129,7 +129,6 @@ func (h *Token) CacheInitialed() {
 	h.rwlock.Lock()
 	defer h.rwlock.Unlock()
 	h.initialCache = true
-	return
 }
 
 func (h *Token) Checkpoint() (data string, err error) {
