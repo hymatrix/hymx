@@ -26,6 +26,9 @@ func NewToken(info tokenSchema.Info, bals, stakes map[string]*big.Int) *Token {
 	for _, b := range bals {
 		total = total.Add(total, b)
 	}
+	for _, s := range stakes {
+		total = total.Add(total, s)
+	}
 
 	return &Token{
 		info: info,
