@@ -17,7 +17,8 @@ type Token struct {
 	balances    map[string]*big.Int
 	stakes      map[string]*big.Int
 
-	rwlock sync.RWMutex
+	initialCache bool
+	rwlock       sync.RWMutex
 }
 
 func NewToken(info tokenSchema.Info, bals, stakes map[string]*big.Int) *Token {
@@ -25,13 +26,17 @@ func NewToken(info tokenSchema.Info, bals, stakes map[string]*big.Int) *Token {
 	for _, b := range bals {
 		total = total.Add(total, b)
 	}
+	for _, s := range stakes {
+		total = total.Add(total, s)
+	}
 
 	return &Token{
 		info: info,
 
-		totalSupply: total,
-		balances:    bals,
-		stakes:      stakes,
+		totalSupply:  total,
+		balances:     bals,
+		stakes:       stakes,
+		initialCache: false,
 	}
 }
 
@@ -117,6 +122,18 @@ func (h *Token) UpdateStake(accId string, amount *big.Int) error {
 	return nil
 }
 
+func (h *Token) CacheInitial() bool {
+	h.rwlock.Lock()
+	defer h.rwlock.Unlock()
+	return h.initialCache
+}
+
+func (h *Token) CacheInitialed() {
+	h.rwlock.Lock()
+	defer h.rwlock.Unlock()
+	h.initialCache = true
+}
+
 func (h *Token) Checkpoint() (data string, err error) {
 	h.rwlock.Lock()
 	defer h.rwlock.Unlock()
@@ -129,9 +146,10 @@ func (h *Token) Checkpoint() (data string, err error) {
 		Logo:      h.info.Logo,
 		MinAmount: h.info.MinAmount,
 
-		TotalSupply: h.totalSupply,
-		Balances:    h.balances,
-		Stakes:      h.stakes,
+		TotalSupply:  h.totalSupply,
+		Balances:     h.balances,
+		Stakes:       h.stakes,
+		InitialCache: h.initialCache,
 	}
 
 	by, err := json.Marshal(sp)
@@ -155,6 +173,7 @@ func (h *Token) Restore(data string) error {
 	h.totalSupply = sp.TotalSupply
 	h.balances = sp.Balances
 	h.stakes = sp.Stakes
+	h.initialCache = sp.InitialCache
 
 	info := tokenSchema.Info{
 		Id:        sp.Id,

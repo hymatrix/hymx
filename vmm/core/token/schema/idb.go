@@ -35,6 +35,9 @@ type IDB interface {
 	Stakes() (map[string]*big.Int, error)
 	UpdateStake(accId string, amount *big.Int) error
 
+	CacheInitial() bool
+	CacheInitialed()
+
 	Checkpoint() (data string, err error)
 	Restore(data string) error
 }

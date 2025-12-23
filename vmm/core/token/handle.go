@@ -3,6 +3,7 @@ package token
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math/big"
 	"strings"
 
@@ -17,6 +18,7 @@ func (h *Token) handleInfo(from string) (res vmmSchema.Result, err error) {
 	info := h.Info()
 	decimals := fmt.Sprintf("%v", info.Decimals)
 
+	res.Cache = h.initCache()
 	res.Messages = []*vmmSchema.ResMessage{
 		{
 			Target: from,
@@ -152,6 +154,7 @@ func (h *Token) handleTransfer(from string, params map[string]string) (res vmmSc
 	}
 
 	res.Messages = []*vmmSchema.ResMessage{debitNotice, creditNotice}
+	res.Cache = h.cacheChangeBalance(from, recipient)
 	return
 }
 
@@ -195,6 +198,9 @@ func (h *Token) handleStake(from string, params map[string]string) (res vmmSchem
 		},
 	}
 	res.Messages = []*vmmSchema.ResMessage{stakeNotice, nodeNotice}
+	res.Cache = map[string]string{}
+	maps.Copy(res.Cache, h.cacheChangeBalance(from))
+	maps.Copy(res.Cache, h.cacheChangeStake(from))
 	return
 }
 
@@ -238,6 +244,9 @@ func (h *Token) handleUnstake(from string, params map[string]string) (res vmmSch
 		},
 	}
 	res.Messages = []*vmmSchema.ResMessage{unstakeNotice, nodeNotice}
+	res.Cache = map[string]string{}
+	maps.Copy(res.Cache, h.cacheChangeBalance(from))
+	maps.Copy(res.Cache, h.cacheChangeStake(from))
 	return
 }
 

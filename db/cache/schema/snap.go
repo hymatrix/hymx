@@ -15,9 +15,10 @@ type TokenSnapshot struct {
 	Logo      string `json:"l"`
 	MinAmount *big.Int
 
-	TotalSupply *big.Int            `json:"ts"`
-	Balances    map[string]*big.Int `json:"bals"`
-	Stakes      map[string]*big.Int `json:"stks"`
+	TotalSupply  *big.Int            `json:"ts"`
+	Balances     map[string]*big.Int `json:"bals"`
+	Stakes       map[string]*big.Int `json:"stks"`
+	InitialCache bool                `json:"ini"`
 }
 
 type RegistrySnapshot struct {
