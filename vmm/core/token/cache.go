@@ -8,7 +8,7 @@ import (
 )
 
 func (h *Token) initCache() (cache map[string]string) {
-	if !h.db.CacheInitial() {
+	if h.db.CacheInitial() {
 		return
 	}
 	defer h.db.CacheInitialed()
@@ -37,6 +37,7 @@ func (h *Token) initCache() (cache map[string]string) {
 		cacheStakeMap["stakes:"+k] = vl.String()
 	}
 
+	cache = map[string]string{}
 	maps.Copy(cache, cacheBalanceMap)
 	maps.Copy(cache, cacheStakeMap)
 	maps.Copy(cache, h.cacheTotalSupply())
