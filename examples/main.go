@@ -47,6 +47,8 @@ func main() {
 			os.Exit(1)
 		}
 		initRegistry(tokenPid, mainNode)
+	case "token_info":
+		tokenInfo(s)
 	case "transfer":
 		// transfer(s, s2.GetAddress(), schema.StakeMinAmount)
 		transfer(s, s2.GetAddress(), big.NewInt(1000))
