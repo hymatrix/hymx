@@ -1,11 +1,23 @@
 package main
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/hymatrix/hymx/sdk"
 	"github.com/permadao/goar/schema"
 )
+
+func tokenInfo(from *sdk.SDK) (err error) {
+	info, _ := from.Client.Info()
+	res, err := from.SendMessageAndWait(info.Token, "",
+		[]schema.Tag{
+			{Name: "Action", Value: "Info"},
+		},
+	)
+	fmt.Println(res)
+	return
+}
 
 func transfer(from *sdk.SDK, to string, amt *big.Int) error {
 	info, _ := from.Client.Info()

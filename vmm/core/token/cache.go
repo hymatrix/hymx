@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"maps"
 	"math/big"
+
+	"github.com/hymatrix/hymx/vmm/utils"
 )
 
 func (h *Token) initCache() (cache map[string]string) {
@@ -56,18 +58,19 @@ func (h *Token) cacheTokenInfo() map[string]string {
 	}
 	res, _ := json.Marshal(tokenInfo)
 	return map[string]string{
-		"token-info": string(res),
+		"info": string(res),
 	}
 }
 
 func (h *Token) cacheChangeBalance(updateAccounts ...string) map[string]string {
 	cacheMap := make(map[string]string)
-	for _, accId := range updateAccounts {
-		bal, err := h.db.BalanceOf(accId)
+	for _, acc := range updateAccounts {
+		_, accid, _ := utils.IDCheck(acc)
+		bal, err := h.db.BalanceOf(accid)
 		if err != nil {
 			bal = big.NewInt(0)
 		}
-		cacheMap["balances:"+accId] = bal.String()
+		cacheMap["balances:"+accid] = bal.String()
 	}
 	return cacheMap
 }
