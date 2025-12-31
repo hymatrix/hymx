@@ -62,6 +62,7 @@ func (n *Node) trySend(pid, target string) {
 			return
 		}
 		if item == nil {
+			log.Error("can not get item from outbox", "pid", pid, "target", target)
 			return
 		}
 
@@ -80,6 +81,7 @@ func (n *Node) trySend(pid, target string) {
 				return
 			}
 			if len(nodes) == 0 {
+				log.Error("outbox send failed, target node not found", "pid", pid, "target", target)
 				return
 			}
 		case hymxSchema.TypeProcess:
