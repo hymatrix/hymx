@@ -43,25 +43,25 @@ func (o *Outbox) Push(pid, target string, message goarSchema.BundleItem) error {
 	return nil
 }
 
-func (o *Outbox) Peek(pid, target string) (seq int, item *goarSchema.BundleItem, err error) {
+func (o *Outbox) Peek(pid, target string) (item *goarSchema.BundleItem, err error) {
 	o.rwlock.RLock()
 	defer o.rwlock.RUnlock()
 
 	pro, ok := o.targets[pid]
 	if !ok {
-		return 0, nil, fmt.Errorf("no target process found for %s/%s", pid, target)
+		return nil, fmt.Errorf("no target process found for %s/%s", pid, target)
 	}
 	sequences, ok := pro[target]
 	if !ok {
-		return 0, nil, fmt.Errorf("no target sequence found for %s/%s", pid, target)
+		return nil, fmt.Errorf("no target sequence found for %s/%s", pid, target)
 	}
 
 	if len(sequences) == 0 {
-		return 0, nil, nil
+		return nil, nil
 	}
-	seq = sequences[0]
+	seq := sequences[0]
 	if seq < 0 || seq >= len(o.mailbox[pid]) {
-		return 0, nil, fmt.Errorf("invalid sequence index %d", seq)
+		return nil, fmt.Errorf("invalid sequence index %d", seq)
 	}
 
 	item = o.mailbox[pid][seq]

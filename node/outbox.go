@@ -56,7 +56,7 @@ func (n *Node) trySend(pid, target string) {
 	n.sendingLock(pid, target)
 	defer n.sendingUnlock(pid, target)
 	for {
-		_, item, err := n.outboxDB.Peek(pid, target)
+		item, err := n.outboxDB.Peek(pid, target)
 		if err != nil {
 			log.Error("outbox peek failed", "err", err)
 			return
