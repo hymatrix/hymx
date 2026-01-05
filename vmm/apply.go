@@ -68,9 +68,8 @@ func (v *Vmm) applyCheck(vm schema.Vm, env *schema.Env, m schema.Meta) (from str
 				err = schema.ErrSequenceTooLow
 				return
 			}
-		} else {
-			env.ReceivedSeq[from] = m.Sequence
 		}
+		env.ReceivedSeq[from] = m.Sequence
 	}
 
 	return
