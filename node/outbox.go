@@ -56,13 +56,12 @@ func (n *Node) trySend(pid, target string) {
 	n.sendingLock(pid, target)
 	defer n.sendingUnlock(pid, target)
 	for {
-		_, item, err := n.outboxDB.Peek(pid, target)
+		item, err := n.outboxDB.Peek(pid, target)
 		if err != nil {
 			log.Error("outbox peek failed", "err", err)
 			return
 		}
 		if item == nil {
-			log.Error("can not get item from outbox", "pid", pid, "target", target)
 			return
 		}
 
@@ -81,7 +80,7 @@ func (n *Node) trySend(pid, target string) {
 				return
 			}
 			if len(nodes) == 0 {
-				log.Error("outbox send failed, target node not found", "pid", pid, "target", target)
+				// log.Error("outbox send failed, target node not found", "pid", pid, "target", target)
 				return
 			}
 		case hymxSchema.TypeProcess:
