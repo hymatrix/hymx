@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/hymatrix/hymx/db/cache/schema"
 	goarSchema "github.com/permadao/goar/schema"
 )
@@ -74,8 +73,6 @@ func (o *Outbox) Commit(pid, target string, assign goarSchema.BundleItem) error 
 
 	// Remove first message from queue - THIS FREES MEMORY
 	o.targets[pid][target] = messages[1:]
-
-	log.Debug("outbox commit", "pid", pid, "target", target, "assign", assign)
 
 	return nil
 }
