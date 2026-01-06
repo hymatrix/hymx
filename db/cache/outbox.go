@@ -38,7 +38,6 @@ func (o *Outbox) Push(pid, target string, message goarSchema.BundleItem) error {
 }
 
 func (o *Outbox) Peek(pid, target string) (item *goarSchema.BundleItem, err error) {
-func (o *Outbox) Peek(pid, target string) (item *goarSchema.BundleItem, err error) {
 	o.rwlock.RLock()
 	defer o.rwlock.RUnlock()
 
