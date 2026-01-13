@@ -12,40 +12,43 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		return err
 	}
 	log.Debug("===> apply", "meta", meta, "env", env)
-	from, err := v.applyCheck(vm, env, meta)
-	if err != nil {
-		return err
-	}
 
-	res := vm.Apply(from, meta)
 	vmmRes := schema.VmmResult{
-		// from meta info and vmm env
 		Nonce:       fmt.Sprintf("%d", env.Nonce),
 		Timestamp:   fmt.Sprintf("%d", meta.Timestamp),
 		ItemId:      meta.ItemId,
 		FromProcess: meta.Pid,
 		PushedFor:   meta.ItemId,
-		// from vm result
-		Messages:    res.Messages,
-		Spawns:      res.Spawns,
-		Assignments: res.Assignments,
-		Output:      res.Output,
-		Data:        res.Data,
-		Cache:       res.Cache,
-	}
-	if res.Error != nil {
-		vmmRes.Error = res.Error.Error()
+		DryRun:      meta.DryRun,
 	}
 	if meta.PushedFor != "" {
 		vmmRes.PushedFor = meta.PushedFor
 	}
-	vmmRes.DryRun = meta.DryRun
-	// send message outbox
-	v.outbox(env, &vmmRes)
-	if meta.DryRun && meta.Nonce == meta.RecoveryMaxNonce {
-		v.RecoveryUnlock(meta.Pid)
+	defer func() {
+		// send message outbox
+		v.outbox(env, &vmmRes)
+		// recovery unlock
+		if meta.DryRun && meta.Nonce == meta.RecoveryMaxNonce {
+			v.RecoveryUnlock(meta.Pid)
+		}
+	}()
+
+	from, err := v.applyCheck(vm, env, meta)
+	if err != nil {
+		vmmRes.Error = err.Error()
+		return err
 	}
 
+	res := vm.Apply(from, meta)
+	vmmRes.Messages = res.Messages
+	vmmRes.Spawns = res.Spawns
+	vmmRes.Assignments = res.Assignments
+	vmmRes.Output = res.Output
+	vmmRes.Data = res.Data
+	vmmRes.Cache = res.Cache
+	if res.Error != nil {
+		vmmRes.Error = res.Error.Error()
+	}
 	return nil
 }
 
@@ -68,9 +71,8 @@ func (v *Vmm) applyCheck(vm schema.Vm, env *schema.Env, m schema.Meta) (from str
 				err = schema.ErrSequenceTooLow
 				return
 			}
-		} else {
-			env.ReceivedSeq[from] = m.Sequence
 		}
+		env.ReceivedSeq[from] = m.Sequence
 	}
 
 	return

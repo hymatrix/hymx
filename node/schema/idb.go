@@ -33,7 +33,7 @@ type IDB interface {
 
 type IDBOutbox interface {
 	Push(pid, target string, message goarSchema.BundleItem) error
-	Peek(pid, target string) (int, *goarSchema.BundleItem, error)
+	Peek(pid, target string) (*goarSchema.BundleItem, error)
 	Commit(pid, target string, assign goarSchema.BundleItem) error
 
 	Checkpoint(pid string) (string, error)

@@ -33,9 +33,8 @@ type RegistrySnapshot struct {
 }
 
 type OutboxSnapshot struct {
-	Id      string                   `json:"i"`
-	Mailbox []*goarSchema.BundleItem `json:"m"`
-	Targets map[string][]int         `json:"t"`
+	Id      string                                `json:"i"`
+	Targets map[string][]*goarSchema.BundleItem   `json:"t"`
 }
 
 type PaySnapshot struct {
