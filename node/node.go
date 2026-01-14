@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"strconv"
 	"sync"
@@ -284,4 +285,18 @@ func (n *Node) isSelf(node registrySchema.Node) bool {
 		}
 	}
 	return false
+}
+
+func (n *Node) backup() error {
+	if n.chainkit == nil {
+		log.Error("backup failed, chainkit is nil")
+		return errors.New("chainkit is nil")
+	}
+
+	err := n.chainkit.Backup()
+	if err != nil {
+		log.Error("backup run failed", "err", err)
+	}
+
+	return nil
 }
