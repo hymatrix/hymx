@@ -16,5 +16,11 @@ var (
 			Aliases: []string{"c", "C"},
 			Usage:   "configure path",
 		},
+		&cli.StringFlag{
+			Name:    "mode",
+			Aliases: []string{"m", "M"},
+			Usage:   "start mode: normal or rebuild",
+			Value:   "normal",
+		},
 	}
 )

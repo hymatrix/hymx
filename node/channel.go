@@ -86,8 +86,8 @@ func (n *Node) runResultChan() {
 			}
 			n.resultHandlerLockMu.RUnlock()
 
-			// normal mode  => save cache and result
-			// rebuild mode => save cache and result
+			// apply mode  => save cache and result
+			// replay mode => save cache and result
 			// dryrun mode  => NOT save cache and result
 			if result.Mode == vmmSchema.ExecModeDryRun {
 				continue

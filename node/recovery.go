@@ -2,6 +2,7 @@ package node
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/hymatrix/hymx/node/schema"
@@ -34,7 +35,7 @@ func (n *Node) runRecovery() error {
 				log.Error("can not get checkpoint index", "pid", pid, "err", err)
 			}
 
-			if err := n.recoveryProcess(pid, maxNonce, ckpId); err != nil {
+			if err := n.recoveryProcess(pid, maxNonce, ckpId, vmmSchema.ExecModeDryRun); err != nil {
 				log.Error("recovery process error", "pid", pid, "maxNonce", maxNonce, "ckpId", ckpId, "err", err)
 			}
 		})
@@ -51,8 +52,8 @@ func (n *Node) runRecovery() error {
 	return nil
 }
 
-func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string) error {
-	log.Debug("recovery process", "pid", pid, "maxNonce", maxNonce, "ckpId", ckpId)
+func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string, mode vmmSchema.ExecMode) error {
+	log.Debug("recovery process", "pid", pid, "maxNonce", maxNonce, "ckpId", ckpId, "mode", mode)
 	if n.vmm.IsRecovering(pid) {
 		return schema.ErrProcessIsRecovering
 	}
@@ -91,7 +92,7 @@ func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string) error {
 				return err
 			}
 
-			if err = n.HandleMode(*msg, assign, vmmSchema.ExecModeDryRun, maxNonce); err != nil {
+			if err = n.HandleMode(*msg, assign, mode, maxNonce); err != nil {
 				log.Error("handle message failed in recover", "nonce", nonce, "err", err)
 				continue
 			}
@@ -113,6 +114,9 @@ func (n *Node) getMessageAndAssignByNonce(pid string, nonce int64) (msgItem, ass
 	}
 
 	// If either is missing, try to download once
+	if n.chainkit == nil {
+		return nil, nil, fmt.Errorf("chainkit is nil")
+	}
 	result, err := n.chainkit.DownloadByPid(pid, nonce, nonce)
 	if err != nil {
 		return nil, nil, err

@@ -7,6 +7,11 @@ import (
 	goarSchema "github.com/permadao/goar/schema"
 )
 
+const (
+	StartModeNormal  = "normal"
+	StartModeRebuild = "rebuild"
+)
+
 type Info struct {
 	Protocol    string              `json:"Protocol"`
 	Variant     string              `json:"Variant"`
