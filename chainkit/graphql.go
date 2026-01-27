@@ -121,3 +121,36 @@ func (c *Chainkit) queryBatch(scheduler, pid string, beginNonce, size int64) (as
 
 	return assignIds, txIds, nil
 }
+
+// QueryMaxNonce query the max nonce of a process
+func (c *Chainkit) queryMaxNonce(scheduler, pid string) (int64, error) {
+	query := fmt.Sprintf(schema.QueryMaxNonceTmp, scheduler, pid)
+	log.Debug("queryql", "query", query)
+
+	response, err := c.Query(query)
+	if err != nil {
+		return 0, fmt.Errorf("GraphQL query failed: %w", err)
+	}
+
+	var graphQLResp schema.GraphQLResp
+	if err := json.Unmarshal(response, &graphQLResp); err != nil {
+		return 0, fmt.Errorf("failed to parse GraphQL response: %w", err)
+	}
+
+	if len(graphQLResp.Transactions.Edges) == 0 {
+		return 0, fmt.Errorf("no transaction found for process %s", pid)
+	}
+
+	node := graphQLResp.Transactions.Edges[0].Node
+	for _, tag := range node.Tags {
+		if tag.Name == "Nonce" {
+			nonce, err := strconv.ParseInt(tag.Value, 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("invalid nonce value: %s", tag.Value)
+			}
+			return nonce, nil
+		}
+	}
+
+	return 0, nil
+}

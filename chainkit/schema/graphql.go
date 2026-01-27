@@ -53,3 +53,24 @@ const QueryTmp = `
     }
   }
 }`
+
+const QueryMaxNonceTmp = `
+{
+  transactions(
+    owners: ["%s"]
+    tags: [
+      {name: "Process", values: ["%s"]}
+    ]
+    sort: HEIGHT_DESC
+    first: 1
+  ){
+    edges {
+      node {
+        tags {
+          name
+          value
+        }
+      }
+    }
+  }
+}`

@@ -155,6 +155,10 @@ func (c *Chainkit) Query(query string) ([]byte, error) {
 	return c.operator.GraphQL(query)
 }
 
+func (c *Chainkit) GetMaxNonce(scheduler, pid string) (int64, error) {
+	return c.queryMaxNonce(scheduler, pid)
+}
+
 // Backup all processes, include messages and assignment
 func (r *Chainkit) Backup() error {
 	return r.backup()
