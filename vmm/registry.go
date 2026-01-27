@@ -52,7 +52,7 @@ func (v *Vmm) spawnRegistry(env schema.Env) (vm schema.Vm, err error) {
 		return nil, schema.ErrMissingParam
 	}
 
-	if env.Meta.Mode == schema.ExecModeNormal {
+	if env.Meta.Mode == schema.ExecModeApply {
 		v.info.Node.Role = registrySchema.RoleMain
 		v.info.JoinNetwork = true
 	}

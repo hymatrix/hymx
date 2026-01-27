@@ -36,7 +36,7 @@ func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.
 	result.Mode = meta.Mode
 	// send to outbox
 	v.outbox(env, result)
-	if meta.Mode != schema.ExecModeNormal && meta.Nonce == meta.RecoveryMaxNonce {
+	if meta.Mode != schema.ExecModeApply && meta.Nonce == meta.RecoveryMaxNonce {
 		v.RecoveryUnlock(meta.Pid)
 	}
 

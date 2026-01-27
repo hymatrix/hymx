@@ -28,7 +28,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		// send message outbox
 		v.outbox(env, &vmmRes)
 		// recovery unlock
-		if meta.Mode != schema.ExecModeNormal && meta.Nonce == meta.RecoveryMaxNonce {
+		if meta.Mode != schema.ExecModeApply && meta.Nonce == meta.RecoveryMaxNonce {
 			v.RecoveryUnlock(meta.Pid)
 		}
 	}()

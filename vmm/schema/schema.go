@@ -17,15 +17,15 @@ const (
 //
 // | Mode             | Execute | Persist | Outbox |
 // |------------------|---------|---------|--------|
-// | ExecModeNormal   | Yes     | Yes     | Yes    |
-// | ExecModeRebuild  | Yes     | Yes     | No     |
+// | ExecModeApply   | Yes     | Yes     | Yes    |
+// | ExecModeReplay  | Yes     | Yes     | No     |
 // | ExecModeDryRun   | Yes     | No      | No     |
 type ExecMode string
 
 const (
-	ExecModeNormal  ExecMode = "normal"
-	ExecModeRebuild ExecMode = "rebuild"
-	ExecModeDryRun  ExecMode = "dryrun"
+	ExecModeApply  ExecMode = "apply"
+	ExecModeReplay ExecMode = "replay"
+	ExecModeDryRun ExecMode = "dryrun"
 )
 
 type VmSpawnFunc func(Env) (Vm, error)
