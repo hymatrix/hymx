@@ -44,7 +44,7 @@ func (n *Node) handleMessage(
 func (n *Node) applyMessage(
 	pid, accid string,
 	item goarSchema.BundleItem, msg hymxSchema.Message,
-	assign hymxSchema.Assignment, dryRun bool, maxNonce int64,
+	assign hymxSchema.Assignment, mode vmmSchema.ExecMode, maxNonce int64,
 ) (err error) {
 	nonce, err := strconv.ParseInt(assign.Nonce, 10, 64)
 	if err != nil {
@@ -80,7 +80,7 @@ func (n *Node) applyMessage(
 		Timestamp:        timestamp,
 		Params:           params,
 		Data:             item.Data,
-		DryRun:           dryRun,
+		Mode:             mode,
 		RecoveryMaxNonce: maxNonce,
 	})
 	return

@@ -13,6 +13,21 @@ const (
 	AccountTypeEVM = "evm"
 )
 
+// ExecMode defines the execution behavior of the VMM.
+//
+// | Mode             | Execute | Persist | Outbox |
+// |------------------|---------|---------|--------|
+// | ExecModeNormal   | Yes     | Yes     | Yes    |
+// | ExecModeRebuild  | Yes     | Yes     | No     |
+// | ExecModeDryRun   | Yes     | No      | No     |
+type ExecMode string
+
+const (
+	ExecModeNormal  ExecMode = "normal"
+	ExecModeRebuild ExecMode = "rebuild"
+	ExecModeDryRun  ExecMode = "dryrun"
+)
+
 type VmSpawnFunc func(Env) (Vm, error)
 
 type Vm interface {
@@ -39,8 +54,8 @@ type Meta struct {
 	Params map[string]string `json:"Params"`
 	Data   string            `json:"Data"`
 
-	DryRun           bool  `json:"-"`
-	RecoveryMaxNonce int64 `json:"-"`
+	Mode             ExecMode `json:"-"`
+	RecoveryMaxNonce int64    `json:"-"`
 }
 
 type Result struct {
@@ -90,7 +105,7 @@ type VmmResult struct {
 	Output      interface{}       `json:"Output"`
 	Data        string            `json:"Data"`
 	Cache       map[string]string `json:"Cache,omitempty"`
-	DryRun      bool              `json:"-"`
+	Mode        ExecMode          `json:"-"`
 	Error       string            `json:"Error"`
 }
 

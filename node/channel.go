@@ -2,6 +2,7 @@ package node
 
 import (
 	"github.com/hymatrix/hymx/node/schema"
+	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 )
 
 func (n *Node) runMsgChan() {
@@ -28,7 +29,7 @@ func (n *Node) runMsgChan() {
 				continue
 			}
 
-			if err := n.applyMessage(i.Pid, i.AccId, i.Item, i.Message, assign, false, 0); err != nil {
+			if err := n.applyMessage(i.Pid, i.AccId, i.Item, i.Message, assign, vmmSchema.ExecModeNormal, 0); err != nil {
 				log.Error("handle item failed", "pid", i.Pid, "itemId", i.Item.Id, "err", err)
 			}
 
@@ -47,7 +48,7 @@ func (n *Node) runProcChan() {
 
 		case i := <-n.assignProcChan:
 
-			if err := n.applyProcess(i.Pid, i.AccId, i.Item, i.Process, false, 0); err != nil {
+			if err := n.applyProcess(i.Pid, i.AccId, i.Item, i.Process, vmmSchema.ExecModeNormal, 0); err != nil {
 				log.Error("spawn failed", "pid", i.Pid, "itemId", i.Item.Id, "err", err)
 				continue
 			}
@@ -85,7 +86,10 @@ func (n *Node) runResultChan() {
 			}
 			n.resultHandlerLockMu.RUnlock()
 
-			if result.DryRun {
+			// normal mode  => save cache and result
+			// rebuild mode => save cache and result
+			// dryrun mode  => NOT save cache and result
+			if result.Mode == vmmSchema.ExecModeDryRun {
 				continue
 			}
 

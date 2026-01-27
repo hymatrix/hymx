@@ -6,6 +6,7 @@ import (
 
 	"github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/utils"
+	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
 )
 
@@ -90,7 +91,7 @@ func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string) error {
 				return err
 			}
 
-			if err = n.HandleDryRun(*msg, assign, maxNonce); err != nil {
+			if err = n.HandleMode(*msg, assign, vmmSchema.ExecModeDryRun, maxNonce); err != nil {
 				log.Error("handle message failed in recover", "nonce", nonce, "err", err)
 				continue
 			}

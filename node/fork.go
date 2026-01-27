@@ -6,6 +6,7 @@ import (
 	"github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/sdk"
 	"github.com/hymatrix/hymx/utils"
+	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 )
 
 func (n *Node) runDefaultFork() {
@@ -102,7 +103,7 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client) {
 				continue
 			}
 
-			if err = n.HandleDryRun(msgItem, assign, -1); err != nil {
+			if err = n.HandleMode(msgItem, assign, vmmSchema.ExecModeDryRun, -1); err != nil {
 				log.Error("fork process is in progress, dry run failed", "pid", pid, "nonce", nonce, "err", err)
 				time.Sleep(delay)
 				continue

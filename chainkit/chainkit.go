@@ -155,10 +155,12 @@ func (c *Chainkit) Query(query string) ([]byte, error) {
 	return c.operator.GraphQL(query)
 }
 
+// Backup all processes, include messages and assignment
 func (r *Chainkit) Backup() error {
 	return r.backup()
 }
 
+// Backup on process
 func (r *Chainkit) BackupProcess(pid string, maxNonce int64) error {
 	return r.backupProcess(pid, maxNonce)
 }

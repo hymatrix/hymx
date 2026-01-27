@@ -33,10 +33,10 @@ func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.
 	v.addVm(vm, env)
 
 	result := v.genSpawnResult(env)
-	result.DryRun = meta.DryRun
+	result.Mode = meta.Mode
 	// send to outbox
 	v.outbox(env, result)
-	if meta.DryRun && meta.Nonce == meta.RecoveryMaxNonce {
+	if meta.Mode != schema.ExecModeNormal && meta.Nonce == meta.RecoveryMaxNonce {
 		v.RecoveryUnlock(meta.Pid)
 	}
 
