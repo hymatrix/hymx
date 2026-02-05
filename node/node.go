@@ -58,8 +58,6 @@ type Node struct {
 	chainkit *chainkit.Chainkit
 
 	recoveryTaskPool *ants.Pool
-
-	StartMode string
 }
 
 func New(
@@ -69,7 +67,6 @@ func New(
 	hymxURL string,
 	nodeInfo *schema.Info,
 	chainkit *chainkit.Chainkit,
-	startMode string,
 ) *Node {
 	outboxChan := make(chan vmmSchema.Outbox, 1000)
 	resultChan := make(chan vmmSchema.VmmResult, 1000)
@@ -109,11 +106,10 @@ func New(
 		outboxDB:         cache.NewOutbox(),
 		recoveryTaskPool: taskPool,
 		chainkit:         chainkit,
-		StartMode:        startMode,
 	}
 }
 
-func (n *Node) Run() {
+func (n *Node) Run(startMode string) {
 	if n.chainkit != nil {
 		n.chainkit.Run()
 		n.AddAssignResHandler(n.chainkit.AssignmentHandler)
@@ -126,7 +122,7 @@ func (n *Node) Run() {
 	go n.runAssignmentChan()
 	go n.runOutboxChan()
 
-	switch n.StartMode {
+	switch startMode {
 	case schema.StartModeNormal:
 		go n.runRecovery()
 		n.runJoin()
@@ -134,7 +130,7 @@ func (n *Node) Run() {
 	case schema.StartModeRebuild:
 		go n.runReplay()
 		n.runJoin()
-		n.runDefaultFork(vmmSchema.ExecModeApply)
+		n.runDefaultFork(vmmSchema.ExecModeReplay)
 	default:
 		go n.runRecovery()
 		n.runJoin()

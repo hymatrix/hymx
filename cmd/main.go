@@ -77,7 +77,7 @@ func run(c *cli.Context) (err error) {
 	}
 
 	startMode := c.String("mode")
-	node := node.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo, chainkit, startMode)
+	node := node.New(bundler, redisURL, arweaveURL, hymxURL, nodeInfo, chainkit)
 
 	s := server.New(node, pay)
 
@@ -91,7 +91,7 @@ func run(c *cli.Context) (err error) {
 	// ex:
 	// s.AddResultHandler(handlers)
 
-	s.Run(port)
+	s.Run(port, startMode)
 
 	log.Info("server is running", "protocol version", schema.Variant, "node version", nodeSchema.NodeVersion, "wallet", bundler.Address, "port", port)
 

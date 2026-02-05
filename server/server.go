@@ -26,7 +26,7 @@ func New(node *node.Node, pay *pay.Pay) *Server {
 	}
 }
 
-func (s *Server) Run(endpoint string) {
+func (s *Server) Run(endpoint string, startMode string) {
 	if s.pay != nil {
 		s.pay.LoadCheckpoint()
 		s.pay.Run()
@@ -36,7 +36,7 @@ func (s *Server) Run(endpoint string) {
 
 	go s.runAPI(endpoint)
 
-	s.node.Run()
+	s.node.Run(startMode)
 }
 
 func (s *Server) Close() {
