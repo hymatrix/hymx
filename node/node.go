@@ -109,7 +109,7 @@ func New(
 	}
 }
 
-func (n *Node) Run() {
+func (n *Node) Run(startMode string) {
 	if n.chainkit != nil {
 		n.chainkit.Run()
 		n.AddAssignResHandler(n.chainkit.AssignmentHandler)
@@ -121,10 +121,25 @@ func (n *Node) Run() {
 	go n.runResultChan()
 	go n.runAssignmentChan()
 	go n.runOutboxChan()
-	go n.runRecovery()
 
-	n.runJoin()
-	n.runDefaultFork()
+	switch startMode {
+	case schema.StartModeNormal:
+		log.Info("start mode selected", "startMode", startMode)
+		go n.runRecovery()
+		n.runJoin()
+		n.runDefaultFork(vmmSchema.ExecModeDryRun)
+	case schema.StartModeRebuild:
+		log.Info("start mode selected", "startMode", startMode)
+		go n.runReplay()
+		n.runJoin()
+		n.runDefaultFork(vmmSchema.ExecModeReplay)
+	default:
+		log.Warn("invalid start mode, fallback to normal", "startMode", startMode)
+		go n.runRecovery()
+		n.runJoin()
+		n.runDefaultFork(vmmSchema.ExecModeDryRun)
+	}
+
 }
 
 func (n *Node) Close() {

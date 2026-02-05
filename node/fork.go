@@ -6,9 +6,10 @@ import (
 	"github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/sdk"
 	"github.com/hymatrix/hymx/utils"
+	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 )
 
-func (n *Node) runDefaultFork() {
+func (n *Node) runDefaultFork(mode vmmSchema.ExecMode) {
 	// fork registry
 	if n.info.Registry != "" {
 		ckpId, err := n.db.GetCheckpointIndex(n.info.Registry)
@@ -16,7 +17,7 @@ func (n *Node) runDefaultFork() {
 			log.Warn("fork registry can not get checkpoint index", "pid", n.info.Registry, "err", err)
 		}
 
-		if err := n.Fork(n.info.Registry, ckpId, n.hymxURL); err != nil {
+		if err := n.Fork(n.info.Registry, ckpId, n.hymxURL, mode); err != nil {
 			log.Error("fork registry failed", "registry", n.info.Registry, "url", n.hymxURL, "err", err)
 		}
 	}
@@ -27,13 +28,13 @@ func (n *Node) runDefaultFork() {
 			log.Warn("fork core token can not get checkpoint index", "pid", n.info.Registry, "err", err)
 		}
 
-		if err := n.Fork(n.info.Token, ckpId, n.hymxURL); err != nil {
+		if err := n.Fork(n.info.Token, ckpId, n.hymxURL, mode); err != nil {
 			log.Error("fork core token failed", "token", n.info.Token, "url", n.hymxURL, "err", err)
 		}
 	}
 }
 
-func (n *Node) Fork(pid, checkpointID, nodeURL string) error {
+func (n *Node) Fork(pid, checkpointID, nodeURL string, mode vmmSchema.ExecMode) error {
 	if n.vmm.IsExists(pid) {
 		log.Error("fork process is already exists", "pid", pid)
 		return schema.ErrProcessAlreadyExists
@@ -58,12 +59,12 @@ func (n *Node) Fork(pid, checkpointID, nodeURL string) error {
 		}
 	}
 
-	go n.runForkProcess(pid, checkpointID, clients)
+	go n.runForkProcess(pid, checkpointID, clients, mode)
 
 	return nil
 }
 
-func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client) {
+func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mode vmmSchema.ExecMode) {
 	// init nonce to 0
 	nonce := int64(0)
 
@@ -102,8 +103,8 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client) {
 				continue
 			}
 
-			if err = n.HandleDryRun(msgItem, assign, -1); err != nil {
-				log.Error("fork process is in progress, dry run failed", "pid", pid, "nonce", nonce, "err", err)
+			if err = n.HandleMode(msgItem, assign, mode, -1); err != nil {
+				log.Error("fork process is in progress, handle mode failed", "pid", pid, "nonce", nonce, "err", err)
 				time.Sleep(delay)
 				continue
 			}

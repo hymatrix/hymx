@@ -22,7 +22,7 @@ func (v *Vmm) outbox(env *schema.Env, result *schema.VmmResult) {
 		msg.Sequence = fmt.Sprintf("%d", env.Sequence)
 		v.vmsLockMu.Unlock()
 
-		if result.DryRun {
+		if result.Mode != schema.ExecModeApply {
 			continue
 		}
 
@@ -57,7 +57,7 @@ func (v *Vmm) outbox(env *schema.Env, result *schema.VmmResult) {
 		spawn.Sequence = fmt.Sprintf("%d", env.Sequence)
 		v.vmsLockMu.Unlock()
 
-		if result.DryRun {
+		if result.Mode != schema.ExecModeApply {
 			continue
 		}
 

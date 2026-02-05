@@ -30,6 +30,9 @@ type Chainkit struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	mu     sync.Mutex // Mutex to prevent concurrent execution
+
+	backupRunning bool
+	backupLockMu  sync.Mutex
 }
 
 func New(config schema.Config) *Chainkit {
@@ -150,4 +153,18 @@ func (c *Chainkit) DownloadByPid(pid string, beginNonce, endNonce int64) (result
 // Execute a GraphQL query
 func (c *Chainkit) Query(query string) ([]byte, error) {
 	return c.operator.GraphQL(query)
+}
+
+func (c *Chainkit) GetMaxNonce(scheduler, pid string) (int64, error) {
+	return c.queryMaxNonce(scheduler, pid)
+}
+
+// Backup all processes, include messages and assignment
+func (r *Chainkit) Backup() error {
+	return r.backup()
+}
+
+// Backup on process
+func (r *Chainkit) BackupProcess(pid string, maxNonce int64) error {
+	return r.backupProcess(pid, maxNonce)
 }

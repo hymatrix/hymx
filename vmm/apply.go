@@ -19,7 +19,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		ItemId:      meta.ItemId,
 		FromProcess: meta.Pid,
 		PushedFor:   meta.ItemId,
-		DryRun:      meta.DryRun,
+		Mode:        meta.Mode,
 	}
 	if meta.PushedFor != "" {
 		vmmRes.PushedFor = meta.PushedFor
@@ -28,7 +28,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		// send message outbox
 		v.outbox(env, &vmmRes)
 		// recovery unlock
-		if meta.DryRun && meta.Nonce == meta.RecoveryMaxNonce {
+		if meta.Mode != schema.ExecModeApply && meta.Nonce == meta.RecoveryMaxNonce {
 			v.RecoveryUnlock(meta.Pid)
 		}
 	}()

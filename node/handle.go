@@ -8,6 +8,7 @@ import (
 	"github.com/hymatrix/hymx/sdk"
 	"github.com/hymatrix/hymx/utils"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
+	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
 	goarUtils "github.com/permadao/goar/utils"
 )
@@ -64,6 +65,22 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	return
 }
 
+func (n *Node) HandleMode(item goarSchema.BundleItem, assign hymxSchema.Assignment, mode vmmSchema.ExecMode, maxNonce int64) (err error) {
+	pid, accid, _, instance, err := utils.Decode(item)
+	if err != nil {
+		return
+	}
+
+	switch v := instance.(type) {
+	case hymxSchema.Process:
+		return n.applyProcess(pid, accid, item, v, mode, maxNonce)
+	case hymxSchema.Message:
+		return n.applyMessage(pid, accid, item, v, assign, mode, maxNonce)
+	default:
+		return schema.ErrInvalidType
+	}
+}
+
 // verifyFromProcess verifies the fromProcess authentication
 // It handles both registry process verification and regular node authentication
 func (n *Node) verifyFromProcess(item goarSchema.BundleItem, pid, signer, fromProcess string) error {
@@ -94,22 +111,6 @@ func (n *Node) verifyFromProcess(item goarSchema.BundleItem, pid, signer, fromPr
 	}
 
 	return nil
-}
-
-func (n *Node) HandleDryRun(item goarSchema.BundleItem, assign hymxSchema.Assignment, maxNonce int64) (err error) {
-	pid, accid, _, instance, err := utils.Decode(item)
-	if err != nil {
-		return
-	}
-
-	switch v := instance.(type) {
-	case hymxSchema.Process:
-		return n.applyProcess(pid, accid, item, v, true, maxNonce)
-	case hymxSchema.Message:
-		return n.applyMessage(pid, accid, item, v, assign, true, maxNonce)
-	default:
-		return schema.ErrInvalidType
-	}
 }
 
 func (n *Node) authNode(accid, fromProcess string) (err error) {

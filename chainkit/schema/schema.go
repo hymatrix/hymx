@@ -21,8 +21,10 @@ type DownloadResult struct {
 type IDBTool interface {
 	// DB
 	GetMessage(msgid string) (msg *goarSchema.BundleItem, err error)
+	GetMessageByNonce(pid string, nonce int64) (msg *goarSchema.BundleItem, err error)
 	GetAssignByNonce(pid string, nonce int64) (assign *goarSchema.BundleItem, err error)
 	GetResult(msgid string) (result *vmmSchema.VmmResult, err error)
+	GetAllProcess() (pids []string, curNonces []int64, err error)
 }
 
 type IDBChainkit interface {

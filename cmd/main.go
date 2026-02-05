@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -47,6 +48,11 @@ func action(c *cli.Context) error {
 		return err
 	}
 
+	startMode := c.String("mode")
+	if startMode != nodeSchema.StartModeNormal && startMode != nodeSchema.StartModeRebuild {
+		return fmt.Errorf("invalid --mode: %s; must be 'normal' or 'rebuild'", startMode)
+	}
+
 	return run(c)
 }
 
@@ -90,7 +96,7 @@ func run(c *cli.Context) (err error) {
 	// ex:
 	// s.AddResultHandler(handlers)
 
-	s.Run(port)
+	s.Run(port, c.String("mode"))
 
 	log.Info("server is running", "protocol version", schema.Variant, "node version", nodeSchema.NodeVersion, "wallet", bundler.Address, "port", port)
 

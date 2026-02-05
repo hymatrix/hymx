@@ -56,7 +56,7 @@ func (n *Node) handleProcess(
 func (n *Node) applyProcess(
 	pid, accid string,
 	item goarSchema.BundleItem, proc hymxSchema.Process,
-	dryRun bool, maxNonce int64,
+	mode vmmSchema.ExecMode, maxNonce int64,
 ) (err error) {
 	params, err := utils.TagsToParams(proc.Tags)
 	if err != nil {
@@ -72,7 +72,7 @@ func (n *Node) applyProcess(
 		Timestamp:        0, // ues 0 now. todo: use assignment timestamp
 		Params:           params,
 		Data:             item.Data,
-		DryRun:           dryRun,
+		Mode:             mode,
 		RecoveryMaxNonce: maxNonce,
 	}
 
