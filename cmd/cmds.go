@@ -34,7 +34,7 @@ var (
 				if err != nil {
 					return err
 				}
-				command := exec.Command(path, "--config", c.String("config"), "--mode", c.String("mode"))
+				command := exec.Command(path, "--config", configPath, "--mode", c.String("mode"))
 
 				// log
 				logName := fmt.Sprintf("%s_%s_%d.log", schema.DataProtocol, nodeSchema.NodeVersion, time.Now().Unix())

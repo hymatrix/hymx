@@ -11,12 +11,13 @@ func (s *Server) injectPayApi(engine *gin.Engine) {
 		return
 	}
 
-	engine.GET("/pay/info", s.PayInfo)
-	engine.GET("pay/sponsorTotal/:sponsor", s.PaySponsorTotal)
-	engine.GET("/pay/sponsorBreakdown/:sponsor", s.PaySponsorBreakdown)
-	engine.GET("/pay/beneficiaryTotal/:beneficiary", s.PayBeneficiaryTotal)
-	engine.GET("/pay/beneficiaryBreakdown/:beneficiary", s.PayBeneficiaryBreakdown)
-	engine.GET("/pay/totalPending/:beneficiary", s.PayTotalPending)
+	payGroup := engine.Group("/pay")
+	payGroup.GET("/info", s.PayInfo)
+	payGroup.GET("/sponsorTotal/:sponsor", s.PaySponsorTotal)
+	payGroup.GET("/sponsorBreakdown/:sponsor", s.PaySponsorBreakdown)
+	payGroup.GET("/beneficiaryTotal/:beneficiary", s.PayBeneficiaryTotal)
+	payGroup.GET("/beneficiaryBreakdown/:beneficiary", s.PayBeneficiaryBreakdown)
+	payGroup.GET("/totalPending/:beneficiary", s.PayTotalPending)
 }
 
 func (s *Server) PayInfo(c *gin.Context) {
