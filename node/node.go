@@ -132,7 +132,7 @@ func (n *Node) Run(startMode string) {
 		log.Info("start mode selected", "startMode", startMode)
 		go n.runReplay()
 		n.runJoin()
-		if n.hymxURL == n.info.Node.AccId {
+		if n.info.Node.Role == registrySchema.RoleMain {
 			n.runDefaultFork(vmmSchema.ExecModeReplay) // main node -> replay
 		} else {
 			n.runDefaultFork(vmmSchema.ExecModeDryRun) // other node -> dryrun
