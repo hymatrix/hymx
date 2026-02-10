@@ -37,6 +37,8 @@ func (s *Server) runAPI(endpoint string) {
 	engine.GET("/messageByNonce/:pid/:nonce", s.GetMessageByNonce)
 	engine.GET("/assignmentByNonce/:pid/:nonce", s.GetAssignByNonce)
 	engine.GET("/assignmentByMessage/:msgid", s.GetAssignByMsg)
+	// get current nonce by pid
+	engine.GET("/nonce/:pid", s.GetNonce)
 
 	// api for node registry
 	engine.GET("/nodes", s.GetNodes)
@@ -388,6 +390,16 @@ func (s *Server) GetModule(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, res)
+}
+
+func (s *Server) GetNonce(c *gin.Context) {
+	pid := c.Param("pid")
+	nonce, err := s.node.GetNonce(pid)
+	if err != nil {
+		schema.ErrorResponse(c, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, nonce)
 }
 
 func (s *Server) handleSubmitErr(err error, item goarSchema.BundleItem, c *gin.Context) (ok bool) {

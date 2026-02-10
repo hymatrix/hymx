@@ -227,6 +227,10 @@ func (n *Node) GetNodesByProcess(pid string) ([]registrySchema.Node, error) {
 	return n.vmm.GetNodesByProcess(pid)
 }
 
+func (n *Node) GetNonce(pid string) (int64, error) {
+	return n.db.GetNonce(pid)
+}
+
 func (n *Node) BalanceOf(accid string) (*big.Int, error) {
 	return n.vmm.BalanceOf(accid)
 }
