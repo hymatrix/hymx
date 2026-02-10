@@ -132,7 +132,11 @@ func (n *Node) Run(startMode string) {
 		log.Info("start mode selected", "startMode", startMode)
 		go n.runReplay()
 		n.runJoin()
-		n.runDefaultFork(vmmSchema.ExecModeReplay)
+		if n.hymxURL == n.info.Node.AccId {
+			n.runDefaultFork(vmmSchema.ExecModeReplay) // main node -> replay
+		} else {
+			n.runDefaultFork(vmmSchema.ExecModeDryRun) // other node -> dryrun
+		}
 	default:
 		log.Warn("invalid start mode, fallback to normal", "startMode", startMode)
 		go n.runRecovery()
