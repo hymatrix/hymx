@@ -14,7 +14,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 	log.Debug("===> apply", "meta", meta, "env", env)
 
 	vmmRes := schema.VmmResult{
-		Nonce:       fmt.Sprintf("%d", env.Nonce),
+		Nonce:       fmt.Sprintf("%d", meta.Nonce),
 		Timestamp:   fmt.Sprintf("%d", meta.Timestamp),
 		ItemId:      meta.ItemId,
 		FromProcess: meta.Pid,
