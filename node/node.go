@@ -132,7 +132,11 @@ func (n *Node) Run(startMode string) {
 		log.Info("start mode selected", "startMode", startMode)
 		go n.runReplay()
 		n.runJoin()
-		n.runDefaultFork(vmmSchema.ExecModeReplay)
+		if n.info.Node.Role == registrySchema.RoleMain {
+			n.runDefaultFork(vmmSchema.ExecModeReplay) // main node -> replay
+		} else {
+			n.runDefaultFork(vmmSchema.ExecModeDryRun) // other node -> dryrun
+		}
 	default:
 		log.Warn("invalid start mode, fallback to normal", "startMode", startMode)
 		go n.runRecovery()
@@ -221,6 +225,10 @@ func (n *Node) GetProcesses(accid string) ([]string, error) {
 
 func (n *Node) GetNodesByProcess(pid string) ([]registrySchema.Node, error) {
 	return n.vmm.GetNodesByProcess(pid)
+}
+
+func (n *Node) GetNonce(pid string) (int64, error) {
+	return n.db.GetNonce(pid)
 }
 
 func (n *Node) BalanceOf(accid string) (*big.Int, error) {

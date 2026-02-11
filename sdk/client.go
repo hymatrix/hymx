@@ -367,6 +367,26 @@ func (c *Client) GetAssignByMessage(msgid string) (item goarSchema.BundleItem, e
 	return
 }
 
+func (c *Client) GetNonce(pid string) (nonce int64, err error) {
+	url, err := c.buildURL("/nonce/" + pid)
+	if err != nil {
+		return
+	}
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		return
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&nonce)
+	return
+}
+
 func (c *Client) BalanceOf(accid string) (amt *big.Int, err error) {
 	url, err := c.buildURL("/balanceof/" + accid)
 	if err != nil {

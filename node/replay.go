@@ -8,9 +8,18 @@ import (
 )
 
 func (n *Node) runReplay() error {
-	allProcessId, err := n.sdk.Client.GetProcesses(n.info.Node.AccId)
-	if err != nil {
-		return err
+	// get all process id and nonce from db first
+	var allProcessId []string
+	var allNonce []int64
+	var err error
+
+	allProcessId, allNonce, err = n.db.GetAllProcess()
+	if err != nil || len(allProcessId) == 0 {
+		allProcessId, err = n.sdk.Client.GetProcesses(n.info.Node.AccId)
+		if err != nil {
+			return err
+		}
+		allNonce = nil
 	}
 
 	pCount := len(allProcessId)
@@ -20,9 +29,14 @@ func (n *Node) runReplay() error {
 	// for each process id, create new vm and start it
 	for i := 0; i < pCount; i++ {
 		pid := allProcessId[i]
-		maxNonce, err := n.getMaxNonce(pid)
-		if err != nil {
-			return err
+		var maxNonce int64
+		if allNonce == nil { // get nonce from remote
+			maxNonce, err = n.getMaxNonce(pid)
+			if err != nil {
+				return err
+			}
+		} else {
+			maxNonce = allNonce[i]
 		}
 
 		err = n.recoveryTaskPool.Submit(func() {
@@ -39,6 +53,7 @@ func (n *Node) runReplay() error {
 		})
 		if err != nil {
 			log.Error("submit replay task error", "pid", pid, "maxNonce", maxNonce, "err", err)
+			wg.Done()
 		}
 	}
 
