@@ -59,6 +59,7 @@ func (v *Vmm) applyCheck(vm schema.Vm, env *schema.Env, m schema.Meta) (from str
 		log.Error("invalid nonce", "cur nonce", m.Nonce, "env nonce", env.Nonce)
 		return
 	}
+	// todo: Because the earlier if condition doesn’t update env.Nonce, the Nonce in the node database can drift out of sync with the VM’s environment Nonce, causing all subsequent transactions from that VM to fail. To resolve this, the Nonce on both the environment and the node side needs to be brought back into sync. A new slashing mechanism should be added so that if a node assigns an incorrect Nonce that doesn’t match the VM’s env Nonce, it gets penalized.
 	env.Nonce = m.Nonce
 
 	from = m.AccId
