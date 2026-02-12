@@ -58,6 +58,7 @@ type Node struct {
 	chainkit *chainkit.Chainkit
 
 	recoveryTaskPool *ants.Pool
+	registrySpawned  chan struct{}
 }
 
 func New(
@@ -70,6 +71,7 @@ func New(
 ) *Node {
 	outboxChan := make(chan vmmSchema.Outbox, 1000)
 	resultChan := make(chan vmmSchema.VmmResult, 1000)
+	registryCh := make(chan struct{}, 1)
 
 	taskPool, err := ants.NewPool(1000)
 	if err != nil {
@@ -85,7 +87,7 @@ func New(
 		bundler: bundler,
 		sdk:     sdk.NewFromBundler(hymxURL, bundler),
 
-		vmm: vmm.New(nodeInfo, resultChan, outboxChan),
+		vmm: vmm.New(nodeInfo, resultChan, outboxChan, registryCh),
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -106,6 +108,7 @@ func New(
 		outboxDB:         cache.NewOutbox(),
 		recoveryTaskPool: taskPool,
 		chainkit:         chainkit,
+		registrySpawned:  registryCh,
 	}
 }
 
@@ -122,28 +125,26 @@ func (n *Node) Run(startMode string) {
 	go n.runAssignmentChan()
 	go n.runOutboxChan()
 
+	if n.info.Node.Role == registrySchema.RoleMain && startMode == schema.StartModeRebuild {
+		n.runDefaultFork(vmmSchema.ExecModeReplay)
+	} else {
+		n.runDefaultFork(vmmSchema.ExecModeDryRun)
+	}
+
+	n.waitRegistrySpawned()
+
 	switch startMode {
 	case schema.StartModeNormal:
 		log.Info("start mode selected", "startMode", startMode)
 		go n.runRecovery()
-		n.runJoin()
-		n.runDefaultFork(vmmSchema.ExecModeDryRun)
 	case schema.StartModeRebuild:
 		log.Info("start mode selected", "startMode", startMode)
 		go n.runReplay()
-		n.runJoin()
-		if n.info.Node.Role == registrySchema.RoleMain {
-			n.runDefaultFork(vmmSchema.ExecModeReplay) // main node -> replay
-		} else {
-			n.runDefaultFork(vmmSchema.ExecModeDryRun) // other node -> dryrun
-		}
 	default:
 		log.Warn("invalid start mode, fallback to normal", "startMode", startMode)
 		go n.runRecovery()
-		n.runJoin()
-		n.runDefaultFork(vmmSchema.ExecModeDryRun)
 	}
-
+	n.runJoin()
 }
 
 func (n *Node) Close() {
@@ -307,4 +308,12 @@ func (n *Node) isSelf(node registrySchema.Node) bool {
 		}
 	}
 	return false
+}
+
+func (n *Node) waitRegistrySpawned() {
+	if n.vmm.RegistryId() == "" {
+		return
+	}
+	// wait for registry spawned
+	<-n.registrySpawned
 }

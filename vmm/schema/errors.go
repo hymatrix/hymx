@@ -12,7 +12,7 @@ var (
 	ErrProcessAlreadyExists   = errors.New("err_process_already_exist")
 	ErrProcessNotFound        = errors.New("err_process_not_found")
 	ErrProcessEnvNotFound     = errors.New("err_process_env_not_found")
-	ErrRegistryNotNound       = errors.New("err_registry_not_found")
+	ErrRegistryNotFound       = errors.New("err_registry_not_found")
 	ErrMissingParam           = errors.New("err_missing_param")
 	ErrInvalidAccid           = errors.New("err_invalid_accid")
 	ErrFactoryAlreadyMounted  = errors.New("err_factory_already_mounted")
