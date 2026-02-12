@@ -133,15 +133,11 @@ func (n *Node) Run(startMode string) {
 
 	n.waitRegistrySpawned()
 
-	switch startMode {
-	case schema.StartModeNormal:
-		log.Info("start mode selected", "startMode", startMode)
-		go n.runRecovery()
-	case schema.StartModeRebuild:
+	if startMode == schema.StartModeRebuild {
 		log.Info("start mode selected", "startMode", startMode)
 		go n.runReplay()
-	default:
-		log.Warn("invalid start mode, fallback to normal", "startMode", startMode)
+	} else {
+		log.Info("start mode selected", "startMode", startMode)
 		go n.runRecovery()
 	}
 	n.runJoin()
@@ -311,7 +307,7 @@ func (n *Node) isSelf(node registrySchema.Node) bool {
 }
 
 func (n *Node) waitRegistrySpawned() {
-	if n.vmm.RegistryId() == "" {
+	if n.vmm.RegistryId() != "" {
 		return
 	}
 	// wait for registry spawned
