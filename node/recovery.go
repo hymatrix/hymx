@@ -58,12 +58,6 @@ func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string, mode vm
 		return schema.ErrProcessIsRecovering
 	}
 
-	// if pid != n.vmm.TokenId() && pid != n.vmm.RegistryId() {
-	// 	log.Debug("wait registry spawned for non-core", "pid", pid, "tokenId", n.vmm.TokenId(), "registryId", n.vmm.RegistryId())
-	// 	n.waitRegistrySpawned()
-	// 	log.Debug("go on")
-	// }
-
 	// lock process
 	n.vmm.RecoveryLock(pid)
 
