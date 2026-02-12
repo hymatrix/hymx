@@ -17,7 +17,9 @@ func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.
 		return schema.ErrProcessAlreadyExists
 	}
 	if v.registry == nil && module.ModuleFormat != schema.ModuleFormatRegistry && module.ModuleFormat != schema.ModuleFormatToken {
-		return schema.ErrRegistryNotFound
+		if err = v.waitRegistrySpawned(pid); err != nil {
+			return err
+		}
 	}
 
 	env := &schema.Env{
@@ -46,6 +48,19 @@ func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.
 	return
 }
 
+func (v *Vmm) waitRegistrySpawned(pid string) error {
+	if v.registry != nil {
+		return nil
+	}
+	log.Debug("wait for registry spawned", "pid", pid)
+	select {
+	case <-v.ctx.Done():
+		return schema.ErrRegistryNotFound
+	case <-v.registrySpawned:
+		log.Debug("registry spawned! go on", "pid", pid)
+		return nil
+	}
+}
 func (v *Vmm) spawn(env schema.Env) (vm schema.Vm, err error) {
 	v.vmsLockMu.RLock()
 
