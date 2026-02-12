@@ -16,6 +16,9 @@ func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.
 	if v.IsExists(pid) {
 		return schema.ErrProcessAlreadyExists
 	}
+	if v.registry == nil && module.ModuleFormat != schema.ModuleFormatRegistry && module.ModuleFormat != schema.ModuleFormatToken {
+		return schema.ErrRegistryNotFound
+	}
 
 	env := &schema.Env{
 		Meta:        meta,

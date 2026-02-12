@@ -78,6 +78,10 @@ func (v *Vmm) spawnRegistry(env schema.Env) (vm schema.Vm, err error) {
 			"Acc-Id": env.Meta.AccId,
 		}})
 
+	if v.registrySpawned != nil {
+		close(v.registrySpawned)
+	}
+
 	return regVm, nil
 }
 

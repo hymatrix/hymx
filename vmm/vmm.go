@@ -30,13 +30,14 @@ type Vmm struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	resultChan chan<- schema.VmmResult
-	outboxChan chan<- schema.Outbox
-	applyChan  chan schema.Meta
-	ckpChan    chan schema.Checkpoint
+	resultChan      chan<- schema.VmmResult
+	outboxChan      chan<- schema.Outbox
+	applyChan       chan schema.Meta
+	ckpChan         chan schema.Checkpoint
+	registrySpawned chan struct{}
 }
 
-func New(info *nodeSchema.Info, resultChan chan<- schema.VmmResult, outboxChan chan<- schema.Outbox) *Vmm {
+func New(info *nodeSchema.Info, resultChan chan<- schema.VmmResult, outboxChan chan<- schema.Outbox, registrySpawned chan struct{}) *Vmm {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Vmm{
 		info: info,
@@ -50,10 +51,11 @@ func New(info *nodeSchema.Info, resultChan chan<- schema.VmmResult, outboxChan c
 		ctx:    ctx,
 		cancel: cancel,
 
-		resultChan: resultChan,
-		outboxChan: outboxChan,
-		applyChan:  make(chan schema.Meta, 1000),
-		ckpChan:    make(chan schema.Checkpoint, 100),
+		resultChan:      resultChan,
+		outboxChan:      outboxChan,
+		applyChan:       make(chan schema.Meta, 1000),
+		ckpChan:         make(chan schema.Checkpoint, 100),
+		registrySpawned: registrySpawned,
 	}
 }
 
