@@ -125,14 +125,6 @@ func (n *Node) Run(startMode string) {
 	go n.runAssignmentChan()
 	go n.runOutboxChan()
 
-	if n.info.Node.Role == registrySchema.RoleMain && startMode == schema.StartModeRebuild {
-		n.runDefaultFork(vmmSchema.ExecModeReplay)
-	} else {
-		n.runDefaultFork(vmmSchema.ExecModeDryRun)
-	}
-
-	n.waitRegistrySpawned()
-
 	if startMode == schema.StartModeRebuild {
 		log.Info("start mode selected", "startMode", startMode)
 		go n.runReplay()
@@ -141,6 +133,11 @@ func (n *Node) Run(startMode string) {
 		go n.runRecovery()
 	}
 	n.runJoin()
+	if n.info.Node.Role == registrySchema.RoleMain && startMode == schema.StartModeRebuild {
+		n.runDefaultFork(vmmSchema.ExecModeReplay)
+	} else {
+		n.runDefaultFork(vmmSchema.ExecModeDryRun)
+	}
 }
 
 func (n *Node) Close() {

@@ -78,6 +78,7 @@ func (v *Vmm) spawnRegistry(env schema.Env) (vm schema.Vm, err error) {
 			"Acc-Id": env.Meta.AccId,
 		}})
 
+	log.Info("spawn registry", "registryId", regVm.GetId())
 	if v.registrySpawned != nil {
 		close(v.registrySpawned)
 	}

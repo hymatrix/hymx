@@ -57,6 +57,7 @@ func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string, mode vm
 	if n.vmm.IsRecovering(pid) {
 		return schema.ErrProcessIsRecovering
 	}
+
 	// lock process
 	n.vmm.RecoveryLock(pid)
 
