@@ -96,7 +96,7 @@ func (n *Node) LoadModule(itemId string) (module hymxSchema.Module, err error) {
 }
 
 func (n *Node) loadModuleByLocal(itemId string) (module hymxSchema.Module, err error) {
-	filename := filepath.Join("mod", fmt.Sprintf("mod-%s.json", itemId))
+	filename := moduleFilePath(itemId)
 
 	_, err = os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -117,7 +117,7 @@ func (n *Node) loadModuleByLocal(itemId string) (module hymxSchema.Module, err e
 		return
 	}
 
-	return utils.TagsToModule(item.Tags)
+	return moduleFromBundleItem(item)
 }
 
 func (n *Node) downloadModule(itemId string) (module hymxSchema.Module, err error) {
@@ -130,5 +130,34 @@ func (n *Node) downloadModule(itemId string) (module hymxSchema.Module, err erro
 		return module, err
 	}
 
-	return utils.TagsToModule(bundleItem.Tags)
+	if err := cacheModuleItem(itemId, bundleItem); err != nil {
+		return module, err
+	}
+
+	return moduleFromBundleItem(*bundleItem)
+}
+
+func moduleFilePath(itemID string) string {
+	return filepath.Join("mod", fmt.Sprintf("mod-%s.json", itemID))
+}
+
+func cacheModuleItem(itemID string, item *goarSchema.BundleItem) error {
+	if item == nil {
+		return errors.New("bundle item is nil")
+	}
+
+	path := moduleFilePath(itemID)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+
+	itemBin, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, itemBin, 0o644)
+}
+
+func moduleFromBundleItem(item goarSchema.BundleItem) (hymxSchema.Module, error) {
+	return utils.TagsToModule(item.Tags)
 }

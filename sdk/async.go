@@ -13,15 +13,17 @@ import (
 	goarSchema "github.com/permadao/goar/schema"
 )
 
+const defaultResultWaitTimeout = 10 * time.Minute
+
 func (s *SDK) ResultAndWait(pid, msgid string) (result vmmSchema.VmmResult, err error) {
-	timeout := time.After(2 * time.Minute)
+	timeout := time.After(defaultResultWaitTimeout)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-timeout:
-			return result, fmt.Errorf("timeout waiting for result after 2 minutes")
+			return result, fmt.Errorf("timeout waiting for result after 10 minutes")
 		case <-ticker.C:
 			result, err = s.Client.GetResult(pid, msgid)
 			if err != nil {
