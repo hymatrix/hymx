@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/hymatrix/hymx/chainkit/optgoar"
@@ -119,9 +120,16 @@ func (s *SDK) SaveModule(moduleBytes []byte, module schema.Module) (itemId strin
 	if err != nil {
 		return "", err
 	}
-	filename := fmt.Sprintf("mod-%s.json", item.Id)
+	filename := moduleFilePath(item.Id)
+	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
+		return "", err
+	}
 	err = os.WriteFile(filename, itemBin, 0644)
 	return item.Id, err
+}
+
+func moduleFilePath(itemID string) string {
+	return filepath.Join("mod", fmt.Sprintf("mod-%s.json", itemID))
 }
 
 func (s *SDK) UploadModuleToArweave(filePath, keyfile string) (txid string, err error) {

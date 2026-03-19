@@ -96,10 +96,8 @@ func (n *Node) LoadModule(itemId string) (module hymxSchema.Module, err error) {
 }
 
 func (n *Node) loadModuleByLocal(itemId string) (module hymxSchema.Module, err error) {
-	filename := moduleFilePath(itemId)
-
-	_, err = os.Stat(filename)
-	if os.IsNotExist(err) {
+	filename, err := resolveModuleFilePath(itemId)
+	if errors.Is(err, os.ErrNotExist) {
 		log.Info("load module from local failed", "id", itemId)
 		err = schema.ErrNotFoundMod
 		return
@@ -139,6 +137,25 @@ func (n *Node) downloadModule(itemId string) (module hymxSchema.Module, err erro
 
 func moduleFilePath(itemID string) string {
 	return filepath.Join("mod", fmt.Sprintf("mod-%s.json", itemID))
+}
+
+func legacyModuleFilePath(itemID string) string {
+	return fmt.Sprintf("mod-%s.json", itemID)
+}
+
+func resolveModuleFilePath(itemID string) (string, error) {
+	candidates := []string{
+		moduleFilePath(itemID),
+		legacyModuleFilePath(itemID),
+	}
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+	}
+	return "", os.ErrNotExist
 }
 
 func cacheModuleItem(itemID string, item *goarSchema.BundleItem) error {
