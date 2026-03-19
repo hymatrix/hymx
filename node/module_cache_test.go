@@ -48,3 +48,31 @@ func TestCacheModuleItemWritesBundleItemJSON(t *testing.T) {
 		t.Fatalf("unexpected cached item data: got %q want %q", cached.Data, item.Data)
 	}
 }
+
+func TestResolveModuleFilePathFallsBackToLegacyPath(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd failed: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(wd)
+	}()
+
+	tempDir := t.TempDir()
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("chdir failed: %v", err)
+	}
+
+	legacyPath := legacyModuleFilePath("module-legacy")
+	if err := os.WriteFile(legacyPath, []byte(`{}`), 0o644); err != nil {
+		t.Fatalf("write legacy module file failed: %v", err)
+	}
+
+	resolved, err := resolveModuleFilePath("module-legacy")
+	if err != nil {
+		t.Fatalf("resolveModuleFilePath failed: %v", err)
+	}
+	if resolved != legacyPath {
+		t.Fatalf("unexpected resolved path: got %q want %q", resolved, legacyPath)
+	}
+}
