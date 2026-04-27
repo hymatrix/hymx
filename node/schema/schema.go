@@ -13,14 +13,16 @@ const (
 )
 
 type Info struct {
-	Protocol    string              `json:"Protocol"`
-	Variant     string              `json:"Variant"`
-	NodeVersion string              `json:"Node-Version"`
-	JoinNetwork bool                `json:"Join-Network"`
-	Token       string              `json:"Token"`
-	Registry    string              `json:"Registry"`
-	Node        registrySchema.Node `json:"Node"`
-	VmCount     int64               `json:"Vm-Count"`
+	Protocol            string              `json:"Protocol"`
+	Variant             string              `json:"Variant"`
+	NodeVersion         string              `json:"Node-Version"`
+	JoinNetwork         bool                `json:"Join-Network"`
+	Token               string              `json:"Token"`
+	Registry            string              `json:"Registry"`
+	Node                registrySchema.Node `json:"Node"`
+	VmCount             int64               `json:"Vm-Count"`
+	EncryptionPublicKey string              `json:"Encryption-Public-Key,omitempty"`
+	EncryptionKeyType   string              `json:"Encryption-Key-Type,omitempty"`
 }
 
 type ItemMeta struct {

@@ -11,7 +11,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 	if err != nil {
 		return err
 	}
-	log.Debug("===> apply", "meta", meta, "env", env)
+	logApplyStart(meta, env)
 
 	vmmRes := schema.VmmResult{
 		Nonce:       fmt.Sprintf("%d", meta.Nonce),
@@ -50,6 +50,22 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		vmmRes.Error = res.Error.Error()
 	}
 	return nil
+}
+
+func logApplyStart(meta schema.Meta, env *schema.Env) {
+	log.Debug("===> apply", "meta", redactedMeta(meta), "pid", meta.Pid, "itemId", meta.ItemId)
+}
+
+func redactedMeta(meta schema.Meta) schema.Meta {
+	if len(meta.Params) == 0 {
+		return meta
+	}
+	params := make(map[string]string, len(meta.Params))
+	for key := range meta.Params {
+		params[key] = "[redacted]"
+	}
+	meta.Params = params
+	return meta
 }
 
 func (v *Vmm) applyCheck(vm schema.Vm, env *schema.Env, m schema.Meta) (from string, err error) {

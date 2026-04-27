@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/everFinance/goether"
@@ -44,16 +43,17 @@ func TestGenerateAndSaveModule_CreatesFile(t *testing.T) {
 	var item goarSchema.BundleItem
 	require.NoError(t, json.Unmarshal(by, &item))
 	assert.Equal(t, id, item.Id)
-
-	persistDir := filepath.Join(cwd, "mod")
-	require.NoError(t, os.MkdirAll(persistDir, 0755))
-	persistPath := filepath.Join(persistDir, filename)
-	require.NoError(t, os.WriteFile(persistPath, by, 0644))
 }
 
 func TestUploadModule_Success(t *testing.T) {
 	modFile := "./mod/mod-lM-6SkQOII31LeDUeNTmCoXCLBBNLllkPEDMVosFrJY.json"
 	keyFile := "./arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json"
+	if _, err := os.Stat(modFile); os.IsNotExist(err) {
+		t.Skipf("module fixture missing: %s", modFile)
+	}
+	if _, err := os.Stat(keyFile); os.IsNotExist(err) {
+		t.Skipf("key fixture missing: %s", keyFile)
+	}
 
 	s := &SDK{}
 	txid, err := s.UploadModuleToArweave(modFile, keyFile)

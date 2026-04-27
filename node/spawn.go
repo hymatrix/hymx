@@ -10,6 +10,7 @@ import (
 	"github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/utils"
+	"github.com/hymatrix/hymx/utils/tagcrypto"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
 )
@@ -58,7 +59,13 @@ func (n *Node) applyProcess(
 	item goarSchema.BundleItem, proc hymxSchema.Process,
 	mode vmmSchema.ExecMode, maxNonce int64,
 ) (err error) {
+	n.rememberRawSpawnItem(pid, item)
+
 	params, err := utils.TagsToParams(proc.Tags)
+	if err != nil {
+		return err
+	}
+	encryptedParams, err := tagcrypto.EncryptedPlainTagNames(item.Tags)
 	if err != nil {
 		return err
 	}
@@ -71,6 +78,7 @@ func (n *Node) applyProcess(
 		Nonce:            0,
 		Timestamp:        0, // ues 0 now. todo: use assignment timestamp
 		Params:           params,
+		EncryptedParams:  encryptedParams,
 		Data:             item.Data,
 		Mode:             mode,
 		RecoveryMaxNonce: maxNonce,

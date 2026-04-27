@@ -105,7 +105,8 @@ func (h *Token) handleBalances(from string) (res vmmSchema.Result, err error) {
 	return
 }
 
-func (h *Token) handleTransfer(from string, params map[string]string) (res vmmSchema.Result, err error) {
+func (h *Token) handleTransfer(from string, meta vmmSchema.Meta) (res vmmSchema.Result, err error) {
+	params := meta.Params
 	recipient, ok := params["Recipient"]
 	if !ok {
 		err = schema.ErrMissingRecipient
@@ -147,7 +148,7 @@ func (h *Token) handleTransfer(from string, params map[string]string) (res vmmSc
 	}
 	// Forward X- prefixed tags to both messages
 	for key, value := range params {
-		if strings.HasPrefix(key, "X-") {
+		if strings.HasPrefix(key, "X-") && !meta.EncryptedParams[key] {
 			debitNotice.Tags = append(debitNotice.Tags, goarSchema.Tag{Name: key, Value: value})
 			creditNotice.Tags = append(creditNotice.Tags, goarSchema.Tag{Name: key, Value: value})
 		}

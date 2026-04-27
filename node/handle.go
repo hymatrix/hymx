@@ -55,6 +55,26 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 
 	switch v := instance.(type) {
 	case hymxSchema.Process:
+		if v.Scheduler != n.bundler.Address {
+			return n.handleProcess(pid, signer, item, v)
+		}
+	case hymxSchema.Message:
+		isRedirect, _, err := n.IsRedirect(pid)
+		if err != nil {
+			return err
+		}
+		if isRedirect || !n.vmm.IsExists(pid) {
+			return n.handleMessage(pid, signer, item, v)
+		}
+	}
+
+	_, internalInstance, err := n.decryptInternalItem(item)
+	if err != nil {
+		return
+	}
+
+	switch v := internalInstance.(type) {
+	case hymxSchema.Process:
 		err = n.handleProcess(pid, signer, item, v)
 	case hymxSchema.Message:
 		err = n.handleMessage(pid, signer, item, v)
@@ -66,7 +86,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 }
 
 func (n *Node) HandleMode(item goarSchema.BundleItem, assign hymxSchema.Assignment, mode vmmSchema.ExecMode, maxNonce int64) (err error) {
-	pid, accid, _, instance, err := utils.Decode(item)
+	pid, accid, _, instance, err := n.decodeInternalItem(item)
 	if err != nil {
 		return
 	}

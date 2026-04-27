@@ -94,11 +94,19 @@ func (s *SDK) SpawnAndWait(module, scheduler string, params []goarSchema.Tag) (*
 	processTags = utils.MergeTags(processTags, params)
 	data := strconv.Itoa(int(time.Now().UnixNano()))
 
-	res, _, err := s.Send("", data, processTags)
+	res, redirectUrl, err := s.Send("", data, processTags)
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.ResultAndWait(res.Id, res.Id)
+
+	realSdk := s
+	if redirectUrl != "" {
+		log.Debug("redirect to url", "url", redirectUrl)
+		realSdk = NewFromBundler(redirectUrl, s.Bundler)
+		defer realSdk.Close()
+	}
+
+	result, err := realSdk.ResultAndWait(res.Id, res.Id)
 	if err != nil {
 		return nil, err
 	}

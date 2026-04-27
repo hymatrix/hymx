@@ -51,8 +51,9 @@ type Meta struct {
 	Nonce     int64 `json:"Nonce"`
 	Timestamp int64 `json:"Timestamp"` // UnixMilli
 	// input params
-	Params map[string]string `json:"Params"`
-	Data   string            `json:"Data"`
+	Params          map[string]string `json:"Params"`
+	EncryptedParams map[string]bool   `json:"-"`
+	Data            string            `json:"Data"`
 
 	Mode             ExecMode `json:"-"`
 	RecoveryMaxNonce int64    `json:"-"`

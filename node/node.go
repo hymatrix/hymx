@@ -27,6 +27,7 @@ type Node struct {
 	info    *schema.Info
 
 	bundler *goar.Bundler
+	signer  interface{}
 	sdk     *sdk.SDK
 
 	vmm *vmm.Vmm
@@ -59,9 +60,13 @@ type Node struct {
 
 	recoveryTaskPool *ants.Pool
 	registrySpawned  chan struct{}
+
+	rawSpawnItems   map[string]goarSchema.BundleItem
+	rawSpawnItemsMu sync.RWMutex
 }
 
 func New(
+	signer interface{},
 	bundler *goar.Bundler,
 	redisURL string,
 	arweaveURL string,
@@ -85,6 +90,7 @@ func New(
 		info:    nodeInfo,
 
 		bundler: bundler,
+		signer:  signer,
 		sdk:     sdk.NewFromBundler(hymxURL, bundler),
 
 		vmm: vmm.New(nodeInfo, resultChan, outboxChan, registryCh),
@@ -109,6 +115,7 @@ func New(
 		recoveryTaskPool: taskPool,
 		chainkit:         chainkit,
 		registrySpawned:  registryCh,
+		rawSpawnItems:    map[string]goarSchema.BundleItem{},
 	}
 }
 

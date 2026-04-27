@@ -4,6 +4,7 @@ import (
 	"github.com/everFinance/goether"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/schema"
+	"github.com/hymatrix/hymx/utils/tagcrypto"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	"github.com/permadao/goar"
 	"github.com/spf13/viper"
@@ -11,6 +12,7 @@ import (
 
 func LoadNodeConfig() (
 	port, ginMode, redisURL, arweaveURL, hymxURL string,
+	signer interface{},
 	bundler *goar.Bundler, nodeInfo *nodeSchema.Info, err error,
 ) {
 	port = viper.GetString("port")
@@ -21,7 +23,6 @@ func LoadNodeConfig() (
 	prvKey := viper.GetString("prvKey")
 	keyfilePath := viper.GetString("keyfilePath")
 
-	var signer interface{}
 	if prvKey != "" {
 		signer, err = goether.NewSigner(prvKey)
 	} else {
@@ -31,6 +32,10 @@ func LoadNodeConfig() (
 		return
 	}
 	bundler, err = goar.NewBundler(signer)
+	if err != nil {
+		return
+	}
+	encryptionKeyType, err := tagcrypto.KeyTypeFromSignatureType(bundler.SignType)
 	if err != nil {
 		return
 	}
@@ -46,6 +51,8 @@ func LoadNodeConfig() (
 			Desc:  viper.GetString("nodeDesc"),
 			URL:   viper.GetString("nodeURL"),
 		},
+		EncryptionPublicKey: bundler.Owner,
+		EncryptionKeyType:   encryptionKeyType,
 	}
 
 	return

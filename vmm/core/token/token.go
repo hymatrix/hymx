@@ -31,7 +31,7 @@ func (h *Token) Apply(from string, meta vmmSchema.Meta) (res vmmSchema.Result) {
 	case "Balances":
 		res, err = h.handleBalances(from)
 	case "Transfer":
-		res, err = h.handleTransfer(from, meta.Params)
+		res, err = h.handleTransfer(from, meta)
 	case "Stake":
 		res, err = h.handleStake(from, meta.Params)
 	case "Unstake":
