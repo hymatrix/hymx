@@ -513,9 +513,11 @@ func TestSendEncryptedRedirectReturnsErrorWhenRedirectInfoIsUnusable(t *testing.
 	nodeBundler, err := goar.NewBundler(nodeSigner)
 	require.NoError(t, err)
 
+	badRedirectInfoRequests := 0
 	badRedirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/info":
+			badRedirectInfoRequests++
 			json.NewEncoder(w).Encode(nodeSchema.Info{})
 		default:
 			http.NotFound(w, r)
@@ -541,11 +543,12 @@ func TestSendEncryptedRedirectReturnsErrorWhenRedirectInfoIsUnusable(t *testing.
 
 	s := newEncryptedTagTestSDK(t, primary.URL)
 
-	res, redirectedURL, err := s.Send("process-id", "payload", []goarSchema.Tag{{Name: tagcrypto.EncryptedTagPrefix + "Secret", Value: "private-value"}})
+	res, redirectedURL, err := s.Send("lM-6SkQOII31LeDUeNTmCoXCLBBNLllkPEDMVosFrJY", "payload", []goarSchema.Tag{{Name: tagcrypto.EncryptedTagPrefix + "Secret", Value: "private-value"}})
 
 	require.Error(t, err)
 	require.Nil(t, res)
 	require.Empty(t, redirectedURL)
+	require.Equal(t, 1, badRedirectInfoRequests)
 }
 
 func TestSendRejectsEncryptedProtocolTagBeforeNetworkAccess(t *testing.T) {
