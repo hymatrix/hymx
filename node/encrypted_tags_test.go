@@ -238,6 +238,114 @@ func TestCheckpointSnapshotFailsWhenEncryptedRawSpawnIsMissing(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestDecryptInternalItemRejectsMalformedEncryptedValue(t *testing.T) {
+	rawTags := []goarSchema.Tag{
+		{Name: "Data-Protocol", Value: hymxSchema.DataProtocol},
+		{Name: "Variant", Value: hymxSchema.Variant},
+		{Name: "Type", Value: hymxSchema.TypeMessage},
+		{Name: tagcrypto.EncryptedTagPrefix + "Secret", Value: "not-a-cipher"},
+	}
+
+	userSigner, err := goether.NewSigner("0xdde30fa25128addf45656a39c0570fd06fce3e48056457b9f1f9fda603cc4be1")
+	require.NoError(t, err)
+	userBundler, err := goar.NewBundler(userSigner)
+	require.NoError(t, err)
+	rawItem, err := userBundler.CreateAndSignItem([]byte("payload"), "lM-6SkQOII31LeDUeNTmCoXCLBBNLllkPEDMVosFrJY", "", rawTags)
+	require.NoError(t, err)
+
+	n := &Node{signer: userSigner}
+	internalItem, instance, err := n.decryptInternalItem(rawItem)
+
+	require.Error(t, err)
+	require.Empty(t, internalItem.Id)
+	require.Nil(t, instance)
+}
+
+func TestDecryptInternalItemRejectsWrongSignerType(t *testing.T) {
+	nodeSigner, err := goether.NewSigner("0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b")
+	require.NoError(t, err)
+	nodeBundler, err := goar.NewBundler(nodeSigner)
+	require.NoError(t, err)
+	encryptedTags, _, err := tagcrypto.EncryptTags(
+		[]goarSchema.Tag{{Name: tagcrypto.EncryptedTagPrefix + "Secret", Value: "private-value"}},
+		nodeBundler.Owner,
+		tagcrypto.KeyTypeEthereumECIES,
+	)
+	require.NoError(t, err)
+	rawTags := utils.MergeTags([]goarSchema.Tag{
+		{Name: "Data-Protocol", Value: hymxSchema.DataProtocol},
+		{Name: "Variant", Value: hymxSchema.Variant},
+		{Name: "Type", Value: hymxSchema.TypeMessage},
+	}, encryptedTags)
+
+	userSigner, err := goether.NewSigner("0xdde30fa25128addf45656a39c0570fd06fce3e48056457b9f1f9fda603cc4be1")
+	require.NoError(t, err)
+	userBundler, err := goar.NewBundler(userSigner)
+	require.NoError(t, err)
+	rawItem, err := userBundler.CreateAndSignItem([]byte("payload"), "lM-6SkQOII31LeDUeNTmCoXCLBBNLllkPEDMVosFrJY", "", rawTags)
+	require.NoError(t, err)
+	arweaveSigner, err := goar.NewSignerFromPath("../examples/test_keyfile.json")
+	require.NoError(t, err)
+
+	n := &Node{signer: arweaveSigner}
+	_, _, err = n.decryptInternalItem(rawItem)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ethereum encrypted tag requires ethereum signer")
+}
+
+func TestSanitizeCheckpointSnapshotRejectsNonProcessRawItem(t *testing.T) {
+	userSigner, err := goether.NewSigner("0xdde30fa25128addf45656a39c0570fd06fce3e48056457b9f1f9fda603cc4be1")
+	require.NoError(t, err)
+	userBundler, err := goar.NewBundler(userSigner)
+	require.NoError(t, err)
+	rawTags := []goarSchema.Tag{
+		{Name: "Data-Protocol", Value: hymxSchema.DataProtocol},
+		{Name: "Variant", Value: hymxSchema.Variant},
+		{Name: "Type", Value: hymxSchema.TypeMessage},
+	}
+	rawItem, err := userBundler.CreateAndSignItem([]byte("payload"), "lM-6SkQOII31LeDUeNTmCoXCLBBNLllkPEDMVosFrJY", "", rawTags)
+	require.NoError(t, err)
+
+	n := &Node{db: checkpointTestDB{items: map[string]goarSchema.BundleItem{"process-id": rawItem}}}
+	snap := vmmSchema.Snapshot{
+		Env: vmmSchema.Env{
+			Meta: vmmSchema.Meta{
+				Pid: "process-id",
+			},
+		},
+	}
+
+	_, err = n.sanitizeCheckpointSnapshot(snap)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid type")
+}
+
+func TestDecryptSnapshotEnvRejectsMalformedEncryptedTag(t *testing.T) {
+	nodeSigner, err := goether.NewSigner("0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b")
+	require.NoError(t, err)
+	n := &Node{signer: nodeSigner}
+	snap := vmmSchema.Snapshot{
+		Env: vmmSchema.Env{
+			Process: hymxSchema.Process{
+				Tags: []goarSchema.Tag{
+					{Name: tagcrypto.EncryptedTagPrefix + "Secret", Value: "not-a-cipher"},
+				},
+			},
+			Meta: vmmSchema.Meta{
+				Params: map[string]string{"Plain": "public-value"},
+			},
+		},
+	}
+
+	restored, err := n.decryptSnapshotEnv(snap)
+
+	require.Error(t, err)
+	require.Equal(t, snap.Env.Meta.Params, restored.Env.Meta.Params)
+	require.Equal(t, snap.Env.Process.Tags, restored.Env.Process.Tags)
+}
+
 type checkpointTestDB struct {
 	items map[string]goarSchema.BundleItem
 }
