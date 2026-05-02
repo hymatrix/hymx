@@ -59,13 +59,14 @@ func TestSendEncryptsPrefixedCustomTagBeforeSigning(t *testing.T) {
 	require.NotEmpty(t, submitted.Id)
 	require.Equal(t, tagcrypto.EncryptedTagPrefix+"Secret", tagValueName(submitted.Tags, tagcrypto.EncryptedTagPrefix+"Secret"))
 	ciphertext := tagValue(submitted.Tags, tagcrypto.EncryptedTagPrefix+"Secret")
+	require.NotEmpty(t, ciphertext)
 	require.NotContains(t, ciphertext, "private-value")
 	require.True(t, strings.HasPrefix(ciphertext, tagcrypto.CipherValuePrefix+":"+tagcrypto.KeyTypeEthereumECIES+":"))
 
-	decrypted, changed, err := tagcrypto.DecryptTags(submitted.Tags, nodeSigner)
+	decryptedParams, changed, err := tagcrypto.DecryptParams(submitted.Tags, nodeSigner)
 	require.NoError(t, err)
 	require.True(t, changed)
-	require.Equal(t, "private-value", tagValue(decrypted, "Secret"))
+	require.Equal(t, "private-value", decryptedParams[tagcrypto.EncryptedTagPrefix+"Secret"])
 }
 
 func TestSendAcceptsSingleNodeEncryptedSpawnRedirect(t *testing.T) {
@@ -132,10 +133,10 @@ func TestSendAcceptsSingleNodeEncryptedSpawnRedirect(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, redirected.URL, redirectedURL)
 
-	decrypted, changed, err := tagcrypto.DecryptTags(redirectedItem.Tags, secondNodeSigner)
+	decryptedParams, changed, err := tagcrypto.DecryptParams(redirectedItem.Tags, secondNodeSigner)
 	require.NoError(t, err)
 	require.True(t, changed)
-	require.Equal(t, "private-value", tagValue(decrypted, "Secret"))
+	require.Equal(t, "private-value", decryptedParams[tagcrypto.EncryptedTagPrefix+"Secret"])
 }
 
 func TestSpawnAndWaitPollsRedirectedNodeForEncryptedSpawn(t *testing.T) {
@@ -261,12 +262,12 @@ func TestSendReencryptsEncryptedTagsForRedirectedNode(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, redirectedURL)
 
-	_, _, err = tagcrypto.DecryptTags(redirectedItem.Tags, firstNodeSigner)
+	_, _, err = tagcrypto.DecryptParams(redirectedItem.Tags, firstNodeSigner)
 	require.Error(t, err)
-	decrypted, changed, err := tagcrypto.DecryptTags(redirectedItem.Tags, secondNodeSigner)
+	decryptedParams, changed, err := tagcrypto.DecryptParams(redirectedItem.Tags, secondNodeSigner)
 	require.NoError(t, err)
 	require.True(t, changed)
-	require.Equal(t, "private-value", tagValue(decrypted, "Secret"))
+	require.Equal(t, "private-value", decryptedParams[tagcrypto.EncryptedTagPrefix+"Secret"])
 }
 
 func TestSendFollowsChainedEncryptedRedirects(t *testing.T) {
@@ -346,14 +347,14 @@ func TestSendFollowsChainedEncryptedRedirects(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, finalNode.URL, redirectedURL)
 
-	_, _, err = tagcrypto.DecryptTags(finalItem.Tags, firstNodeSigner)
+	_, _, err = tagcrypto.DecryptParams(finalItem.Tags, firstNodeSigner)
 	require.Error(t, err)
-	_, _, err = tagcrypto.DecryptTags(finalItem.Tags, secondNodeSigner)
+	_, _, err = tagcrypto.DecryptParams(finalItem.Tags, secondNodeSigner)
 	require.Error(t, err)
-	decrypted, changed, err := tagcrypto.DecryptTags(finalItem.Tags, thirdNodeSigner)
+	decryptedParams, changed, err := tagcrypto.DecryptParams(finalItem.Tags, thirdNodeSigner)
 	require.NoError(t, err)
 	require.True(t, changed)
-	require.Equal(t, "private-value", tagValue(decrypted, "Secret"))
+	require.Equal(t, "private-value", decryptedParams[tagcrypto.EncryptedTagPrefix+"Secret"])
 }
 
 func TestSendReturnsErrorForEncryptedRedirectWithoutUsableNodes(t *testing.T) {
