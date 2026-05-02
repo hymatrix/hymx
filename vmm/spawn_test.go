@@ -63,6 +63,21 @@ func TestGenSpawnResultDoesNotForwardEncryptedOriginReference(t *testing.T) {
 	require.NotContains(t, tags, goarSchema.Tag{Name: "Reference", Value: "private-reference"})
 }
 
+func TestSpawnChecksExistingProcessBeforeDecryptingTags(t *testing.T) {
+	v := New(nil, make(chan schema.VmmResult, 1), make(chan schema.Outbox, 1), make(chan struct{}), nil)
+	v.addVm(testVm{}, &schema.Env{Meta: schema.Meta{Pid: "process-id"}})
+
+	err := v.Spawn(
+		schema.Meta{Pid: "process-id"},
+		hymxSchema.Process{
+			Tags: []goarSchema.Tag{{Name: "Encrypted-Secret", Value: "not-a-cipher"}},
+		},
+		hymxSchema.Module{},
+	)
+
+	require.ErrorIs(t, err, schema.ErrProcessAlreadyExists)
+}
+
 func tagValue(tags []goarSchema.Tag, name string) string {
 	for _, tag := range tags {
 		if tag.Name == name {

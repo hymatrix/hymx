@@ -13,14 +13,14 @@ import (
 func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.Module) (err error) {
 	pid := meta.Pid
 
+	if v.IsExists(pid) {
+		return schema.ErrProcessAlreadyExists
+	}
 	meta, err = v.withDecryptedParamsFromTags(meta, process.Tags)
 	if err != nil {
 		return err
 	}
 
-	if v.IsExists(pid) {
-		return schema.ErrProcessAlreadyExists
-	}
 	if v.registry == nil && module.ModuleFormat != schema.ModuleFormatRegistry && module.ModuleFormat != schema.ModuleFormatToken {
 		log.Debug("wait for registry spawned", "pid", pid)
 		select {

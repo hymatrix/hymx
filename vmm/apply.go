@@ -7,16 +7,10 @@ import (
 )
 
 func (v *Vmm) apply(meta schema.Meta) error {
-	meta, err := v.withDecryptedParamsFromParamMap(meta)
-	if err != nil {
-		return err
-	}
-
 	vm, env, err := v.GetVm(meta.Pid)
 	if err != nil {
 		return err
 	}
-	logApplyStart(meta, env)
 
 	vmmRes := schema.VmmResult{
 		Nonce:       fmt.Sprintf("%d", meta.Nonce),
@@ -37,6 +31,13 @@ func (v *Vmm) apply(meta schema.Meta) error {
 			v.RecoveryUnlock(meta.Pid)
 		}
 	}()
+
+	meta, err = v.withDecryptedParamsFromParamMap(meta)
+	if err != nil {
+		vmmRes.Error = err.Error()
+		return err
+	}
+	logApplyStart(meta, env)
 
 	from, err := v.applyCheck(vm, env, meta)
 	if err != nil {
