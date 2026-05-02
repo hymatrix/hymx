@@ -23,8 +23,13 @@ func TestSafeLogMetaRedactsParams(t *testing.T) {
 		Params: map[string]string{
 			"Secret": "private-value",
 		},
+		DecryptedParams: map[string]string{
+			"Encrypted-Secret": "decrypted-private-value",
+		},
 	}, nil)
 
 	require.NotContains(t, buf.String(), "private-value")
+	require.NotContains(t, buf.String(), "decrypted-private-value")
 	require.Contains(t, buf.String(), "Secret")
+	require.Contains(t, buf.String(), "Encrypted-Secret")
 }

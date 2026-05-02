@@ -13,6 +13,11 @@ import (
 func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.Module) (err error) {
 	pid := meta.Pid
 
+	meta, err = v.withDecryptedParamsFromTags(meta, process.Tags)
+	if err != nil {
+		return err
+	}
+
 	if v.IsExists(pid) {
 		return schema.ErrProcessAlreadyExists
 	}

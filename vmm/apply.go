@@ -7,6 +7,11 @@ import (
 )
 
 func (v *Vmm) apply(meta schema.Meta) error {
+	meta, err := v.withDecryptedParamsFromParamMap(meta)
+	if err != nil {
+		return err
+	}
+
 	vm, env, err := v.GetVm(meta.Pid)
 	if err != nil {
 		return err
@@ -57,14 +62,20 @@ func logApplyStart(meta schema.Meta, env *schema.Env) {
 }
 
 func redactedMeta(meta schema.Meta) schema.Meta {
-	if len(meta.Params) == 0 {
-		return meta
+	if len(meta.Params) > 0 {
+		params := make(map[string]string, len(meta.Params))
+		for key := range meta.Params {
+			params[key] = "[redacted]"
+		}
+		meta.Params = params
 	}
-	params := make(map[string]string, len(meta.Params))
-	for key := range meta.Params {
-		params[key] = "[redacted]"
+	if len(meta.DecryptedParams) > 0 {
+		decryptedParams := make(map[string]string, len(meta.DecryptedParams))
+		for key := range meta.DecryptedParams {
+			decryptedParams[key] = "[redacted]"
+		}
+		meta.DecryptedParams = decryptedParams
 	}
-	meta.Params = params
 	return meta
 }
 
