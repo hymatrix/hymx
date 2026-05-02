@@ -39,6 +39,7 @@ func TestTransferForwardsOnlyRawXParams(t *testing.T) {
 		require.Equal(t, "public-value", tokenTagValue(msg.Tags, "X-Public"))
 		require.Empty(t, tokenTagValue(msg.Tags, "X-Secret"))
 		require.Empty(t, tokenTagValue(msg.Tags, "Encrypted-X-Secret"))
+		require.False(t, tokenHasTagValue(msg.Tags, "private-value"))
 	}
 }
 
@@ -49,4 +50,13 @@ func tokenTagValue(tags []goarSchema.Tag, name string) string {
 		}
 	}
 	return ""
+}
+
+func tokenHasTagValue(tags []goarSchema.Tag, value string) bool {
+	for _, tag := range tags {
+		if tag.Value == value {
+			return true
+		}
+	}
+	return false
 }
