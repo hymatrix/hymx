@@ -104,6 +104,27 @@ func TestSpawnChecksExistingProcessBeforeDecryptingTags(t *testing.T) {
 	require.ErrorIs(t, err, schema.ErrProcessAlreadyExists)
 }
 
+func TestSpawnDecryptFailureUnlocksRecovery(t *testing.T) {
+	v := New(nil, make(chan schema.VmmResult, 1), make(chan schema.Outbox, 1), make(chan struct{}), nil)
+	v.RecoveryLock("process-id")
+
+	err := v.Spawn(
+		schema.Meta{
+			Pid:              "process-id",
+			Mode:             schema.ExecModeReplay,
+			Nonce:            0,
+			RecoveryMaxNonce: 0,
+		},
+		hymxSchema.Process{
+			Tags: []goarSchema.Tag{{Name: "Encrypted-Secret", Value: "not-a-cipher"}},
+		},
+		hymxSchema.Module{},
+	)
+
+	require.Error(t, err)
+	require.False(t, v.IsRecovering("process-id"))
+}
+
 func tagValue(tags []goarSchema.Tag, name string) string {
 	for _, tag := range tags {
 		if tag.Name == name {
