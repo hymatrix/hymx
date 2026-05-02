@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	EncryptedTagPrefix    = "Hymx-Encrypted-"
+	EncryptedTagPrefix    = "Encrypted-"
 	CipherValuePrefix     = "hymxenc:v1"
 	KeyTypeEthereumECIES  = "ethereum-ecies"
 	KeyTypeArweaveRSAOAEP = "arweave-rsa-oaep-sha256"
@@ -171,6 +171,38 @@ func DecryptTags(tags []goarSchema.Tag, signer interface{}) ([]goarSchema.Tag, b
 		changed = true
 	}
 	return decrypted, changed, nil
+}
+
+func DecryptParams(tags []goarSchema.Tag, decryptKey interface{}) (map[string]string, bool, error) {
+	decrypted := map[string]string{}
+	changed := false
+	for _, tag := range tags {
+		if !IsEncryptedTagName(tag.Name) {
+			continue
+		}
+		if _, err := PlainTagName(tag.Name); err != nil {
+			return nil, false, err
+		}
+		keyType, ciphertext, err := parseCipherValue(tag.Value)
+		if err != nil {
+			return nil, false, err
+		}
+		plaintext, err := decryptValue(ciphertext, keyType, decryptKey)
+		if err != nil {
+			return nil, false, err
+		}
+		decrypted[tag.Name] = string(plaintext)
+		changed = true
+	}
+	return decrypted, changed, nil
+}
+
+func DecryptParamMap(params map[string]string, decryptKey interface{}) (map[string]string, bool, error) {
+	tags := make([]goarSchema.Tag, 0, len(params))
+	for key, value := range params {
+		tags = append(tags, goarSchema.Tag{Name: key, Value: value})
+	}
+	return DecryptParams(tags, decryptKey)
 }
 
 func encryptValue(plaintext []byte, publicKey, keyType string) ([]byte, error) {

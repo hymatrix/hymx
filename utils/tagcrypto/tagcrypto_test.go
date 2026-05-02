@@ -25,10 +25,48 @@ func TestEthereumEncryptedTagRoundTrip(t *testing.T) {
 	require.NotContains(t, encrypted[0].Value, "private-value")
 	require.True(t, strings.HasPrefix(encrypted[0].Value, CipherValuePrefix+":"+KeyTypeEthereumECIES+":"))
 
-	decrypted, changed, err := DecryptTags(encrypted, nodeSigner)
+	decryptedParams, changed, err := DecryptParams(encrypted, nodeSigner)
 	require.NoError(t, err)
 	require.True(t, changed)
-	require.Equal(t, []goarSchema.Tag{{Name: "Secret", Value: "private-value"}}, decrypted)
+	require.Equal(t, map[string]string{"Encrypted-Secret": "private-value"}, decryptedParams)
+}
+
+func TestDecryptParamsKeepsEncryptedTagKeys(t *testing.T) {
+	nodeSigner, err := goether.NewSigner("0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b")
+	require.NoError(t, err)
+	nodeBundler, err := goar.NewBundler(nodeSigner)
+	require.NoError(t, err)
+
+	tags := []goarSchema.Tag{{Name: EncryptedTagPrefix + "Secret", Value: "private-value"}}
+	encrypted, changed, err := EncryptTags(tags, nodeBundler.Owner, KeyTypeEthereumECIES)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, "Encrypted-Secret", encrypted[0].Name)
+
+	params, changed, err := DecryptParams(encrypted, nodeSigner)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, map[string]string{"Encrypted-Secret": "private-value"}, params)
+}
+
+func TestDecryptParamMapKeepsEncryptedTagKeys(t *testing.T) {
+	nodeSigner, err := goether.NewSigner("0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b")
+	require.NoError(t, err)
+	nodeBundler, err := goar.NewBundler(nodeSigner)
+	require.NoError(t, err)
+
+	encrypted, _, err := EncryptTags([]goarSchema.Tag{
+		{Name: EncryptedTagPrefix + "Secret", Value: "private-value"},
+	}, nodeBundler.Owner, KeyTypeEthereumECIES)
+	require.NoError(t, err)
+
+	decrypted, changed, err := DecryptParamMap(map[string]string{
+		"Public":          "public-value",
+		encrypted[0].Name: encrypted[0].Value,
+	}, nodeSigner)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, map[string]string{"Encrypted-Secret": "private-value"}, decrypted)
 }
 
 func TestArweaveEncryptedTagRoundTrip(t *testing.T) {
@@ -46,10 +84,10 @@ func TestArweaveEncryptedTagRoundTrip(t *testing.T) {
 	require.NotContains(t, encrypted[0].Value, "private-value")
 	require.True(t, strings.HasPrefix(encrypted[0].Value, CipherValuePrefix+":"+KeyTypeArweaveRSAOAEP+":"))
 
-	decrypted, changed, err := DecryptTags(encrypted, nodeSigner)
+	decryptedParams, changed, err := DecryptParams(encrypted, nodeSigner)
 	require.NoError(t, err)
 	require.True(t, changed)
-	require.Equal(t, []goarSchema.Tag{{Name: "Secret", Value: "private-value"}}, decrypted)
+	require.Equal(t, map[string]string{"Encrypted-Secret": "private-value"}, decryptedParams)
 }
 
 func TestEncryptedReservedTagRejected(t *testing.T) {
@@ -104,20 +142,17 @@ func TestMixedPlainAndEncryptedTagsRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, map[string]bool{"Secret": true}, names)
 
-	decrypted, changed, err := DecryptTags(encrypted, nodeSigner)
+	decryptedParams, changed, err := DecryptParams(encrypted, nodeSigner)
 	require.NoError(t, err)
 	require.True(t, changed)
-	require.Equal(t, []goarSchema.Tag{
-		{Name: "Plain", Value: "public-value"},
-		{Name: "Secret", Value: "private-value"},
-	}, decrypted)
+	require.Equal(t, map[string]string{"Encrypted-Secret": "private-value"}, decryptedParams)
 }
 
-func TestDecryptTagsRejectsMalformedCipherValue(t *testing.T) {
+func TestDecryptParamsRejectsMalformedCipherValue(t *testing.T) {
 	nodeSigner, err := goether.NewSigner("0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b")
 	require.NoError(t, err)
 
-	_, _, err = DecryptTags([]goarSchema.Tag{
+	_, _, err = DecryptParams([]goarSchema.Tag{
 		{Name: EncryptedTagPrefix + "Secret", Value: "not-a-cipher"},
 	}, nodeSigner)
 
@@ -133,11 +168,11 @@ func TestEncryptTagsRejectsUnsupportedKeyType(t *testing.T) {
 	require.Contains(t, err.Error(), "unsupported encryption key type")
 }
 
-func TestDecryptTagsRejectsUnsupportedCipherKeyType(t *testing.T) {
+func TestDecryptParamsRejectsUnsupportedCipherKeyType(t *testing.T) {
 	nodeSigner, err := goether.NewSigner("0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b")
 	require.NoError(t, err)
 
-	_, _, err = DecryptTags([]goarSchema.Tag{
+	_, _, err = DecryptParams([]goarSchema.Tag{
 		{Name: EncryptedTagPrefix + "Secret", Value: CipherValuePrefix + ":unsupported-key-type:Y2lwaGVy"},
 	}, nodeSigner)
 
@@ -145,7 +180,7 @@ func TestDecryptTagsRejectsUnsupportedCipherKeyType(t *testing.T) {
 	require.Contains(t, err.Error(), "unsupported encryption key type")
 }
 
-func TestDecryptTagsRejectsWrongSignerType(t *testing.T) {
+func TestDecryptParamsRejectsWrongSignerType(t *testing.T) {
 	nodeSigner, err := goether.NewSigner("0x64dd2342616f385f3e8157cf7246cf394217e13e8f91b7d208e9f8b60e25ed1b")
 	require.NoError(t, err)
 	nodeBundler, err := goar.NewBundler(nodeSigner)
@@ -158,7 +193,7 @@ func TestDecryptTagsRejectsWrongSignerType(t *testing.T) {
 	}, nodeBundler.Owner, KeyTypeEthereumECIES)
 	require.NoError(t, err)
 
-	_, _, err = DecryptTags(encrypted, arweaveSigner)
+	_, _, err = DecryptParams(encrypted, arweaveSigner)
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ethereum encrypted tag requires ethereum signer")
