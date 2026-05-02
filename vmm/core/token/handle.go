@@ -148,7 +148,7 @@ func (h *Token) handleTransfer(from string, meta vmmSchema.Meta) (res vmmSchema.
 	}
 	// Forward X- prefixed tags to both messages
 	for key, value := range params {
-		if strings.HasPrefix(key, "X-") && !meta.EncryptedParams[key] {
+		if strings.HasPrefix(key, "X-") {
 			debitNotice.Tags = append(debitNotice.Tags, goarSchema.Tag{Name: key, Value: value})
 			creditNotice.Tags = append(creditNotice.Tags, goarSchema.Tag{Name: key, Value: value})
 		}

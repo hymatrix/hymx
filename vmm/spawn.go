@@ -100,10 +100,7 @@ func (v *Vmm) genSpawnResult(env *schema.Env) (result *schema.VmmResult) {
 	// if spawn form process, send 'Spawned 'msg to it
 	// Reference tag from ao
 	if env.Meta.FromProcess != "" {
-		ref := "0"
-		if !env.Meta.EncryptedParams["Reference"] {
-			ref = utils.GetTagsValueByDefault("Reference", env.Process.Tags, "0")
-		}
+		ref := utils.GetTagsValueByDefault("Reference", env.Process.Tags, "0")
 		spawnedMsg := &schema.ResMessage{
 			Target: env.Meta.FromProcess,
 			Tags: []goarSchema.Tag{
@@ -114,7 +111,7 @@ func (v *Vmm) genSpawnResult(env *schema.Env) (result *schema.VmmResult) {
 		}
 		// Forward X- prefixed tags to message
 		for key, value := range env.Meta.Params {
-			if strings.HasPrefix(key, "X-") && !env.Meta.EncryptedParams[key] {
+			if strings.HasPrefix(key, "X-") {
 				spawnedMsg.Tags = append(spawnedMsg.Tags, goarSchema.Tag{Name: key, Value: value})
 			}
 		}

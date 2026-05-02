@@ -52,7 +52,6 @@ type Meta struct {
 	Timestamp int64 `json:"Timestamp"` // UnixMilli
 	// input params
 	Params          map[string]string `json:"Params"`
-	EncryptedParams map[string]bool   `json:"-"`
 	DecryptedParams map[string]string `json:"-"`
 	Data            string            `json:"Data"`
 

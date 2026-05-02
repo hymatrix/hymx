@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTransferDoesNotForwardEncryptedOriginXParams(t *testing.T) {
+func TestTransferForwardsOnlyRawXParams(t *testing.T) {
 	from := "0x1111111111111111111111111111111111111111"
 	recipient := "0x2222222222222222222222222222222222222222"
 	db := cache.NewToken(tokenSchema.Info{Ticker: "TST"}, map[string]*big.Int{
@@ -23,12 +23,11 @@ func TestTransferDoesNotForwardEncryptedOriginXParams(t *testing.T) {
 	res := tok.Apply(from, vmmSchema.Meta{
 		Action: "Transfer",
 		Params: map[string]string{
-			"Recipient": recipient,
-			"Quantity":  "1",
-			"X-Public":  "public-value",
-			"X-Secret":  "private-value",
+			"Recipient":          recipient,
+			"Quantity":           "1",
+			"X-Public":           "public-value",
+			"Encrypted-X-Secret": "ciphertext",
 		},
-		EncryptedParams: map[string]bool{"X-Secret": true},
 		DecryptedParams: map[string]string{
 			"Encrypted-X-Secret": "private-value",
 		},
@@ -39,7 +38,7 @@ func TestTransferDoesNotForwardEncryptedOriginXParams(t *testing.T) {
 	for _, msg := range res.Messages {
 		require.Equal(t, "public-value", tokenTagValue(msg.Tags, "X-Public"))
 		require.Empty(t, tokenTagValue(msg.Tags, "X-Secret"))
-		require.NotContains(t, msg.Tags, goarSchema.Tag{Name: "X-Secret", Value: "private-value"})
+		require.Empty(t, tokenTagValue(msg.Tags, "Encrypted-X-Secret"))
 	}
 }
 

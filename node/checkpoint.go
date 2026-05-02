@@ -55,11 +55,6 @@ func (n *Node) Restore(ckpId string) (nonce int64, err error) {
 		return -1, err
 	}
 
-	snap, err = n.decryptSnapshotEnv(snap)
-	if err != nil {
-		return -1, err
-	}
-
 	if err = n.vmm.Restore(snap); err != nil {
 		return -1, err
 	}
@@ -83,11 +78,6 @@ func (n *Node) Checkpoint(pid string) (ckpItem goarSchema.BundleItem, err error)
 }
 
 func (n *Node) signCheckpoint(snap vmmSchema.Snapshot) (ckpItem goarSchema.BundleItem, err error) {
-	snap, err = n.sanitizeCheckpointSnapshot(snap)
-	if err != nil {
-		return
-	}
-
 	ckp := hymxSchema.Checkpoint{
 		Base:    hymxSchema.DefaultCheckpoint,
 		Process: snap.Env.Meta.Pid,

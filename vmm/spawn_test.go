@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGenSpawnResultDoesNotForwardEncryptedOriginXParams(t *testing.T) {
+func TestGenSpawnResultForwardsOnlyRawXParams(t *testing.T) {
 	v := &Vmm{}
 	env := &schema.Env{
 		Meta: schema.Meta{
@@ -17,10 +17,9 @@ func TestGenSpawnResultDoesNotForwardEncryptedOriginXParams(t *testing.T) {
 			Pid:         "process-id",
 			FromProcess: "parent-process",
 			Params: map[string]string{
-				"X-Public": "public-value",
-				"X-Secret": "private-value",
+				"X-Public":           "public-value",
+				"Encrypted-X-Secret": "ciphertext",
 			},
-			EncryptedParams: map[string]bool{"X-Secret": true},
 			DecryptedParams: map[string]string{
 				"Encrypted-X-Secret": "private-value",
 			},
@@ -35,24 +34,23 @@ func TestGenSpawnResultDoesNotForwardEncryptedOriginXParams(t *testing.T) {
 	tags := result.Messages[0].Tags
 	require.Equal(t, "public-value", tagValue(tags, "X-Public"))
 	require.Empty(t, tagValue(tags, "X-Secret"))
-	require.NotContains(t, tags, goarSchema.Tag{Name: "X-Secret", Value: "private-value"})
+	require.Empty(t, tagValue(tags, "Encrypted-X-Secret"))
 }
 
-func TestGenSpawnResultDoesNotForwardEncryptedOriginReference(t *testing.T) {
+func TestGenSpawnResultUsesDefaultForEncryptedOriginReference(t *testing.T) {
 	v := &Vmm{}
 	env := &schema.Env{
 		Meta: schema.Meta{
-			ItemId:          "item-id",
-			Pid:             "process-id",
-			FromProcess:     "parent-process",
-			Params:          map[string]string{"Reference": "private-reference"},
-			EncryptedParams: map[string]bool{"Reference": true},
+			ItemId:      "item-id",
+			Pid:         "process-id",
+			FromProcess: "parent-process",
+			Params:      map[string]string{"Encrypted-Reference": "ciphertext"},
 			DecryptedParams: map[string]string{
 				"Encrypted-Reference": "private-reference",
 			},
 		},
 		Process: hymxSchema.Process{
-			Tags: []goarSchema.Tag{{Name: "Reference", Value: "private-reference"}},
+			Tags: []goarSchema.Tag{{Name: "Encrypted-Reference", Value: "ciphertext"}},
 		},
 	}
 

@@ -60,9 +60,6 @@ type Node struct {
 
 	recoveryTaskPool *ants.Pool
 	registrySpawned  chan struct{}
-
-	rawSpawnItems   map[string]goarSchema.BundleItem
-	rawSpawnItemsMu sync.RWMutex
 }
 
 func New(
@@ -115,7 +112,6 @@ func New(
 		recoveryTaskPool: taskPool,
 		chainkit:         chainkit,
 		registrySpawned:  registryCh,
-		rawSpawnItems:    map[string]goarSchema.BundleItem{},
 	}
 }
 

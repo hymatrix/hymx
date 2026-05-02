@@ -6,7 +6,6 @@ import (
 	"github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/utils"
-	"github.com/hymatrix/hymx/utils/tagcrypto"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
 )
@@ -60,10 +59,6 @@ func (n *Node) applyMessage(
 	if err != nil {
 		return err
 	}
-	encryptedParams, err := tagcrypto.EncryptedPlainTagNames(item.Tags)
-	if err != nil {
-		return err
-	}
 
 	sequence := int64(0)
 	if msg.Sequence != "" {
@@ -84,7 +79,6 @@ func (n *Node) applyMessage(
 		Nonce:            nonce,
 		Timestamp:        timestamp,
 		Params:           params,
-		EncryptedParams:  encryptedParams,
 		Data:             item.Data,
 		Mode:             mode,
 		RecoveryMaxNonce: maxNonce,

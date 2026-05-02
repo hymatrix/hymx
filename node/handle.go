@@ -68,10 +68,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 		}
 	}
 
-	_, internalInstance, err := n.decryptInternalItem(item)
-	if err != nil {
-		return
-	}
+	internalInstance := instance
 
 	switch v := internalInstance.(type) {
 	case hymxSchema.Process:
@@ -86,7 +83,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 }
 
 func (n *Node) HandleMode(item goarSchema.BundleItem, assign hymxSchema.Assignment, mode vmmSchema.ExecMode, maxNonce int64) (err error) {
-	pid, accid, _, instance, err := n.decodeInternalItem(item)
+	pid, accid, _, instance, err := utils.Decode(item)
 	if err != nil {
 		return
 	}
