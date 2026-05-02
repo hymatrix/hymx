@@ -65,6 +65,30 @@ func TestGenSpawnResultUsesRawReferenceWhenEncryptedReferenceIsPresent(t *testin
 	require.NotContains(t, tags, goarSchema.Tag{Name: "Reference", Value: "private-reference"})
 }
 
+func TestGenSpawnResultUsesDefaultReferenceWhenOnlyEncryptedReferenceIsPresent(t *testing.T) {
+	v := &Vmm{}
+	env := &schema.Env{
+		Meta: schema.Meta{
+			ItemId:      "item-id",
+			Pid:         "process-id",
+			FromProcess: "parent-process",
+			Params:      map[string]string{"Encrypted-Reference": "ciphertext"},
+			DecryptedParams: map[string]string{
+				"Encrypted-Reference": "private-reference",
+			},
+		},
+		Process: hymxSchema.Process{
+			Tags: []goarSchema.Tag{{Name: "Encrypted-Reference", Value: "ciphertext"}},
+		},
+	}
+
+	result := v.genSpawnResult(env)
+	require.Len(t, result.Messages, 1)
+	tags := result.Messages[0].Tags
+	require.Equal(t, "0", tagValue(tags, "Reference"))
+	require.False(t, hasTagValue(tags, "private-reference"))
+}
+
 func TestSpawnChecksExistingProcessBeforeDecryptingTags(t *testing.T) {
 	v := New(nil, make(chan schema.VmmResult, 1), make(chan schema.Outbox, 1), make(chan struct{}), nil)
 	v.addVm(testVm{}, &schema.Env{Meta: schema.Meta{Pid: "process-id"}})
