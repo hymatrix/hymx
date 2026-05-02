@@ -151,7 +151,7 @@ func TestHandleRoutesEncryptedSpawnBeforeDecrypting(t *testing.T) {
 	n := &Node{
 		signer:  localSigner,
 		bundler: localBundler,
-		vmm:     vmm.New(&nodeSchema.Info{}, make(chan vmmSchema.VmmResult), make(chan vmmSchema.Outbox), make(chan struct{}, 1)),
+		vmm:     vmm.New(&nodeSchema.Info{}, make(chan vmmSchema.VmmResult), make(chan vmmSchema.Outbox), make(chan struct{}, 1), nil),
 	}
 
 	err = n.Handle(rawItem)
@@ -227,6 +227,7 @@ func TestCheckpointSnapshotFailsWhenEncryptedRawSpawnIsMissing(t *testing.T) {
 				Pid:             "process-id",
 				Params:          map[string]string{"Secret": "private-value"},
 				EncryptedParams: map[string]bool{"Secret": true},
+				DecryptedParams: map[string]string{"Encrypted-Secret": "private-value"},
 			},
 			Process: hymxSchema.Process{
 				Tags: []goarSchema.Tag{{Name: "Secret", Value: "private-value"}},

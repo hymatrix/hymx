@@ -29,6 +29,9 @@ func TestTransferDoesNotForwardEncryptedOriginXParams(t *testing.T) {
 			"X-Secret":  "private-value",
 		},
 		EncryptedParams: map[string]bool{"X-Secret": true},
+		DecryptedParams: map[string]string{
+			"Encrypted-X-Secret": "private-value",
+		},
 	})
 
 	require.NoError(t, res.Error)

@@ -15,9 +15,10 @@ var log = common.NewLog("vmm")
 
 // VirtualMachine Management
 type Vmm struct {
-	info     *nodeSchema.Info
-	registry *registry.Registry
-	token    *token.Token
+	info          *nodeSchema.Info
+	tagDecryptKey interface{}
+	registry      *registry.Registry
+	token         *token.Token
 
 	vmFactors map[string]schema.VmSpawnFunc // moduleFormat -> vmSpawnFunc
 	vms       map[string]schema.Vm          // pid -> virtual machine
@@ -37,10 +38,11 @@ type Vmm struct {
 	registrySpawned chan struct{}
 }
 
-func New(info *nodeSchema.Info, resultChan chan<- schema.VmmResult, outboxChan chan<- schema.Outbox, registrySpawned chan struct{}) *Vmm {
+func New(info *nodeSchema.Info, resultChan chan<- schema.VmmResult, outboxChan chan<- schema.Outbox, registrySpawned chan struct{}, tagDecryptKey interface{}) *Vmm {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Vmm{
-		info: info,
+		info:          info,
+		tagDecryptKey: tagDecryptKey,
 
 		vmFactors: map[string]schema.VmSpawnFunc{},
 		vms:       map[string]schema.Vm{},

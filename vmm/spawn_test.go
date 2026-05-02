@@ -21,6 +21,9 @@ func TestGenSpawnResultDoesNotForwardEncryptedOriginXParams(t *testing.T) {
 				"X-Secret": "private-value",
 			},
 			EncryptedParams: map[string]bool{"X-Secret": true},
+			DecryptedParams: map[string]string{
+				"Encrypted-X-Secret": "private-value",
+			},
 		},
 		Process: hymxSchema.Process{
 			Tags: []goarSchema.Tag{{Name: "Reference", Value: "7"}},
@@ -44,6 +47,9 @@ func TestGenSpawnResultDoesNotForwardEncryptedOriginReference(t *testing.T) {
 			FromProcess:     "parent-process",
 			Params:          map[string]string{"Reference": "private-reference"},
 			EncryptedParams: map[string]bool{"Reference": true},
+			DecryptedParams: map[string]string{
+				"Encrypted-Reference": "private-reference",
+			},
 		},
 		Process: hymxSchema.Process{
 			Tags: []goarSchema.Tag{{Name: "Reference", Value: "private-reference"}},
