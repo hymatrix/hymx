@@ -227,7 +227,7 @@ func TestCheckpointSnapshotFailsWhenEncryptedRawSpawnIsMissing(t *testing.T) {
 				Pid:             "process-id",
 				Params:          map[string]string{"Secret": "private-value"},
 				EncryptedParams: map[string]bool{"Secret": true},
-				DecryptedParams: map[string]string{"Encrypted-Secret": "private-value"},
+				DecryptedParams: map[string]string{},
 			},
 			Process: hymxSchema.Process{
 				Tags: []goarSchema.Tag{{Name: "Secret", Value: "private-value"}},
