@@ -55,6 +55,23 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 
 	switch v := instance.(type) {
 	case hymxSchema.Process:
+		if v.Scheduler != n.bundler.Address {
+			return n.handleProcess(pid, signer, item, v)
+		}
+	case hymxSchema.Message:
+		isRedirect, _, err := n.IsRedirect(pid)
+		if err != nil {
+			return err
+		}
+		if isRedirect || !n.vmm.IsExists(pid) {
+			return n.handleMessage(pid, signer, item, v)
+		}
+	}
+
+	internalInstance := instance
+
+	switch v := internalInstance.(type) {
+	case hymxSchema.Process:
 		err = n.handleProcess(pid, signer, item, v)
 	case hymxSchema.Message:
 		err = n.handleMessage(pid, signer, item, v)

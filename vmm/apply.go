@@ -11,7 +11,6 @@ func (v *Vmm) apply(meta schema.Meta) error {
 	if err != nil {
 		return err
 	}
-	log.Debug("===> apply", "meta", meta, "env", env)
 
 	vmmRes := schema.VmmResult{
 		Nonce:       fmt.Sprintf("%d", meta.Nonce),
@@ -33,6 +32,13 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		}
 	}()
 
+	meta, err = v.withDecryptedParamsFromParamMap(meta)
+	if err != nil {
+		vmmRes.Error = err.Error()
+		return err
+	}
+	logApplyStart(meta, env)
+
 	from, err := v.applyCheck(vm, env, meta)
 	if err != nil {
 		vmmRes.Error = err.Error()
@@ -50,6 +56,28 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		vmmRes.Error = res.Error.Error()
 	}
 	return nil
+}
+
+func logApplyStart(meta schema.Meta, env *schema.Env) {
+	log.Debug("===> apply", "meta", redactedMeta(meta), "pid", meta.Pid, "itemId", meta.ItemId)
+}
+
+func redactedMeta(meta schema.Meta) schema.Meta {
+	if len(meta.Params) > 0 {
+		params := make(map[string]string, len(meta.Params))
+		for key := range meta.Params {
+			params[key] = "[redacted]"
+		}
+		meta.Params = params
+	}
+	if len(meta.DecryptedParams) > 0 {
+		decryptedParams := make(map[string]string, len(meta.DecryptedParams))
+		for key := range meta.DecryptedParams {
+			decryptedParams[key] = "[redacted]"
+		}
+		meta.DecryptedParams = decryptedParams
+	}
+	return meta
 }
 
 func (v *Vmm) applyCheck(vm schema.Vm, env *schema.Env, m schema.Meta) (from string, err error) {

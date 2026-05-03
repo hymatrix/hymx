@@ -430,7 +430,12 @@ func (s *Server) handleSubmitErr(err error, item goarSchema.BundleItem, c *gin.C
 		c.JSON(http.StatusPermanentRedirect, node)
 		ok = true
 	case nodeSchema.ErrMessageRedirect:
-		_, nodes, errRedir := s.node.IsRedirect(item.Id)
+		pid, errDecode := redirectPIDForItem(item)
+		if errDecode != nil {
+			log.Error("decode item failed", "item", item, "err", errDecode)
+			return
+		}
+		_, nodes, errRedir := s.node.IsRedirect(pid)
 		if errRedir != nil {
 			log.Error("is redirect failed", "item", item, "err", errRedir)
 			return
@@ -443,6 +448,11 @@ func (s *Server) handleSubmitErr(err error, item goarSchema.BundleItem, c *gin.C
 	}
 
 	return
+}
+
+func redirectPIDForItem(item goarSchema.BundleItem) (string, error) {
+	pid, _, _, _, err := utils.Decode(item)
+	return pid, err
 }
 
 func getFullURL(c *gin.Context) string {

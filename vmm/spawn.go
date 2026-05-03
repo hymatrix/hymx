@@ -16,6 +16,16 @@ func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.
 	if v.IsExists(pid) {
 		return schema.ErrProcessAlreadyExists
 	}
+	defer func() {
+		if meta.Mode != schema.ExecModeApply && meta.Nonce == meta.RecoveryMaxNonce {
+			v.RecoveryUnlock(meta.Pid)
+		}
+	}()
+	meta, err = v.withDecryptedParamsFromTags(meta, process.Tags)
+	if err != nil {
+		return err
+	}
+
 	if v.registry == nil && module.ModuleFormat != schema.ModuleFormatRegistry && module.ModuleFormat != schema.ModuleFormatToken {
 		log.Debug("wait for registry spawned", "pid", pid)
 		select {
@@ -45,9 +55,6 @@ func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.
 	result.Mode = meta.Mode
 	// send to outbox
 	v.outbox(env, result)
-	if meta.Mode != schema.ExecModeApply && meta.Nonce == meta.RecoveryMaxNonce {
-		v.RecoveryUnlock(meta.Pid)
-	}
 
 	return
 }

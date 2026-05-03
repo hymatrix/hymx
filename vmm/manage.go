@@ -141,6 +141,12 @@ func (v *Vmm) Checkpoint(pid string) (snap schema.Snapshot, err error) {
 }
 
 func (v *Vmm) Restore(snap schema.Snapshot) error {
+	meta, err := v.withDecryptedParamsFromTags(snap.Env.Meta, snap.Env.Process.Tags)
+	if err != nil {
+		return err
+	}
+	snap.Env.Meta = meta
+
 	vm, _, err := v.GetVm(snap.Env.Meta.Pid)
 	if err != nil {
 		if vm, err = v.spawn(snap.Env); err != nil {

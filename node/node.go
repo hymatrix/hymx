@@ -27,6 +27,7 @@ type Node struct {
 	info    *schema.Info
 
 	bundler *goar.Bundler
+	signer  interface{}
 	sdk     *sdk.SDK
 
 	vmm *vmm.Vmm
@@ -62,6 +63,7 @@ type Node struct {
 }
 
 func New(
+	signer interface{},
 	bundler *goar.Bundler,
 	redisURL string,
 	arweaveURL string,
@@ -85,9 +87,10 @@ func New(
 		info:    nodeInfo,
 
 		bundler: bundler,
+		signer:  signer,
 		sdk:     sdk.NewFromBundler(hymxURL, bundler),
 
-		vmm: vmm.New(nodeInfo, resultChan, outboxChan, registryCh),
+		vmm: vmm.New(nodeInfo, resultChan, outboxChan, registryCh, signer),
 
 		ctx:    ctx,
 		cancel: cancel,
