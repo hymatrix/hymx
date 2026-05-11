@@ -13,4 +13,5 @@ checkpoint
 # Release notes files
 release_notes_*.md
 CLAUDE.md
+AGENTS.md
 /.claude
