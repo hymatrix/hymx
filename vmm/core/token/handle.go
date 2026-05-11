@@ -105,8 +105,7 @@ func (h *Token) handleBalances(from string) (res vmmSchema.Result, err error) {
 	return
 }
 
-func (h *Token) handleTransfer(from string, meta vmmSchema.Meta) (res vmmSchema.Result, err error) {
-	params := meta.Params
+func (h *Token) handleTransfer(from string, params map[string]string) (res vmmSchema.Result, err error) {
 	recipient, ok := params["Recipient"]
 	if !ok {
 		err = schema.ErrMissingRecipient
