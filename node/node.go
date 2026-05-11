@@ -27,7 +27,6 @@ type Node struct {
 	info    *schema.Info
 
 	bundler *goar.Bundler
-	signer  interface{}
 	sdk     *sdk.SDK
 
 	vmm *vmm.Vmm
@@ -87,7 +86,6 @@ func New(
 		info:    nodeInfo,
 
 		bundler: bundler,
-		signer:  signer,
 		sdk:     sdk.NewFromBundler(hymxURL, bundler),
 
 		vmm: vmm.New(nodeInfo, resultChan, outboxChan, registryCh, signer),

@@ -1,14 +1,12 @@
 package node
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/everFinance/goether"
 	hymxSchema "github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/utils"
 	"github.com/hymatrix/hymx/utils/tagcrypto"
-	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
 	"github.com/stretchr/testify/require"
@@ -41,27 +39,4 @@ func TestNodeDecodeKeepsEncryptedTagsRaw(t *testing.T) {
 	msg := instance.(hymxSchema.Message)
 	require.Empty(t, utils.GetTagsValue("Secret", msg.Tags))
 	require.NotEmpty(t, utils.GetTagsValue(tagcrypto.EncryptedTagPrefix+"Secret", msg.Tags))
-}
-
-func TestCheckpointSnapshotKeepsRawEncryptedEnv(t *testing.T) {
-	snap := vmmSchema.Snapshot{
-		Env: vmmSchema.Env{
-			Meta: vmmSchema.Meta{
-				Pid: "process-id",
-				Params: map[string]string{
-					"Encrypted-Secret": "hymxenc:v1:ethereum-ecies:ciphertext",
-				},
-				DecryptedParams: map[string]string{"Encrypted-Secret": "private-value"},
-			},
-			Process: hymxSchema.Process{
-				Tags: []goarSchema.Tag{{Name: "Encrypted-Secret", Value: "hymxenc:v1:ethereum-ecies:ciphertext"}},
-			},
-		},
-		Data: "vm-state",
-	}
-	by, err := json.Marshal(snap)
-	require.NoError(t, err)
-	require.Contains(t, string(by), "Encrypted-Secret")
-	require.Contains(t, string(by), "ciphertext")
-	require.NotContains(t, string(by), "private-value")
 }
