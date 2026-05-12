@@ -7,18 +7,17 @@ import (
 
 	"github.com/hymatrix/hymx/cryptor"
 	"github.com/hymatrix/hymx/vmm/schema"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDecryptParams(t *testing.T) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("GenerateKey() error = %v", err)
-	}
+	require.NoError(t, err)
+
 	c := cryptor.NewRSAFromPrivateKey(privateKey)
 	encryptedValue, err := c.Encrypt("secret")
-	if err != nil {
-		t.Fatalf("Encrypt() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	v := &Vmm{cryptor: c}
 	meta := schema.Meta{
@@ -29,27 +28,18 @@ func TestDecryptParams(t *testing.T) {
 	}
 
 	v.decryptParams(&meta)
-	if meta.Params["Foo"] != "plain" {
-		t.Fatalf("Foo = %q, want plain", meta.Params["Foo"])
-	}
-	if meta.Params["Bar"] != "secret" {
-		t.Fatalf("Bar = %q, want secret", meta.Params["Bar"])
-	}
-	if meta.Params["Encrypted-Bar"] != encryptedValue {
-		t.Fatalf("Encrypted-Bar = %q, want %q", meta.Params["Encrypted-Bar"], encryptedValue)
-	}
+	assert.Equal(t, "plain", meta.Params["Foo"])
+	assert.Equal(t, "secret", meta.Params["Bar"])
+	assert.Equal(t, encryptedValue, meta.Params["Encrypted-Bar"])
 }
 
 func TestDecryptParamsSkipsExistingPlaintextParam(t *testing.T) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("GenerateKey() error = %v", err)
-	}
+	require.NoError(t, err)
+
 	c := cryptor.NewRSAFromPrivateKey(privateKey)
 	encryptedValue, err := c.Encrypt("secret")
-	if err != nil {
-		t.Fatalf("Encrypt() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	v := &Vmm{cryptor: c}
 	meta := schema.Meta{
@@ -60,12 +50,8 @@ func TestDecryptParamsSkipsExistingPlaintextParam(t *testing.T) {
 	}
 
 	v.decryptParams(&meta)
-	if meta.Params["Bar"] != "plain-secret" {
-		t.Fatalf("Bar = %q, want plain-secret", meta.Params["Bar"])
-	}
-	if meta.Params["Encrypted-Bar"] != encryptedValue {
-		t.Fatalf("Encrypted-Bar = %q, want %q", meta.Params["Encrypted-Bar"], encryptedValue)
-	}
+	assert.Equal(t, "plain-secret", meta.Params["Bar"])
+	assert.Equal(t, encryptedValue, meta.Params["Encrypted-Bar"])
 }
 
 func TestDecryptParamsMissingDecryptor(t *testing.T) {
@@ -77,7 +63,5 @@ func TestDecryptParamsMissingDecryptor(t *testing.T) {
 	}
 
 	v.decryptParams(&meta)
-	if meta.Params["Bar"] != schema.ErrDecryptParamFailed.Error() {
-		t.Fatalf("Bar = %q, want %q", meta.Params["Bar"], schema.ErrDecryptParamFailed.Error())
-	}
+	assert.Equal(t, schema.ErrDecryptParamFailed.Error(), meta.Params["Bar"])
 }
