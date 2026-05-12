@@ -199,9 +199,9 @@ func (c *Client) SetCryptor(encryptor *cryptor.Cryptor) {
 	c.cryptor = encryptor
 }
 
-// SetCryptorFromInfo initializes the client cryptor from node info public key fields.
-func (c *Client) SetCryptorFromInfo(algorithm, publicKey string) error {
-	encryptor, err := cryptor.NewFromPublicKey(algorithm, publicKey)
+// SetCryptorFromInfo initializes the client cryptor from a node info public key.
+func (c *Client) SetCryptorFromInfo(publicKey string) error {
+	encryptor, err := cryptor.NewFromPublicKey(publicKey)
 	if err != nil {
 		return err
 	}
@@ -218,7 +218,7 @@ func (c *Client) GetCryptor() (*cryptor.Cryptor, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = c.SetCryptorFromInfo(info.EncryptionKeyType, info.EncryptionPublicKey); err != nil {
+	if err = c.SetCryptorFromInfo(info.EncryptionPublicKey); err != nil {
 		return nil, err
 	}
 	return c.cryptor, nil

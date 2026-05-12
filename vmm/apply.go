@@ -33,7 +33,6 @@ func (v *Vmm) apply(meta schema.Meta) error {
 			v.RecoveryUnlock(meta.Pid)
 		}
 	}()
-	v.decryptParams(&meta)
 
 	from, err := v.applyCheck(vm, env, meta)
 	if err != nil {
@@ -41,6 +40,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		return err
 	}
 
+	v.decryptParams(&meta)
 	res := vm.Apply(from, meta)
 	vmmRes.Messages = res.Messages
 	vmmRes.Spawns = res.Spawns
@@ -55,7 +55,12 @@ func (v *Vmm) apply(meta schema.Meta) error {
 }
 
 func (v *Vmm) decryptParams(meta *schema.Meta) {
-	if len(meta.Params) == 0 {
+	if meta == nil || len(meta.Params) == 0 {
+		return
+	}
+
+	if v.cryptor == nil {
+		log.Warn("skip encrypted params because this node does not support decryption", "pid", meta.Pid, "itemId", meta.ItemId)
 		return
 	}
 
@@ -67,11 +72,6 @@ func (v *Vmm) decryptParams(meta *schema.Meta) {
 		decryptedKey := strings.TrimPrefix(key, schema.EncryptedTagPrefix)
 		if _, ok := meta.Params[decryptedKey]; ok {
 			log.Warn("skip encrypted param because plaintext param exists", "pid", meta.Pid, "itemId", meta.ItemId, "key", key, "plaintextKey", decryptedKey)
-			continue
-		}
-		if v.cryptor == nil {
-			log.Warn("decrypt encrypted param failed", "pid", meta.Pid, "itemId", meta.ItemId, "key", key, "err", schema.ErrMissingDecryptor)
-			decryptedParams[decryptedKey] = schema.ErrDecryptParamFailed.Error()
 			continue
 		}
 		decryptedValue, err := v.cryptor.Decrypt(value)

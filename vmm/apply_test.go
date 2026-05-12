@@ -1,10 +1,10 @@
 package vmm
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/hymatrix/hymx/cryptor"
 	"github.com/hymatrix/hymx/vmm/schema"
 	"github.com/stretchr/testify/assert"
@@ -12,10 +12,11 @@ import (
 )
 
 func TestDecryptParams(t *testing.T) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, err := crypto.GenerateKey()
 	require.NoError(t, err)
 
-	c := cryptor.NewRSAFromPrivateKey(privateKey)
+	c, err := cryptor.NewECCFromPrivateKey(hexutil.Encode(crypto.FromECDSA(privateKey)))
+	require.NoError(t, err)
 	encryptedValue, err := c.Encrypt("secret")
 	require.NoError(t, err)
 
@@ -33,11 +34,20 @@ func TestDecryptParams(t *testing.T) {
 	assert.Equal(t, encryptedValue, meta.Params["Encrypted-Bar"])
 }
 
+func TestDecryptParamsNilMeta(t *testing.T) {
+	v := &Vmm{}
+
+	assert.NotPanics(t, func() {
+		v.decryptParams(nil)
+	})
+}
+
 func TestDecryptParamsSkipsExistingPlaintextParam(t *testing.T) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, err := crypto.GenerateKey()
 	require.NoError(t, err)
 
-	c := cryptor.NewRSAFromPrivateKey(privateKey)
+	c, err := cryptor.NewECCFromPrivateKey(hexutil.Encode(crypto.FromECDSA(privateKey)))
+	require.NoError(t, err)
 	encryptedValue, err := c.Encrypt("secret")
 	require.NoError(t, err)
 
@@ -54,7 +64,7 @@ func TestDecryptParamsSkipsExistingPlaintextParam(t *testing.T) {
 	assert.Equal(t, encryptedValue, meta.Params["Encrypted-Bar"])
 }
 
-func TestDecryptParamsMissingDecryptor(t *testing.T) {
+func TestDecryptParamsUnsupportedNodeKeepsParams(t *testing.T) {
 	v := &Vmm{}
 	meta := schema.Meta{
 		Params: map[string]string{
@@ -63,5 +73,6 @@ func TestDecryptParamsMissingDecryptor(t *testing.T) {
 	}
 
 	v.decryptParams(&meta)
-	assert.Equal(t, schema.ErrDecryptParamFailed.Error(), meta.Params["Bar"])
+	assert.NotContains(t, meta.Params, "Bar")
+	assert.Equal(t, "secret", meta.Params["Encrypted-Bar"])
 }

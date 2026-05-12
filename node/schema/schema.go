@@ -22,7 +22,6 @@ type Info struct {
 	Node                registrySchema.Node `json:"Node"`
 	VmCount             int64               `json:"Vm-Count"`
 	EncryptionPublicKey string              `json:"Encryption-Public-Key"`
-	EncryptionKeyType   string              `json:"Encryption-Key-Type"`
 }
 
 type ItemMeta struct {

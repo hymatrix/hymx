@@ -30,9 +30,6 @@ func LoadNodeConfig() (
 		}
 	} else {
 		signer, err = goar.NewSignerFromPath(keyfilePath)
-		if err == nil {
-			decryptor, err = cryptor.NewRSAFromKeyfile(keyfilePath)
-		}
 	}
 	if err != nil {
 		return
@@ -42,9 +39,12 @@ func LoadNodeConfig() (
 		return
 	}
 
-	pubkey, keytype, err := decryptor.PublicKey()
-	if err != nil {
-		return
+	var pubkey string
+	if decryptor != nil {
+		pubkey, err = decryptor.PublicKey()
+		if err != nil {
+			return
+		}
 	}
 	nodeInfo = &nodeSchema.Info{
 		Protocol:    schema.DataProtocol,
@@ -58,7 +58,6 @@ func LoadNodeConfig() (
 			URL:   viper.GetString("nodeURL"),
 		},
 		EncryptionPublicKey: pubkey,
-		EncryptionKeyType:   keytype,
 	}
 
 	return

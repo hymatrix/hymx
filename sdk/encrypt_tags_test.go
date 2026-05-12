@@ -1,12 +1,11 @@
 package sdk
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/hymatrix/hymx/cryptor"
-	cryptorSchema "github.com/hymatrix/hymx/cryptor/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
 	"github.com/stretchr/testify/assert"
@@ -14,14 +13,15 @@ import (
 )
 
 func TestEncryptTags(t *testing.T) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, err := crypto.GenerateKey()
 	require.NoError(t, err)
 
-	privateCryptor := cryptor.NewRSAFromPrivateKey(privateKey)
-	publicKey, algorithm, err := privateCryptor.PublicKey()
+	privateCryptor, err := cryptor.NewECCFromPrivateKey(hexutil.Encode(crypto.FromECDSA(privateKey)))
+	require.NoError(t, err)
+	publicKey, err := privateCryptor.PublicKey()
 	require.NoError(t, err)
 
-	publicCryptor, err := cryptor.NewFromPublicKey(algorithm, publicKey)
+	publicCryptor, err := cryptor.NewFromPublicKey(publicKey)
 	require.NoError(t, err)
 
 	s := &SDK{Client: NewClient("")}
@@ -37,15 +37,16 @@ func TestEncryptTags(t *testing.T) {
 }
 
 func TestSetCryptorFromInfo(t *testing.T) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, err := crypto.GenerateKey()
 	require.NoError(t, err)
 
-	privateCryptor := cryptor.NewRSAFromPrivateKey(privateKey)
-	publicKey, _, err := privateCryptor.PublicKey()
+	privateCryptor, err := cryptor.NewECCFromPrivateKey(hexutil.Encode(crypto.FromECDSA(privateKey)))
+	require.NoError(t, err)
+	publicKey, err := privateCryptor.PublicKey()
 	require.NoError(t, err)
 
 	c := NewClient("")
-	require.NoError(t, c.SetCryptorFromInfo(cryptorSchema.AlgorithmRSA, publicKey))
+	require.NoError(t, c.SetCryptorFromInfo(publicKey))
 
 	publicCryptor, err := c.GetCryptor()
 	require.NoError(t, err)
