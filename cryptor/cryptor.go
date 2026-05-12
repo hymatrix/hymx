@@ -152,7 +152,7 @@ func (c *Cryptor) Decrypt(ciphertext string) (string, error) {
 }
 
 // PublicKey returns the public key string and its algorithm.
-func (c *Cryptor) PublicKey() (string, string, error) {
+func (c *Cryptor) PublicKey() (publicKey, algorithm string, err error) {
 	switch c.Algorithm {
 	case schema.AlgorithmRSA:
 		if c.rsaPublic == nil {
