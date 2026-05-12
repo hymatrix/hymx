@@ -11,6 +11,8 @@ const (
 
 	AccountTypeAR  = "arweave"
 	AccountTypeEVM = "evm"
+
+	EncryptedTagPrefix = "Encrypted-"
 )
 
 // ExecMode defines the execution behavior of the VMM.

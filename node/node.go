@@ -8,6 +8,7 @@ import (
 
 	"github.com/hymatrix/hymx/chainkit"
 	"github.com/hymatrix/hymx/common"
+	"github.com/hymatrix/hymx/cryptor"
 	"github.com/hymatrix/hymx/db/cache"
 	"github.com/hymatrix/hymx/db/rdb"
 	"github.com/hymatrix/hymx/node/schema"
@@ -62,6 +63,7 @@ type Node struct {
 }
 
 func New(
+	cryptor *cryptor.Cryptor,
 	bundler *goar.Bundler,
 	redisURL string,
 	arweaveURL string,
@@ -87,7 +89,7 @@ func New(
 		bundler: bundler,
 		sdk:     sdk.NewFromBundler(hymxURL, bundler),
 
-		vmm: vmm.New(nodeInfo, resultChan, outboxChan, registryCh),
+		vmm: vmm.New(cryptor, nodeInfo, resultChan, outboxChan, registryCh),
 
 		ctx:    ctx,
 		cancel: cancel,
