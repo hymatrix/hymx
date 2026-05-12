@@ -77,7 +77,7 @@ func TestDecryptParamsMissingDecryptor(t *testing.T) {
 	}
 
 	v.decryptParams(&meta)
-	if meta.Params["Bar"] != schema.ErrMissingDecryptor.Error() {
-		t.Fatalf("Bar = %q, want %q", meta.Params["Bar"], schema.ErrMissingDecryptor.Error())
+	if meta.Params["Bar"] != schema.ErrDecryptParamFailed.Error() {
+		t.Fatalf("Bar = %q, want %q", meta.Params["Bar"], schema.ErrDecryptParamFailed.Error())
 	}
 }

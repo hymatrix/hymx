@@ -71,13 +71,13 @@ func (v *Vmm) decryptParams(meta *schema.Meta) {
 		}
 		if v.cryptor == nil {
 			log.Warn("decrypt encrypted param failed", "pid", meta.Pid, "itemId", meta.ItemId, "key", key, "err", schema.ErrMissingDecryptor)
-			decryptedParams[decryptedKey] = schema.ErrMissingDecryptor.Error()
+			decryptedParams[decryptedKey] = schema.ErrDecryptParamFailed.Error()
 			continue
 		}
 		decryptedValue, err := v.cryptor.Decrypt(value)
 		if err != nil {
 			log.Warn("decrypt encrypted param failed", "pid", meta.Pid, "itemId", meta.ItemId, "key", key, "err", err)
-			decryptedParams[decryptedKey] = err.Error()
+			decryptedParams[decryptedKey] = schema.ErrDecryptParamFailed.Error()
 			continue
 		}
 		decryptedParams[decryptedKey] = decryptedValue
