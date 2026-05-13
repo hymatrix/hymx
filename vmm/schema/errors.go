@@ -16,4 +16,5 @@ var (
 	ErrMissingParam           = errors.New("err_missing_param")
 	ErrInvalidAccid           = errors.New("err_invalid_accid")
 	ErrFactoryAlreadyMounted  = errors.New("err_factory_already_mounted")
+	ErrDecryptParamFailed     = errors.New("err_decrypt_param_failed")
 )

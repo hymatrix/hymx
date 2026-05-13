@@ -1,7 +1,6 @@
 package sdk
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +11,8 @@ import (
 	serverSchema "github.com/hymatrix/hymx/server/schema"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ========================================
@@ -23,12 +24,8 @@ func TestSendRedirectHandling(t *testing.T) {
 	// Create a mock successful server (alternative node)
 	successServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify the request method and content type
-		if r.Method != "POST" {
-			t.Errorf("Expected POST method, got %s", r.Method)
-		}
-		if r.Header.Get("Content-Type") != "application/json" {
-			t.Errorf("Expected Content-Type application/json, got %s", r.Header.Get("Content-Type"))
-		}
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		// Return a successful response
 		response := serverSchema.Response{
@@ -67,27 +64,17 @@ func TestSendRedirectHandling(t *testing.T) {
 
 	// Call Send method
 	response, redirectedURL, err := client.Send(testData)
-	if err != nil {
-		t.Fatalf("Send failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Verify redirected URL is set
-	if redirectedURL == "" {
-		t.Errorf("Expected redirected URL to be set, got empty string")
-	}
+	assert.NotEmpty(t, redirectedURL)
 
 	// Verify response is not nil
-	if response == nil {
-		t.Fatalf("Expected non-nil response, got nil")
-	}
+	require.NotNil(t, response)
 
 	// Verify response
-	if response.Id != "test-message-id" {
-		t.Errorf("Expected Id 'test-message-id', got '%s'", response.Id)
-	}
-	if response.Message != "success" {
-		t.Errorf("Expected Message 'success', got '%s'", response.Message)
-	}
+	assert.Equal(t, "test-message-id", response.Id)
+	assert.Equal(t, "success", response.Message)
 
 	t.Log("✅ Send method successfully handled 308 redirect")
 }
@@ -136,19 +123,13 @@ func TestSendRedirectWithFailedNodes(t *testing.T) {
 	response, redirectedURL, err := client.Send(testData)
 
 	// Should return error since all nodes failed (308 response)
-	if err == nil {
-		t.Fatal("Expected error when all nodes fail, but got nil")
-	}
+	require.Error(t, err)
 
 	// The response should be nil since we can't parse a successful response from 308
-	if response != nil {
-		t.Errorf("Expected nil response when all nodes fail, got %+v", response)
-	}
+	assert.Nil(t, response)
 
 	// Redirected URL should be empty when all nodes fail
-	if redirectedURL != "" {
-		t.Errorf("Expected empty redirected URL when all nodes fail, got %s", redirectedURL)
-	}
+	assert.Empty(t, redirectedURL)
 
 	t.Log("✅ Send method correctly handled failed alternative nodes")
 }
@@ -158,19 +139,13 @@ func TestSendWithoutRedirect(t *testing.T) {
 	// Create a mock successful server
 	successServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request
-		if r.Method != "POST" {
-			t.Errorf("Expected POST method, got %s", r.Method)
-		}
+		assert.Equal(t, "POST", r.Method)
 
 		// Read and verify request body
 		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("Failed to read request body: %v", err)
-		}
+		assert.NoError(t, err)
 		expectedBody := `{"test": "data"}`
-		if string(body) != expectedBody {
-			t.Errorf("Expected body '%s', got '%s'", expectedBody, string(body))
-		}
+		assert.Equal(t, expectedBody, string(body))
 
 		// Return successful response
 		response := serverSchema.Response{
@@ -191,27 +166,17 @@ func TestSendWithoutRedirect(t *testing.T) {
 
 	// Call Send method
 	response, redirectedURL, err := client.Send(testData)
-	if err != nil {
-		t.Fatalf("Send failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Redirected URL should be empty when no redirect occurs
-	if redirectedURL != "" {
-		t.Errorf("Expected empty redirected URL when no redirect occurs, got %s", redirectedURL)
-	}
+	assert.Empty(t, redirectedURL)
 
 	// Verify response is not nil
-	if response == nil {
-		t.Fatalf("Expected non-nil response, got nil")
-	}
+	require.NotNil(t, response)
 
 	// Verify response
-	if response.Id != "direct-message-id" {
-		t.Errorf("Expected Id 'direct-message-id', got '%s'", response.Id)
-	}
-	if response.Message != "direct-success" {
-		t.Errorf("Expected Message 'direct-success', got '%s'", response.Message)
-	}
+	assert.Equal(t, "direct-message-id", response.Id)
+	assert.Equal(t, "direct-success", response.Message)
 
 	t.Log("✅ Send method works correctly without redirect")
 }
@@ -223,10 +188,7 @@ func TestSendRedirectPreservesRequestBody(t *testing.T) {
 	// Create a mock successful server that captures the request body
 	successServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("Failed to read request body: %v", err)
-			return
-		}
+		require.NoError(t, err)
 		receivedBody = body
 
 		// Return successful response
@@ -265,19 +227,13 @@ func TestSendRedirectPreservesRequestBody(t *testing.T) {
 
 	// Call Send method
 	_, redirectedURL, err := client.Send(testData)
-	if err != nil {
-		t.Fatalf("Send failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Verify redirected URL is set
-	if redirectedURL == "" {
-		t.Errorf("Expected redirected URL to be set, got empty string")
-	}
+	assert.NotEmpty(t, redirectedURL)
 
 	// Verify the request body was preserved
-	if !bytes.Equal(receivedBody, testData) {
-		t.Errorf("Request body not preserved during redirect.\nExpected: %s\nReceived: %s", string(testData), string(receivedBody))
-	}
+	assert.Equal(t, testData, receivedBody)
 
 	t.Log("✅ Send method correctly preserves request body during redirect")
 }
@@ -296,9 +252,7 @@ func TestGetNodesSuccess(t *testing.T) {
 
 	// Create mock server
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/nodes" {
-			t.Errorf("expected path /nodes, got %s", r.URL.Path)
-		}
+		assert.Equal(t, "/nodes", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(nodes)
@@ -307,19 +261,11 @@ func TestGetNodesSuccess(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetNodes()
-	if err != nil {
-		t.Fatalf("GetNodes failed: %v", err)
-	}
+	require.NoError(t, err)
 
-	if len(got) != 2 {
-		t.Fatalf("expected 2 nodes, got %d", len(got))
-	}
-	if got["acc1"].URL != "http://127.0.0.1:8080" {
-		t.Errorf("acc1 URL mismatch: %s", got["acc1"].URL)
-	}
-	if got["acc2"].Role != "follower" {
-		t.Errorf("acc2 Role mismatch: %s", got["acc2"].Role)
-	}
+	require.Len(t, got, 2)
+	assert.Equal(t, "http://127.0.0.1:8080", got["acc1"].URL)
+	assert.Equal(t, "follower", got["acc2"].Role)
 
 	t.Log("✅ GetNodes method returns nodes map correctly")
 }
@@ -334,12 +280,8 @@ func TestGetNodesErrorStatus(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetNodes()
-	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
-	}
-	if got != nil {
-		t.Errorf("expected nil nodes on error, got: %+v", got)
-	}
+	require.Error(t, err)
+	assert.Nil(t, got)
 
 	t.Log("✅ GetNodes method handles non-2xx status correctly")
 }
@@ -355,12 +297,8 @@ func TestGetNodesNullResponse(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetNodes()
-	if err != nil {
-		t.Fatalf("GetNodes failed: %v", err)
-	}
-	if got != nil {
-		t.Errorf("expected nil map for null JSON, got: %+v", got)
-	}
+	require.NoError(t, err)
+	assert.Nil(t, got)
 
 	t.Log("✅ GetNodes method decodes null response to nil map")
 }
@@ -374,9 +312,7 @@ func TestGetNodeSuccess(t *testing.T) {
 	want := registrySchema.Node{AccId: "acc123", Name: "node-main", Role: "main", Desc: "desc", URL: "http://127.0.0.1:8080"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/node/acc123" {
-			t.Errorf("expected path /node/acc123, got %s", r.URL.Path)
-		}
+		assert.Equal(t, "/node/acc123", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(want)
@@ -385,15 +321,10 @@ func TestGetNodeSuccess(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetNode("acc123")
-	if err != nil {
-		t.Fatalf("GetNode failed: %v", err)
-	}
-	if got == nil {
-		t.Fatal("expected non-nil node, got nil")
-	}
-	if got.URL != want.URL || got.Role != want.Role {
-		t.Errorf("field mismatch: got=%+v want=%+v", got, want)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, want.URL, got.URL)
+	assert.Equal(t, want.Role, got.Role)
 
 	t.Log("✅ GetNode method returns single node correctly")
 }
@@ -408,12 +339,8 @@ func TestGetNodeErrorStatus(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetNode("acc500")
-	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
-	}
-	if got != nil {
-		t.Errorf("expected nil node on error, got: %+v", got)
-	}
+	require.Error(t, err)
+	assert.Nil(t, got)
 
 	t.Log("✅ GetNode method handles non-2xx status correctly")
 }
@@ -429,12 +356,8 @@ func TestGetNodeNullResponse(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetNode("accnull")
-	if err != nil {
-		t.Fatalf("GetNode failed: %v", err)
-	}
-	if got != nil {
-		t.Errorf("expected nil for null JSON, got: %+v", got)
-	}
+	require.NoError(t, err)
+	assert.Nil(t, got)
 
 	t.Log("✅ GetNode method decodes null response to nil pointer")
 }
@@ -451,9 +374,7 @@ func TestGetNodesByProcessSuccess(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/nodesByProcess/p123" {
-			t.Errorf("expected path /nodesByProcess/p123, got %s", r.URL.Path)
-		}
+		assert.Equal(t, "/nodesByProcess/p123", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(want)
@@ -462,15 +383,10 @@ func TestGetNodesByProcessSuccess(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetNodesByProcess("p123")
-	if err != nil {
-		t.Fatalf("GetNodesByProcess failed: %v", err)
-	}
-	if len(got) != 2 {
-		t.Fatalf("expected 2 nodes, got %d", len(got))
-	}
-	if got[0].AccId != "acc1" || got[1].Role != "candidate" {
-		t.Errorf("field mismatch: got=%+v", got)
-	}
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, "acc1", got[0].AccId)
+	assert.Equal(t, "candidate", got[1].Role)
 
 	t.Log("✅ GetNodesByProcess returns node list correctly")
 }
@@ -485,12 +401,8 @@ func TestGetNodesByProcessErrorStatus(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetNodesByProcess("p500")
-	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
-	}
-	if got != nil {
-		t.Errorf("expected nil slice on error, got: %+v", got)
-	}
+	require.Error(t, err)
+	assert.Nil(t, got)
 
 	t.Log("✅ GetNodesByProcess handles non-2xx status correctly")
 }
@@ -506,12 +418,8 @@ func TestGetNodesByProcessNullResponse(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetNodesByProcess("pnull")
-	if err != nil {
-		t.Fatalf("GetNodesByProcess failed: %v", err)
-	}
-	if got != nil {
-		t.Errorf("expected nil slice for null JSON, got: %+v", got)
-	}
+	require.NoError(t, err)
+	assert.Nil(t, got)
 
 	t.Log("✅ GetNodesByProcess decodes null to nil slice")
 }
@@ -525,9 +433,7 @@ func TestGetProcessesSuccess(t *testing.T) {
 	want := []string{"p1", "p2", "p3"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/processes/accX" {
-			t.Errorf("expected path /processes/accX, got %s", r.URL.Path)
-		}
+		assert.Equal(t, "/processes/accX", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(want)
@@ -536,12 +442,8 @@ func TestGetProcessesSuccess(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetProcesses("accX")
-	if err != nil {
-		t.Fatalf("GetProcesses failed: %v", err)
-	}
-	if len(got) != 3 || got[0] != "p1" || got[2] != "p3" {
-		t.Errorf("value mismatch: got=%+v want=%+v", got, want)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
 
 	t.Log("✅ GetProcesses returns process list correctly")
 }
@@ -556,12 +458,8 @@ func TestGetProcessesErrorStatus(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetProcesses("acc500")
-	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
-	}
-	if got != nil {
-		t.Errorf("expected nil slice on error, got: %+v", got)
-	}
+	require.Error(t, err)
+	assert.Nil(t, got)
 
 	t.Log("✅ GetProcesses handles non-2xx status correctly")
 }
@@ -577,12 +475,8 @@ func TestGetProcessesNullResponse(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetProcesses("accnull")
-	if err != nil {
-		t.Fatalf("GetProcesses failed: %v", err)
-	}
-	if got != nil {
-		t.Errorf("expected nil slice for null JSON, got: %+v", got)
-	}
+	require.NoError(t, err)
+	assert.Nil(t, got)
 
 	t.Log("✅ GetProcesses decodes null to nil slice")
 }
@@ -594,9 +488,7 @@ func TestGetProcessesNullResponse(t *testing.T) {
 // TestGetCacheSuccess tests successful retrieval of cache value
 func TestGetCacheSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/cache/p123/k456" {
-			t.Errorf("expected path /cache/p123/k456, got %s", r.URL.Path)
-		}
+		assert.Equal(t, "/cache/p123/k456", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode("cached-value")
@@ -605,12 +497,8 @@ func TestGetCacheSuccess(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetCache("p123", "k456")
-	if err != nil {
-		t.Fatalf("GetCache failed: %v", err)
-	}
-	if got != "cached-value" {
-		t.Errorf("expected 'cached-value', got: %s", got)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "cached-value", got)
 
 	t.Log("✅ GetCache returns string value correctly")
 }
@@ -625,12 +513,8 @@ func TestGetCacheErrorStatus(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetCache("p500", "k500")
-	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
-	}
-	if got != "" {
-		t.Errorf("expected empty string on error, got: %q", got)
-	}
+	require.Error(t, err)
+	assert.Empty(t, got)
 
 	t.Log("✅ GetCache handles non-2xx status correctly")
 }
@@ -638,9 +522,7 @@ func TestGetCacheErrorStatus(t *testing.T) {
 // TestGetCacheEmptyString tests decoding of JSON empty string
 func TestGetCacheEmptyString(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/cache/p123/k456" {
-			t.Errorf("expected path /cache/p123/k456, got %s", r.URL.Path)
-		}
+		assert.Equal(t, "/cache/p123/k456", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("\"\"")) // JSON empty string ""
@@ -649,12 +531,8 @@ func TestGetCacheEmptyString(t *testing.T) {
 
 	client := NewClient(srv.URL)
 	got, err := client.GetCache("p123", "k456")
-	if err != nil {
-		t.Fatalf("GetCache failed: %v", err)
-	}
-	if got != "" {
-		t.Errorf("expected empty string, got: %q", got)
-	}
+	require.NoError(t, err)
+	assert.Empty(t, got)
 
 	t.Log("✅ GetCache decodes empty string correctly")
 }
@@ -668,30 +546,19 @@ func TestTrySendSuccess(t *testing.T) {
 	var received serverSchema.TrySendRequest
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Fatalf("expected POST, got %s", r.Method)
-		}
-		if r.URL.Path != "/trysend" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
-			t.Fatalf("expected Content-Type application/json, got %s", ct)
-		}
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Equal(t, "/trysend", r.URL.Path)
+		require.Equal(t, "application/json", r.Header.Get("Content-Type"))
 		// Read and decode body
-		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
-			t.Fatalf("failed to decode request body: %v", err)
-		}
-		if received.Pid != "p123" || received.Target != "t456" {
-			t.Fatalf("body mismatch: %+v", received)
-		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&received))
+		require.Equal(t, "p123", received.Pid)
+		require.Equal(t, "t456", received.Target)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
-	if err := client.TrySend("p123", "t456"); err != nil {
-		t.Fatalf("TrySend failed: %v", err)
-	}
+	require.NoError(t, client.TrySend("p123", "t456"))
 
 	t.Log("✅ TrySend posts JSON and returns on 2xx")
 }
@@ -704,9 +571,7 @@ func TestTrySendErrorStatus(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
-	if err := client.TrySend("p500", "t500"); err == nil {
-		t.Fatal("expected error for 500 response, got nil")
-	}
+	require.Error(t, client.TrySend("p500", "t500"))
 
 	t.Log("✅ TrySend handles non-2xx status correctly")
 }
@@ -720,15 +585,11 @@ func TestGetResultRedirectHandling(t *testing.T) {
 	// Create a mock successful server (alternative node)
 	successServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify the request method
-		if r.Method != "GET" {
-			t.Errorf("Expected GET method, got %s", r.Method)
-		}
+		assert.Equal(t, "GET", r.Method)
 
 		// Verify the URL path contains the expected process ID and message ID
 		expectedPath := "/result/test-process-id/test-message-id"
-		if r.URL.Path != expectedPath {
-			t.Errorf("Expected path '%s', got '%s'", expectedPath, r.URL.Path)
-		}
+		assert.Equal(t, expectedPath, r.URL.Path)
 
 		// Return a successful result response
 		result := vmmSchema.VmmResult{
@@ -765,20 +626,12 @@ func TestGetResultRedirectHandling(t *testing.T) {
 
 	// Call GetResult method
 	result, err := client.GetResult("test-process-id", "test-message-id")
-	if err != nil {
-		t.Fatalf("GetResult failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Verify result
-	if result.ItemId != "test-item-id" {
-		t.Errorf("Expected ItemId 'test-item-id', got '%s'", result.ItemId)
-	}
-	if result.FromProcess != "test-process-id" {
-		t.Errorf("Expected FromProcess 'test-process-id', got '%s'", result.FromProcess)
-	}
-	if result.Output != "test-output" {
-		t.Errorf("Expected Output 'test-output', got '%v'", result.Output)
-	}
+	assert.Equal(t, "test-item-id", result.ItemId)
+	assert.Equal(t, "test-process-id", result.FromProcess)
+	assert.Equal(t, "test-output", result.Output)
 
 	t.Log("✅ GetResult method successfully handled 308 redirect")
 }
@@ -826,9 +679,7 @@ func TestGetResultRedirectWithFailedNodes(t *testing.T) {
 
 	// Call GetResult method - should fail since all alternative nodes fail
 	_, err := client.GetResult("test-process-id", "test-message-id")
-	if err == nil {
-		t.Fatal("Expected GetResult to fail when all alternative nodes fail, but it succeeded")
-	}
+	require.Error(t, err)
 
 	t.Logf("✅ GetResult correctly failed when all alternative nodes failed: %v", err)
 }
@@ -838,15 +689,11 @@ func TestGetResultWithoutRedirect(t *testing.T) {
 	// Create a mock successful server
 	successServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request
-		if r.Method != "GET" {
-			t.Errorf("Expected GET method, got %s", r.Method)
-		}
+		assert.Equal(t, "GET", r.Method)
 
 		// Verify URL path
 		expectedPath := "/result/direct-process-id/direct-message-id"
-		if r.URL.Path != expectedPath {
-			t.Errorf("Expected path '%s', got '%s'", expectedPath, r.URL.Path)
-		}
+		assert.Equal(t, expectedPath, r.URL.Path)
 
 		// Return successful result response
 		result := vmmSchema.VmmResult{
@@ -865,20 +712,12 @@ func TestGetResultWithoutRedirect(t *testing.T) {
 
 	// Call GetResult method
 	result, err := client.GetResult("direct-process-id", "direct-message-id")
-	if err != nil {
-		t.Fatalf("GetResult failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Verify result
-	if result.ItemId != "direct-item-id" {
-		t.Errorf("Expected ItemId 'direct-item-id', got '%s'", result.ItemId)
-	}
-	if result.FromProcess != "direct-process-id" {
-		t.Errorf("Expected FromProcess 'direct-process-id', got '%s'", result.FromProcess)
-	}
-	if result.Output != "direct-output" {
-		t.Errorf("Expected Output 'direct-output', got '%s'", result.Output)
-	}
+	assert.Equal(t, "direct-item-id", result.ItemId)
+	assert.Equal(t, "direct-process-id", result.FromProcess)
+	assert.Equal(t, "direct-output", result.Output)
 
 	t.Log("✅ GetResult method works correctly without redirect")
 }
@@ -889,9 +728,7 @@ func TestGetResultRedirectPreservesURLPath(t *testing.T) {
 	successServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify the URL path is preserved
 		expectedPath := "/result/path-process-id/path-message-id"
-		if r.URL.Path != expectedPath {
-			t.Errorf("Expected path '%s', got '%s'", expectedPath, r.URL.Path)
-		}
+		assert.Equal(t, expectedPath, r.URL.Path)
 
 		// Return successful result response
 		result := vmmSchema.VmmResult{
@@ -928,14 +765,10 @@ func TestGetResultRedirectPreservesURLPath(t *testing.T) {
 
 	// Call GetResult method
 	result, err := client.GetResult("path-process-id", "path-message-id")
-	if err != nil {
-		t.Fatalf("GetResult failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Verify result
-	if result.ItemId != "path-test-id" {
-		t.Errorf("Expected ItemId 'path-test-id', got '%s'", result.ItemId)
-	}
+	assert.Equal(t, "path-test-id", result.ItemId)
 
 	t.Log("✅ GetResult method preserved URL path during redirect")
 }
@@ -991,17 +824,11 @@ func TestGetResultRedirectWithMultipleNodes(t *testing.T) {
 
 	// Call GetResult method - should succeed with second node
 	result, err := client.GetResult("multi-node-process-id", "multi-node-message-id")
-	if err != nil {
-		t.Fatalf("GetResult failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Verify result
-	if result.ItemId != "multi-node-item-id" {
-		t.Errorf("Expected ItemId 'multi-node-item-id', got '%s'", result.ItemId)
-	}
-	if result.FromProcess != "multi-node-process-id" {
-		t.Errorf("Expected FromProcess 'multi-node-process-id', got '%s'", result.FromProcess)
-	}
+	assert.Equal(t, "multi-node-item-id", result.ItemId)
+	assert.Equal(t, "multi-node-process-id", result.FromProcess)
 
 	t.Log("✅ GetResult method successfully handled redirect with multiple nodes")
 }
@@ -1019,21 +846,13 @@ func TestGetResultsSuccess(t *testing.T) {
 	// Create mock server that returns ResponseResults
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request method and path
-		if r.Method != "GET" {
-			t.Errorf("Expected GET method, got %s", r.Method)
-		}
+		assert.Equal(t, "GET", r.Method)
 		expectedPath := "/results/test-process-id"
-		if r.URL.Path != expectedPath {
-			t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
-		}
+		assert.Equal(t, expectedPath, r.URL.Path)
 
 		// Verify query parameters
-		if r.URL.Query().Get("sort") != "DESC" {
-			t.Errorf("Expected sort=DESC, got %s", r.URL.Query().Get("sort"))
-		}
-		if r.URL.Query().Get("limit") != "10" {
-			t.Errorf("Expected limit=10, got %s", r.URL.Query().Get("limit"))
-		}
+		assert.Equal(t, "DESC", r.URL.Query().Get("sort"))
+		assert.Equal(t, "10", r.URL.Query().Get("limit"))
 
 		// Create mock response data
 		mockResults := serverSchema.ResponseResults{
@@ -1084,35 +903,21 @@ func TestGetResultsSuccess(t *testing.T) {
 
 	// Call GetResults
 	results, err := client.GetResults("test-process-id", 10)
-	if err != nil {
-		t.Fatalf("GetResults failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Verify results
-	if len(results.Edges) != 2 {
-		t.Errorf("Expected 2 edges, got %d", len(results.Edges))
-	}
+	assert.Len(t, results.Edges, 2)
 
 	// Verify first result
 	firstEdge := results.Edges[0]
-	if firstEdge.Node.Nonce != "1" {
-		t.Errorf("Expected first result nonce '1', got '%s'", firstEdge.Node.Nonce)
-	}
-	if firstEdge.Node.ItemId != "test-item-1" {
-		t.Errorf("Expected first result ItemId 'test-item-1', got '%s'", firstEdge.Node.ItemId)
-	}
-	if firstEdge.Cursor == "" {
-		t.Error("Expected non-empty cursor for first result")
-	}
+	assert.Equal(t, "1", firstEdge.Node.Nonce)
+	assert.Equal(t, "test-item-1", firstEdge.Node.ItemId)
+	assert.NotEmpty(t, firstEdge.Cursor)
 
 	// Verify second result
 	secondEdge := results.Edges[1]
-	if secondEdge.Node.Nonce != "2" {
-		t.Errorf("Expected second result nonce '2', got '%s'", secondEdge.Node.Nonce)
-	}
-	if secondEdge.Node.ItemId != "test-item-2" {
-		t.Errorf("Expected second result ItemId 'test-item-2', got '%s'", secondEdge.Node.ItemId)
-	}
+	assert.Equal(t, "2", secondEdge.Node.Nonce)
+	assert.Equal(t, "test-item-2", secondEdge.Node.ItemId)
 
 	t.Log("✅ GetResults method works correctly with successful response")
 }
@@ -1136,14 +941,10 @@ func TestGetResultsEmptyResponse(t *testing.T) {
 
 	// Call GetResults
 	results, err := client.GetResults("empty-process-id", 5)
-	if err != nil {
-		t.Fatalf("GetResults failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Verify empty results
-	if len(results.Edges) != 0 {
-		t.Errorf("Expected 0 edges, got %d", len(results.Edges))
-	}
+	assert.Len(t, results.Edges, 0)
 
 	t.Log("✅ GetResults method handles empty response correctly")
 }
@@ -1162,15 +963,11 @@ func TestGetResultsServerError(t *testing.T) {
 
 	// Call GetResults
 	_, err := client.GetResults("error-process-id", 5)
-	if err == nil {
-		t.Fatal("Expected error, got nil")
-	}
+	require.Error(t, err)
 
 	// Verify error message contains status code
 	expectedError := "invalid server response: 500"
-	if err.Error() != expectedError {
-		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
-	}
+	assert.EqualError(t, err, expectedError)
 
 	t.Log("✅ GetResults method handles server error correctly")
 }
@@ -1190,9 +987,7 @@ func TestGetResultsInvalidJSON(t *testing.T) {
 
 	// Call GetResults
 	_, err := client.GetResults("invalid-json-process-id", 5)
-	if err == nil {
-		t.Fatal("Expected JSON decode error, got nil")
-	}
+	require.Error(t, err)
 
 	t.Log("✅ GetResults method handles invalid JSON correctly")
 }
@@ -1204,9 +999,7 @@ func TestGetResultsNetworkError(t *testing.T) {
 
 	// Call GetResults
 	_, err := client.GetResults("network-error-process-id", 5)
-	if err == nil {
-		t.Fatal("Expected network error, got nil")
-	}
+	require.Error(t, err)
 
 	t.Log("✅ GetResults method handles network error correctly")
 }
@@ -1246,14 +1039,10 @@ func TestGetResultsURLBuilding(t *testing.T) {
 	for _, tc := range testCases {
 		// Call GetResults
 		_, err := client.GetResults(tc.pid, tc.limit)
-		if err != nil {
-			t.Fatalf("GetResults failed for pid %s: %v", tc.pid, err)
-		}
+		require.NoErrorf(t, err, "GetResults failed for pid %s", tc.pid)
 
 		// Verify URL
-		if capturedURL != tc.expectedPath {
-			t.Errorf("Expected URL path '%s', got '%s'", tc.expectedPath, capturedURL)
-		}
+		assert.Equal(t, tc.expectedPath, capturedURL)
 	}
 
 	t.Log("✅ GetResults method builds URLs correctly")

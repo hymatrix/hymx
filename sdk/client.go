@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/hymatrix/hymx/cryptor"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
 	serverSchema "github.com/hymatrix/hymx/server/schema"
@@ -21,6 +22,7 @@ import (
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+	cryptor    *cryptor.Cryptor
 }
 
 func NewClient(hmxURL string) *Client {
@@ -190,6 +192,36 @@ func (c *Client) Info() (info nodeSchema.Info, err error) {
 
 	err = json.NewDecoder(resp.Body).Decode(&info)
 	return
+}
+
+// SetCryptor injects the cryptor used to encrypt outbound params.
+func (c *Client) SetCryptor(encryptor *cryptor.Cryptor) {
+	c.cryptor = encryptor
+}
+
+// SetCryptorFromInfo initializes the client cryptor from a node info public key.
+func (c *Client) SetCryptorFromInfo(publicKey string) error {
+	encryptor, err := cryptor.NewFromPublicKey(publicKey)
+	if err != nil {
+		return err
+	}
+	c.cryptor = encryptor
+	return nil
+}
+
+// GetCryptor returns the injected cryptor or lazily loads it from /info.
+func (c *Client) GetCryptor() (*cryptor.Cryptor, error) {
+	if c.cryptor != nil {
+		return c.cryptor, nil
+	}
+	info, err := c.Info()
+	if err != nil {
+		return nil, err
+	}
+	if err = c.SetCryptorFromInfo(info.EncryptionPublicKey); err != nil {
+		return nil, err
+	}
+	return c.cryptor, nil
 }
 
 func (c *Client) Callback(targetURL string) (res string, err error) {

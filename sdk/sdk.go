@@ -82,6 +82,18 @@ func (s *SDK) SendMessage(target, data string, params []goarSchema.Tag) (resp *s
 	return
 }
 
+// SendMessageWithEncryptedParams sends plain params and encrypted params in one message.
+func (s *SDK) SendMessageWithEncryptedParams(
+	target, data string,
+	params, encryptedParams []goarSchema.Tag,
+) (resp *serverSchema.Response, err error) {
+	encryptedTags, err := s.EncryptTags(encryptedParams)
+	if err != nil {
+		return nil, err
+	}
+	return s.SendMessage(target, data, utils.MergeTags(params, encryptedTags))
+}
+
 // Spawn for process creation
 func (s *SDK) Spawn(module, scheduler string, params []goarSchema.Tag) (resp *serverSchema.Response, err error) {
 	process := schema.Process{

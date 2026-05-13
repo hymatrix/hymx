@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/hymatrix/hymx/common"
+	"github.com/hymatrix/hymx/cryptor"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/vmm/core/registry"
 	"github.com/hymatrix/hymx/vmm/core/token"
@@ -15,6 +16,8 @@ var log = common.NewLog("vmm")
 
 // VirtualMachine Management
 type Vmm struct {
+	cryptor *cryptor.Cryptor
+
 	info     *nodeSchema.Info
 	registry *registry.Registry
 	token    *token.Token
@@ -37,9 +40,11 @@ type Vmm struct {
 	registrySpawned chan struct{}
 }
 
-func New(info *nodeSchema.Info, resultChan chan<- schema.VmmResult, outboxChan chan<- schema.Outbox, registrySpawned chan struct{}) *Vmm {
+func New(cryptor *cryptor.Cryptor, info *nodeSchema.Info, resultChan chan<- schema.VmmResult, outboxChan chan<- schema.Outbox, registrySpawned chan struct{}) *Vmm {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Vmm{
+		cryptor: cryptor,
+
 		info: info,
 
 		vmFactors: map[string]schema.VmSpawnFunc{},

@@ -77,6 +77,18 @@ func (s *SDK) SendMessageAndWait(target, data string, params []goarSchema.Tag) (
 	return s.SendAndWait(target, data, msgTags)
 }
 
+// SendMessageWithEncryptedParamsAndWait sends encrypted params and waits for the result.
+func (s *SDK) SendMessageWithEncryptedParamsAndWait(
+	target, data string,
+	params, encryptedParams []goarSchema.Tag,
+) (*serverSchema.Response, error) {
+	encryptedTags, err := s.EncryptTags(encryptedParams)
+	if err != nil {
+		return nil, err
+	}
+	return s.SendMessageAndWait(target, data, utils.MergeTags(params, encryptedTags))
+}
+
 func (s *SDK) SpawnAndWait(module, scheduler string, params []goarSchema.Tag) (*serverSchema.Response, error) {
 	process := schema.Process{
 		Base:      schema.DefaultBaseProcess,

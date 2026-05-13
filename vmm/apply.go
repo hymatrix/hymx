@@ -2,6 +2,7 @@ package vmm
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/hymatrix/hymx/vmm/schema"
 )
@@ -39,6 +40,7 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		return err
 	}
 
+	v.decryptParams(&meta)
 	res := vm.Apply(from, meta)
 	vmmRes.Messages = res.Messages
 	vmmRes.Spawns = res.Spawns
@@ -50,6 +52,39 @@ func (v *Vmm) apply(meta schema.Meta) error {
 		vmmRes.Error = res.Error.Error()
 	}
 	return nil
+}
+
+func (v *Vmm) decryptParams(meta *schema.Meta) {
+	if meta == nil || len(meta.Params) == 0 {
+		return
+	}
+
+	if v.cryptor == nil {
+		log.Warn("skip encrypted params because this node does not support decryption", "pid", meta.Pid, "itemId", meta.ItemId)
+		return
+	}
+
+	decryptedParams := map[string]string{}
+	for key, value := range meta.Params {
+		if !strings.HasPrefix(key, schema.EncryptedTagPrefix) {
+			continue
+		}
+		decryptedKey := strings.TrimPrefix(key, schema.EncryptedTagPrefix)
+		if _, ok := meta.Params[decryptedKey]; ok {
+			log.Warn("skip encrypted param because plaintext param exists", "pid", meta.Pid, "itemId", meta.ItemId, "key", key, "plaintextKey", decryptedKey)
+			continue
+		}
+		decryptedValue, err := v.cryptor.Decrypt(value)
+		if err != nil {
+			log.Warn("decrypt encrypted param failed", "pid", meta.Pid, "itemId", meta.ItemId, "key", key, "err", err)
+			decryptedParams[decryptedKey] = schema.ErrDecryptParamFailed.Error()
+			continue
+		}
+		decryptedParams[decryptedKey] = decryptedValue
+	}
+	for key, value := range decryptedParams {
+		meta.Params[key] = value
+	}
 }
 
 func (v *Vmm) applyCheck(vm schema.Vm, env *schema.Env, m schema.Meta) (from string, err error) {
