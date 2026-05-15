@@ -1,5 +1,6 @@
 # join test network
 port: :8080
+adminPort: "" # optional, e.g. :8081; empty disables admin API
 ginMode: release # debug or release
 
 redisURL: redis://@localhost:6379/2
