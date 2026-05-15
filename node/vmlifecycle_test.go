@@ -213,6 +213,28 @@ func (suite *NodeVMLifecycleTestSuite) TestResumeVMUnknownProcess() {
 	assert.ErrorIs(suite.T(), err, nodeSchema.ErrProcessNotFound)
 }
 
+func (suite *NodeVMLifecycleTestSuite) TestStoppedErrorForRegisteredNonRunningProcess() {
+	pid := "pid-1"
+	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
+	suite.installLifecycleHooks(nil, nil, nil, true)
+	assert.NoError(suite.T(), n.vmm.Kill(pid))
+
+	err := n.errForMissingLocalVM(pid)
+
+	assert.ErrorIs(suite.T(), err, nodeSchema.ErrProcessStopped)
+}
+
+func (suite *NodeVMLifecycleTestSuite) TestProcessNotFoundForUnknownNonRunningProcess() {
+	pid := "pid-1"
+	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
+	suite.installLifecycleHooks(nil, nil, nil, false)
+	assert.NoError(suite.T(), n.vmm.Kill(pid))
+
+	err := n.errForMissingLocalVM(pid)
+
+	assert.ErrorIs(suite.T(), err, nodeSchema.ErrProcessNotFound)
+}
+
 func TestNodeVMLifecycleTestSuite(t *testing.T) {
 	suite.Run(t, new(NodeVMLifecycleTestSuite))
 }
