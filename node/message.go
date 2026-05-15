@@ -87,7 +87,7 @@ func (n *Node) applyMessage(
 }
 
 func (n *Node) errForMissingLocalVM(pid string) error {
-	registered, err := n.processRegisteredToLocalNode(pid)
+	registered, err := n.isRegistered(pid)
 	if err != nil {
 		return err
 	}

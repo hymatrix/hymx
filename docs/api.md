@@ -155,9 +155,9 @@ Response body (array of nodes):
     - `400` with `{ "error": "err_invalid_params" }` when `url` missing
     - `400` with `{ "error": "err_callback_failed" }` on fetch failure
 
-### Admin VM Lifecycle
+### Admin
 
-Admin VM lifecycle endpoints are served only on the configured `adminPort`. If `adminPort` is empty or missing, the admin server is not started and these endpoints are unavailable.
+Admin endpoints are served only on the configured `adminPort`. If `adminPort` is empty or missing, the admin server is not started and these endpoints are unavailable.
 
 - `POST /admin/vms/stop`
   - Description: Checkpoint and stop a live VM process on this node. The process remains registered in Registry.

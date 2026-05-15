@@ -5,7 +5,7 @@ import (
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 )
 
-func (n *Node) processRegisteredToLocalNode(pid string) (bool, error) {
+func (n *Node) isRegistered(pid string) (bool, error) {
 	nodes, err := n.GetNodesByProcess(pid)
 	if err != nil {
 		return false, err
@@ -32,19 +32,12 @@ func (n *Node) StopVM(pid string) error {
 		return schema.ErrProcessNotFound
 	}
 
-	ckpItem, err := n.Checkpoint(pid)
+	_, err := n.saveCheckpoint(pid)
 	if err != nil {
-		return err
-	}
-	if err = SaveCheckpoint(ckpItem); err != nil {
-		return err
-	}
-	if err = n.db.SaveCheckpointIndex(pid, ckpItem.Id); err != nil {
 		return err
 	}
 
 	if err = n.vmm.Kill(pid); err != nil {
-		_ = n.restoreAfterFailedStop(pid, ckpItem.Id)
 		return err
 	}
 	return nil
@@ -55,7 +48,7 @@ func (n *Node) ResumeVM(pid string) error {
 		return schema.ErrProcessAlreadyExists
 	}
 
-	registered, err := n.processRegisteredToLocalNode(pid)
+	registered, err := n.isRegistered(pid)
 	if err != nil {
 		return err
 	}

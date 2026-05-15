@@ -187,6 +187,21 @@ func (suite *NodeVMLifecycleTestSuite) TestStopVMSaveCheckpointIndexFailureLeave
 	assert.True(suite.T(), n.vmm.IsExists(pid))
 }
 
+func (suite *NodeVMLifecycleTestSuite) TestSaveCheckpointPersistsItemAndIndex() {
+	pid := "pid-1"
+	db := &lifecycleDB{}
+	n := suite.newLifecycleNode(pid, &lifecycleVM{}, db)
+
+	ckpItem, err := n.saveCheckpoint(pid)
+
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), ckpItem.Id)
+	assert.Equal(suite.T(), ckpItem.Id, db.saveCheckpointID)
+	savedItem, err := LoadCheckpoint(ckpItem.Id)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), ckpItem.Id, savedItem.Id)
+}
+
 func (suite *NodeVMLifecycleTestSuite) TestStopVMSuccessKillsVM() {
 	pid := "pid-1"
 	vm := &lifecycleVM{}
