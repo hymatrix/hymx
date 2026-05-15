@@ -43,6 +43,7 @@ Response body (array of nodes):
   - Success: `200` with `{ "id": "<item-id>" }`
   - Errors:
     - `400` with `{ "error": "..." }` on decode or handle failures
+    - `400` with `{ "error": "err_process_stopped" }` when the target process is registered to this node but not currently running. The message is not assigned or persisted.
     - `402` with `X402Response` when payment is required
     - `308` with node redirect for spawn/message redirection
   - Example:
@@ -153,6 +154,34 @@ Response body (array of nodes):
   - Errors:
     - `400` with `{ "error": "err_invalid_params" }` when `url` missing
     - `400` with `{ "error": "err_callback_failed" }` on fetch failure
+
+### Admin VM Lifecycle
+
+Admin VM lifecycle endpoints are served only on the configured `adminPort`. If `adminPort` is empty or missing, the admin server is not started and these endpoints are unavailable.
+
+- `POST /admin/vms/stop`
+  - Description: Checkpoint and stop a live VM process on this node. The process remains registered in Registry.
+  - Request: `{ "pid": "<process-id>" }`
+  - Success: `200` with `{ "id": "<pid>", "message": "stopped" }`
+  - Errors:
+    - `400` with `{ "error": "err_invalid_params" }` when `pid` is missing
+    - `400` with `{ "error": "err_core_vm_cannot_stop" }` for token or registry
+    - `400` with `{ "error": "err_process_not_found" }` when the VM is not live
+
+- `POST /admin/vms/resume`
+  - Description: Resume a registered but non-running VM by running recovery for that process.
+  - Request: `{ "pid": "<process-id>" }`
+  - Success: `200` with `{ "id": "<pid>", "message": "resumed" }`
+  - Errors:
+    - `400` with `{ "error": "err_invalid_params" }` when `pid` is missing
+    - `400` with `{ "error": "err_process_already_exist" }` when the VM is already running
+    - `400` with `{ "error": "err_process_not_found" }` when the process is not registered to this node
+
+- `GET /admin/vms/running`
+  - Description: List VM pids currently running in this node process.
+  - Success: `200` with `{ "pids": ["<pid>"] }`
+
+Clients can derive stopped VMs by comparing `GET /processes/:accid` with `GET /admin/vms/running`.
 
 ## Data Structures
 
