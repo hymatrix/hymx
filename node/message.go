@@ -27,7 +27,14 @@ func (n *Node) handleMessage(
 
 	// check if the process not found before assignment
 	if !n.vmm.IsExists(pid) {
-		err = n.errForMissingLocalVM(pid)
+		registered, registerErr := n.isRegistered(pid)
+		if registerErr != nil {
+			err = registerErr
+		} else if registered {
+			err = schema.ErrProcessStopped
+		} else {
+			err = schema.ErrProcessNotFound
+		}
 		log.Error("handle message failed", "pid", pid, "err", err)
 		return
 	}
@@ -84,15 +91,4 @@ func (n *Node) applyMessage(
 		RecoveryMaxNonce: maxNonce,
 	})
 	return
-}
-
-func (n *Node) errForMissingLocalVM(pid string) error {
-	registered, err := n.isRegistered(pid)
-	if err != nil {
-		return err
-	}
-	if registered {
-		return schema.ErrProcessStopped
-	}
-	return schema.ErrProcessNotFound
 }

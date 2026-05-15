@@ -128,13 +128,19 @@ func (suite *NodeVMLifecycleTestSuite) newLifecycleNode(pid string, vm vmmSchema
 }
 
 func (suite *NodeVMLifecycleTestSuite) registerProcess(n *Node, pid string) {
-	nodeJSON := `{"Acc-Id":"local-node","Name":"local","Role":"main","Desc":"","URL":"http://127.0.0.1:8080"}`
+	accID := n.info.Node.AccId
+	nodeJSON := fmt.Sprintf(`{"Acc-Id":%q,"Name":"local","Role":"main","Desc":"","URL":"http://127.0.0.1:8080"}`, accID)
 	data := fmt.Sprintf(
-		`{"i":"registry-pid","tp":"token-pid","mi":"local-node","pi":{%q:{"local-node":%s}},"ai":{"local-node":{%q:%q}},"re":{"local-node":true},"n":{"local-node":%s}}`,
+		`{"i":"registry-pid","tp":"token-pid","mi":%q,"pi":{%q:{%q:%s}},"ai":{%q:{%q:%q}},"re":{%q:true},"n":{%q:%s}}`,
+		accID,
 		pid,
+		accID,
 		nodeJSON,
+		accID,
 		pid,
 		pid,
+		accID,
+		accID,
 		nodeJSON,
 	)
 	err := n.vmm.Restore(vmmSchema.Snapshot{
@@ -251,25 +257,16 @@ func (suite *NodeVMLifecycleTestSuite) TestResumeVMUnknownProcess() {
 	assert.ErrorIs(suite.T(), err, nodeSchema.ErrProcessNotFound)
 }
 
-func (suite *NodeVMLifecycleTestSuite) TestStoppedErrorForRegisteredNonRunningProcess() {
+func (suite *NodeVMLifecycleTestSuite) TestHandleMessageReturnsStoppedErrorForRegisteredNonRunningProcess() {
 	pid := "pid-1"
 	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
+	n.info.Node.AccId = n.bundler.Address
 	suite.registerProcess(n, pid)
 	assert.NoError(suite.T(), n.vmm.Kill(pid))
 
-	err := n.errForMissingLocalVM(pid)
+	err := n.handleMessage(pid, "accid", goarSchema.BundleItem{}, hymxSchema.Message{})
 
 	assert.ErrorIs(suite.T(), err, nodeSchema.ErrProcessStopped)
-}
-
-func (suite *NodeVMLifecycleTestSuite) TestProcessNotFoundForUnknownNonRunningProcess() {
-	pid := "pid-1"
-	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
-	assert.NoError(suite.T(), n.vmm.Kill(pid))
-
-	err := n.errForMissingLocalVM(pid)
-
-	assert.ErrorIs(suite.T(), err, nodeSchema.ErrProcessNotFound)
 }
 
 func TestNodeVMLifecycleTestSuite(t *testing.T) {

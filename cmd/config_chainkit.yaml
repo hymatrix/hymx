@@ -1,5 +1,4 @@
 port: :8080
-adminPort: "" # optional, e.g. :8081; empty disables admin API
 ginMode: release # debug or release
 
 redisURL: redis://@localhost:6379/0
@@ -21,4 +20,3 @@ chainkit:
   redisURL: redis://@localhost:6379/10
   keyfilePath: ./arweave-keyfile-QXZ7A1acq-E65smWygrDqibEyKOMS-73F2e7kf6PqLc.json
   optType: goar
-

@@ -1,5 +1,4 @@
 port: :8082
-adminPort: "" # optional, e.g. :8083; empty disables admin API
 ginMode: release # debug or release
 
 redisURL: redis://@localhost:6379/3
