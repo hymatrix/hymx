@@ -3,20 +3,9 @@ package node
 import (
 	"github.com/hymatrix/hymx/node/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
-	goarSchema "github.com/permadao/goar/schema"
 )
 
-var checkpointVM = func(n *Node, pid string) (goarSchema.BundleItem, error) {
-	return n.Checkpoint(pid)
-}
-
-var saveCheckpoint = SaveCheckpoint
-
-var recoverVM = func(n *Node, pid string, maxNonce int64, ckpId string, mode vmmSchema.ExecMode) error {
-	return n.recoveryProcess(pid, maxNonce, ckpId, mode)
-}
-
-var processRegisteredToLocalNode = func(n *Node, pid string) (bool, error) {
+func (n *Node) processRegisteredToLocalNode(pid string) (bool, error) {
 	nodes, err := n.GetNodesByProcess(pid)
 	if err != nil {
 		return false, err
@@ -43,11 +32,11 @@ func (n *Node) StopVM(pid string) error {
 		return schema.ErrProcessNotFound
 	}
 
-	ckpItem, err := checkpointVM(n, pid)
+	ckpItem, err := n.Checkpoint(pid)
 	if err != nil {
 		return err
 	}
-	if err = saveCheckpoint(ckpItem); err != nil {
+	if err = SaveCheckpoint(ckpItem); err != nil {
 		return err
 	}
 	if err = n.db.SaveCheckpointIndex(pid, ckpItem.Id); err != nil {
@@ -66,7 +55,7 @@ func (n *Node) ResumeVM(pid string) error {
 		return schema.ErrProcessAlreadyExists
 	}
 
-	registered, err := processRegisteredToLocalNode(n, pid)
+	registered, err := n.processRegisteredToLocalNode(pid)
 	if err != nil {
 		return err
 	}
@@ -83,7 +72,7 @@ func (n *Node) ResumeVM(pid string) error {
 		ckpId = ""
 	}
 
-	return recoverVM(n, pid, maxNonce, ckpId, vmmSchema.ExecModeDryRun)
+	return n.recoveryProcess(pid, maxNonce, ckpId, vmmSchema.ExecModeDryRun)
 }
 
 func (n *Node) GetRunningVMs() []string {
@@ -108,5 +97,5 @@ func (n *Node) restoreAfterFailedStop(pid, ckpId string) error {
 	if err != nil {
 		return err
 	}
-	return recoverVM(n, pid, maxNonce, ckpId, vmmSchema.ExecModeDryRun)
+	return n.recoveryProcess(pid, maxNonce, ckpId, vmmSchema.ExecModeDryRun)
 }

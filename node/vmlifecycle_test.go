@@ -2,13 +2,18 @@ package node
 
 import (
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/hymatrix/hymx/db/cache"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/vmm"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
+	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -63,25 +68,52 @@ func (db *lifecycleDB) GetCache(pid, key string) (string, error) { return "", ni
 func (db *lifecycleDB) SaveCache(pid, key, value string) error   { return nil }
 
 type lifecycleVM struct {
-	closed bool
+	checkpointErr error
+	closed        bool
 }
 
 func (vm *lifecycleVM) Apply(from string, meta vmmSchema.Meta) vmmSchema.Result {
 	return vmmSchema.Result{}
 }
-func (vm *lifecycleVM) Checkpoint() (string, error) { return "vm-state", nil }
-func (vm *lifecycleVM) Restore(data string) error   { return nil }
+func (vm *lifecycleVM) Checkpoint() (string, error) {
+	return "vm-state", vm.checkpointErr
+}
+func (vm *lifecycleVM) Restore(data string) error { return nil }
 func (vm *lifecycleVM) Close() error {
 	vm.closed = true
 	return nil
 }
 
 func (suite *NodeVMLifecycleTestSuite) newLifecycleNode(pid string, vm vmmSchema.Vm, db *lifecycleDB) *Node {
+	keyfile, err := filepath.Abs("../cmd/test_keyfile.json")
+	assert.NoError(suite.T(), err)
+	signer, err := goar.NewSignerFromPath(keyfile)
+	assert.NoError(suite.T(), err)
+	bundler, err := goar.NewBundler(signer)
+	assert.NoError(suite.T(), err)
+
+	oldWd, err := os.Getwd()
+	assert.NoError(suite.T(), err)
+	assert.NoError(suite.T(), os.Chdir(suite.T().TempDir()))
+	suite.T().Cleanup(func() {
+		assert.NoError(suite.T(), os.Chdir(oldWd))
+	})
+
 	n := &Node{
-		info: &nodeSchema.Info{Node: registrySchema.Node{AccId: "local-node"}},
-		db:   db,
+		info:     &nodeSchema.Info{Node: registrySchema.Node{AccId: "local-node"}},
+		bundler:  bundler,
+		db:       db,
+		outboxDB: cache.NewOutbox(),
 	}
-	n.vmm = vmm.New(nil, n.info, nil, nil, nil)
+	n.vmm = vmm.New(
+		nil,
+		n.info,
+		make(chan vmmSchema.VmmResult, 100),
+		make(chan vmmSchema.Outbox, 100),
+		make(chan struct{}),
+	)
+	n.vmm.Run()
+	suite.T().Cleanup(n.vmm.Close)
 	assert.NoError(suite.T(), n.vmm.Mount("test.module", func(env vmmSchema.Env) (vmmSchema.Vm, error) {
 		return vm, nil
 	}))
@@ -95,39 +127,33 @@ func (suite *NodeVMLifecycleTestSuite) newLifecycleNode(pid string, vm vmmSchema
 	return n
 }
 
-func (suite *NodeVMLifecycleTestSuite) installLifecycleHooks(checkpointErr, saveErr, recoverErr error, registered bool) {
-	oldCheckpoint := checkpointVM
-	oldSave := saveCheckpoint
-	oldRecover := recoverVM
-	oldRegistered := processRegisteredToLocalNode
-	suite.T().Cleanup(func() {
-		checkpointVM = oldCheckpoint
-		saveCheckpoint = oldSave
-		recoverVM = oldRecover
-		processRegisteredToLocalNode = oldRegistered
-	})
-
-	checkpointVM = func(n *Node, pid string) (goarSchema.BundleItem, error) {
-		return goarSchema.BundleItem{Id: "ckp-1"}, checkpointErr
-	}
-	saveCheckpoint = func(goarSchema.BundleItem) error {
-		return saveErr
-	}
-	recoverVM = func(n *Node, pid string, maxNonce int64, ckpId string, mode vmmSchema.ExecMode) error {
-		if recoverErr != nil {
-			return recoverErr
-		}
-		return n.vmm.Restore(vmmSchema.Snapshot{
-			Env: vmmSchema.Env{
-				Meta:   vmmSchema.Meta{Pid: pid},
-				Module: hymxSchema.Module{ModuleFormat: "test.module"},
+func (suite *NodeVMLifecycleTestSuite) registerProcess(n *Node, pid string) {
+	nodeJSON := `{"Acc-Id":"local-node","Name":"local","Role":"main","Desc":"","URL":"http://127.0.0.1:8080"}`
+	data := fmt.Sprintf(
+		`{"i":"registry-pid","tp":"token-pid","mi":"local-node","pi":{%q:{"local-node":%s}},"ai":{"local-node":{%q:%q}},"re":{"local-node":true},"n":{"local-node":%s}}`,
+		pid,
+		nodeJSON,
+		pid,
+		pid,
+		nodeJSON,
+	)
+	err := n.vmm.Restore(vmmSchema.Snapshot{
+		Env: vmmSchema.Env{
+			Meta: vmmSchema.Meta{
+				Pid:   "registry-pid",
+				AccId: "local-node",
+				Params: map[string]string{
+					"Token-Pid": "token-pid",
+					"Name":      "local",
+					"URL":       "http://127.0.0.1:8080",
+				},
 			},
-			Data: "vm-state",
-		})
-	}
-	processRegisteredToLocalNode = func(n *Node, pid string) (bool, error) {
-		return registered, nil
-	}
+			Process: hymxSchema.Process{Scheduler: "local-node"},
+			Module:  hymxSchema.Module{ModuleFormat: vmmSchema.ModuleFormatRegistry},
+		},
+		Data: data,
+	})
+	assert.NoError(suite.T(), err)
 }
 
 func (suite *NodeVMLifecycleTestSuite) TestStopVMRejectsCoreVM() {
@@ -141,9 +167,8 @@ func (suite *NodeVMLifecycleTestSuite) TestStopVMRejectsCoreVM() {
 
 func (suite *NodeVMLifecycleTestSuite) TestStopVMCheckpointFailureLeavesVMRunning() {
 	pid := "pid-1"
-	vm := &lifecycleVM{}
+	vm := &lifecycleVM{checkpointErr: errors.New("checkpoint failed")}
 	n := suite.newLifecycleNode(pid, vm, &lifecycleDB{})
-	suite.installLifecycleHooks(errors.New("checkpoint failed"), nil, nil, true)
 
 	err := n.StopVM(pid)
 
@@ -155,7 +180,6 @@ func (suite *NodeVMLifecycleTestSuite) TestStopVMSaveCheckpointIndexFailureLeave
 	pid := "pid-1"
 	vm := &lifecycleVM{}
 	n := suite.newLifecycleNode(pid, vm, &lifecycleDB{saveCheckpointErr: errors.New("index failed")})
-	suite.installLifecycleHooks(nil, nil, nil, true)
 
 	err := n.StopVM(pid)
 
@@ -168,7 +192,6 @@ func (suite *NodeVMLifecycleTestSuite) TestStopVMSuccessKillsVM() {
 	vm := &lifecycleVM{}
 	db := &lifecycleDB{}
 	n := suite.newLifecycleNode(pid, vm, db)
-	suite.installLifecycleHooks(nil, nil, nil, true)
 
 	err := n.StopVM(pid)
 
@@ -181,12 +204,14 @@ func (suite *NodeVMLifecycleTestSuite) TestStopVMSuccessKillsVM() {
 func (suite *NodeVMLifecycleTestSuite) TestResumeVMSuccessRunsRecovery() {
 	pid := "pid-1"
 	vm := &lifecycleVM{}
-	db := &lifecycleDB{nonce: 7, checkpointID: "ckp-1"}
+	db := &lifecycleDB{}
 	n := suite.newLifecycleNode(pid, vm, db)
-	suite.installLifecycleHooks(nil, nil, nil, true)
-	assert.NoError(suite.T(), n.vmm.Kill(pid))
+	suite.registerProcess(n, pid)
+	err := n.StopVM(pid)
+	assert.NoError(suite.T(), err)
+	db.checkpointID = db.saveCheckpointID
 
-	err := n.ResumeVM(pid)
+	err = n.ResumeVM(pid)
 
 	assert.NoError(suite.T(), err)
 	assert.True(suite.T(), n.vmm.IsExists(pid))
@@ -195,7 +220,6 @@ func (suite *NodeVMLifecycleTestSuite) TestResumeVMSuccessRunsRecovery() {
 func (suite *NodeVMLifecycleTestSuite) TestResumeVMAlreadyRunning() {
 	pid := "pid-1"
 	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
-	suite.installLifecycleHooks(nil, nil, nil, true)
 
 	err := n.ResumeVM(pid)
 
@@ -205,7 +229,6 @@ func (suite *NodeVMLifecycleTestSuite) TestResumeVMAlreadyRunning() {
 func (suite *NodeVMLifecycleTestSuite) TestResumeVMUnknownProcess() {
 	pid := "pid-1"
 	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
-	suite.installLifecycleHooks(nil, nil, nil, false)
 	assert.NoError(suite.T(), n.vmm.Kill(pid))
 
 	err := n.ResumeVM(pid)
@@ -216,7 +239,7 @@ func (suite *NodeVMLifecycleTestSuite) TestResumeVMUnknownProcess() {
 func (suite *NodeVMLifecycleTestSuite) TestStoppedErrorForRegisteredNonRunningProcess() {
 	pid := "pid-1"
 	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
-	suite.installLifecycleHooks(nil, nil, nil, true)
+	suite.registerProcess(n, pid)
 	assert.NoError(suite.T(), n.vmm.Kill(pid))
 
 	err := n.errForMissingLocalVM(pid)
@@ -227,7 +250,6 @@ func (suite *NodeVMLifecycleTestSuite) TestStoppedErrorForRegisteredNonRunningPr
 func (suite *NodeVMLifecycleTestSuite) TestProcessNotFoundForUnknownNonRunningProcess() {
 	pid := "pid-1"
 	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
-	suite.installLifecycleHooks(nil, nil, nil, false)
 	assert.NoError(suite.T(), n.vmm.Kill(pid))
 
 	err := n.errForMissingLocalVM(pid)
