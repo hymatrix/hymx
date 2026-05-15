@@ -5,22 +5,6 @@ import (
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 )
 
-func (n *Node) isRegistered(pid string) (bool, error) {
-	nodes, err := n.GetNodesByProcess(pid)
-	if err != nil {
-		return false, err
-	}
-	if n.info == nil {
-		return false, nil
-	}
-	for _, node := range nodes {
-		if node.AccId == n.info.Node.AccId {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func (n *Node) StopVM(pid string) error {
 	if n.isCoreVM(pid) {
 		return schema.ErrCoreVmCannotStop
@@ -85,10 +69,18 @@ func (n *Node) isCoreVM(pid string) bool {
 	return false
 }
 
-func (n *Node) restoreAfterFailedStop(pid, ckpId string) error {
-	maxNonce, err := n.db.GetNonce(pid)
+func (n *Node) isRegistered(pid string) (bool, error) {
+	nodes, err := n.GetNodesByProcess(pid)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return n.recoveryProcess(pid, maxNonce, ckpId, vmmSchema.ExecModeDryRun)
+	if n.info == nil {
+		return false, nil
+	}
+	for _, node := range nodes {
+		if node.AccId == n.info.Node.AccId {
+			return true, nil
+		}
+	}
+	return false, nil
 }
