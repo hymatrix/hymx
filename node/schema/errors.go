@@ -9,6 +9,8 @@ var (
 	ErrProcessIsRecovering       = errors.New("err_process_is_recovering")
 	ErrProcessAlreadyExists      = errors.New("err_process_already_exist")
 	ErrProcessNotFound           = errors.New("err_process_not_found")
+	ErrProcessStopped            = errors.New("err_process_stopped")
+	ErrCoreVmCannotStop          = errors.New("err_core_vm_cannot_stop")
 	ErrSpawnRedirect             = errors.New("err_spwan_redirect")
 	ErrMessageRedirect           = errors.New("err_message_redirect")
 	ErrDuplicateItem             = errors.New("err_duplicate_item")
