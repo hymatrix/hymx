@@ -22,7 +22,9 @@ func (v *Vmm) Kill(pid string) (err error) {
 
 	v.vmsLockMu.Lock()
 	defer v.vmsLockMu.Unlock()
-	vm.Close()
+	if err = vm.Close(); err != nil {
+		return err
+	}
 	delete(v.vms, pid)
 	delete(v.vmsEnv, pid)
 
