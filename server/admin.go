@@ -11,11 +11,12 @@ import (
 )
 
 func (s *Server) runAdminAPI(endpoint string) {
-	if endpoint == "" {
-		return
-	}
+	engine := gin.Default()
+	engine.Use(common.CORSMiddleware())
+	engine.POST("/admin/vms/stop", s.Stop)
+	engine.POST("/admin/vms/resume", s.Resume)
+	engine.GET("/admin/vms/running", s.Running)
 
-	engine := s.newAdminEngine()
 	s.adminAPIServer = &http.Server{
 		Addr:    endpoint,
 		Handler: engine,
@@ -24,15 +25,6 @@ func (s *Server) runAdminAPI(endpoint string) {
 	if err := s.adminAPIServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Error("admin http ListenAndServe", "err", err)
 	}
-}
-
-func (s *Server) newAdminEngine() *gin.Engine {
-	engine := gin.Default()
-	engine.Use(common.CORSMiddleware())
-	engine.POST("/admin/vms/stop", s.Stop)
-	engine.POST("/admin/vms/resume", s.Resume)
-	engine.GET("/admin/vms/running", s.Running)
-	return engine
 }
 
 func (s *Server) closeAdminAPI() {
@@ -58,7 +50,7 @@ func (s *Server) Stop(c *gin.Context) {
 		schema.ErrorResponse(c, schema.ErrInvalidParams.Error())
 		return
 	}
-	if err := s.vmAdmin.Stop(req.Pid); err != nil {
+	if err := s.node.Stop(req.Pid); err != nil {
 		schema.ErrorResponse(c, err.Error())
 		return
 	}
@@ -71,7 +63,7 @@ func (s *Server) Resume(c *gin.Context) {
 		schema.ErrorResponse(c, schema.ErrInvalidParams.Error())
 		return
 	}
-	if err := s.vmAdmin.Resume(req.Pid); err != nil {
+	if err := s.node.Resume(req.Pid); err != nil {
 		schema.ErrorResponse(c, err.Error())
 		return
 	}
@@ -79,5 +71,5 @@ func (s *Server) Resume(c *gin.Context) {
 }
 
 func (s *Server) Running(c *gin.Context) {
-	c.JSON(http.StatusOK, schema.ResponseRunningVMs{Pids: s.vmAdmin.Running()})
+	c.JSON(http.StatusOK, schema.ResponseRunningVMs{Pids: s.node.Running()})
 }

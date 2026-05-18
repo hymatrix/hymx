@@ -12,17 +12,9 @@ import (
 
 var log = common.NewLog("server")
 
-type vmAdmin interface {
-	Stop(pid string) error
-	Resume(pid string) error
-	Running() []string
-}
-
 type Server struct {
 	node *node.Node
 	pay  *pay.Pay
-
-	vmAdmin vmAdmin
 
 	apiServer      *http.Server
 	adminAPIServer *http.Server
@@ -30,9 +22,8 @@ type Server struct {
 
 func New(node *node.Node, pay *pay.Pay) *Server {
 	return &Server{
-		node:    node,
-		pay:     pay,
-		vmAdmin: node,
+		node: node,
+		pay:  pay,
 	}
 }
 

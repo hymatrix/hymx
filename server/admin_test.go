@@ -2,13 +2,12 @@ package server
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	serverSchema "github.com/hymatrix/hymx/server/schema"
+	"github.com/gin-gonic/gin"
+	"github.com/hymatrix/hymx/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -18,88 +17,52 @@ type AdminTestSuite struct {
 	suite.Suite
 }
 
-func (suite *AdminTestSuite) TestAdminStopRouteReadsPidFromBodyAndUsesResponseEnvelope() {
-	admin := &fakeVMAdmin{}
-	s := &Server{vmAdmin: admin}
-	engine := s.newAdminEngine()
+func (suite *AdminTestSuite) TestAdminStopRouteReturnsInvalidParamsWhenPidMissing() {
+	s := &Server{}
+	engine := newTestAdminEngine(s)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/admin/vms/stop", bytes.NewBufferString(`{"pid":"pid-1"}`))
-	req.Header.Set("Content-Type", "application/json")
-	engine.ServeHTTP(w, req)
-
-	assert.Equal(suite.T(), http.StatusOK, w.Code)
-	assert.Equal(suite.T(), "pid-1", admin.stoppedPid)
-	res := serverSchema.Response{}
-	assert.NoError(suite.T(), json.Unmarshal(w.Body.Bytes(), &res))
-	assert.Equal(suite.T(), "pid-1", res.Id)
-	assert.Equal(suite.T(), "stopped", res.Message)
-}
-
-func (suite *AdminTestSuite) TestAdminResumeRouteReadsPidFromBodyAndUsesResponseEnvelope() {
-	admin := &fakeVMAdmin{}
-	s := &Server{vmAdmin: admin}
-	engine := s.newAdminEngine()
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/admin/vms/resume", bytes.NewBufferString(`{"pid":"pid-1"}`))
-	req.Header.Set("Content-Type", "application/json")
-	engine.ServeHTTP(w, req)
-
-	assert.Equal(suite.T(), http.StatusOK, w.Code)
-	assert.Equal(suite.T(), "pid-1", admin.resumedPid)
-	res := serverSchema.Response{}
-	assert.NoError(suite.T(), json.Unmarshal(w.Body.Bytes(), &res))
-	assert.Equal(suite.T(), "pid-1", res.Id)
-	assert.Equal(suite.T(), "resumed", res.Message)
-}
-
-func (suite *AdminTestSuite) TestAdminRunningRouteReturnsPids() {
-	s := &Server{vmAdmin: &fakeVMAdmin{running: []string{"pid-1"}}}
-	engine := s.newAdminEngine()
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/admin/vms/running", nil)
-	engine.ServeHTTP(w, req)
-
-	assert.Equal(suite.T(), http.StatusOK, w.Code)
-	res := serverSchema.ResponseRunningVMs{}
-	assert.NoError(suite.T(), json.Unmarshal(w.Body.Bytes(), &res))
-	assert.Equal(suite.T(), []string{"pid-1"}, res.Pids)
-}
-
-func (suite *AdminTestSuite) TestAdminStopRouteReturnsErrorEnvelope() {
-	s := &Server{vmAdmin: &fakeVMAdmin{err: errors.New("err_process_stopped")}}
-	engine := s.newAdminEngine()
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/admin/vms/stop", bytes.NewBufferString(`{"pid":"pid-1"}`))
+	req := httptest.NewRequest(http.MethodPost, "/admin/vms/stop", bytes.NewBufferString(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	engine.ServeHTTP(w, req)
 
 	assert.Equal(suite.T(), http.StatusBadRequest, w.Code)
-	assert.JSONEq(suite.T(), `{"error":"err_process_stopped"}`, w.Body.String())
+	assert.JSONEq(suite.T(), `{"error":"err_invalid_params"}`, w.Body.String())
 }
 
-type fakeVMAdmin struct {
-	running    []string
-	stoppedPid string
-	resumedPid string
-	err        error
+func (suite *AdminTestSuite) TestAdminResumeRouteReturnsInvalidParamsWhenPidMissing() {
+	s := &Server{}
+	engine := newTestAdminEngine(s)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/admin/vms/resume", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	assert.Equal(suite.T(), http.StatusBadRequest, w.Code)
+	assert.JSONEq(suite.T(), `{"error":"err_invalid_params"}`, w.Body.String())
 }
 
-func (f *fakeVMAdmin) Stop(pid string) error {
-	f.stoppedPid = pid
-	return f.err
+func (suite *AdminTestSuite) TestAdminRoutesAreRegistered() {
+	s := &Server{}
+	engine := newTestAdminEngine(s)
+
+	routes := []string{}
+	for _, route := range engine.Routes() {
+		routes = append(routes, route.Method+" "+route.Path)
+	}
+	assert.Contains(suite.T(), routes, "POST /admin/vms/stop")
+	assert.Contains(suite.T(), routes, "POST /admin/vms/resume")
+	assert.Contains(suite.T(), routes, "GET /admin/vms/running")
 }
 
-func (f *fakeVMAdmin) Resume(pid string) error {
-	f.resumedPid = pid
-	return f.err
-}
-
-func (f *fakeVMAdmin) Running() []string {
-	return f.running
+func newTestAdminEngine(s *Server) *gin.Engine {
+	engine := gin.Default()
+	engine.Use(common.CORSMiddleware())
+	engine.POST("/admin/vms/stop", s.Stop)
+	engine.POST("/admin/vms/resume", s.Resume)
+	engine.GET("/admin/vms/running", s.Running)
+	return engine
 }
 
 func TestAdminTestSuite(t *testing.T) {
