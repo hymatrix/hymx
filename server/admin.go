@@ -29,9 +29,9 @@ func (s *Server) runAdminAPI(endpoint string) {
 func (s *Server) newAdminEngine() *gin.Engine {
 	engine := gin.Default()
 	engine.Use(common.CORSMiddleware())
-	engine.POST("/admin/vms/stop", s.StopVM)
-	engine.POST("/admin/vms/resume", s.ResumeVM)
-	engine.GET("/admin/vms/running", s.RunningVMs)
+	engine.POST("/admin/vms/stop", s.Stop)
+	engine.POST("/admin/vms/resume", s.Resume)
+	engine.GET("/admin/vms/running", s.Running)
 	return engine
 }
 
@@ -52,32 +52,32 @@ func (s *Server) closeAdminAPI() {
 	log.Info("admin api has been shut down")
 }
 
-func (s *Server) StopVM(c *gin.Context) {
+func (s *Server) Stop(c *gin.Context) {
 	req := schema.RequestVM{}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Pid == "" {
 		schema.ErrorResponse(c, schema.ErrInvalidParams.Error())
 		return
 	}
-	if err := s.vmAdmin.StopVM(req.Pid); err != nil {
+	if err := s.vmAdmin.Stop(req.Pid); err != nil {
 		schema.ErrorResponse(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, schema.Response{Id: req.Pid, Message: "stopped"})
 }
 
-func (s *Server) ResumeVM(c *gin.Context) {
+func (s *Server) Resume(c *gin.Context) {
 	req := schema.RequestVM{}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Pid == "" {
 		schema.ErrorResponse(c, schema.ErrInvalidParams.Error())
 		return
 	}
-	if err := s.vmAdmin.ResumeVM(req.Pid); err != nil {
+	if err := s.vmAdmin.Resume(req.Pid); err != nil {
 		schema.ErrorResponse(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, schema.Response{Id: req.Pid, Message: "resumed"})
 }
 
-func (s *Server) RunningVMs(c *gin.Context) {
-	c.JSON(http.StatusOK, schema.ResponseRunningVMs{Pids: s.vmAdmin.GetRunningVMs()})
+func (s *Server) Running(c *gin.Context) {
+	c.JSON(http.StatusOK, schema.ResponseRunningVMs{Pids: s.vmAdmin.Running()})
 }

@@ -5,9 +5,9 @@ import (
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 )
 
-func (n *Node) StopVM(pid string) error {
-	if n.isCoreVM(pid) {
-		return schema.ErrCoreVmCannotStop
+func (n *Node) Stop(pid string) error {
+	if n.isCore(pid) {
+		return schema.ErrCoreProcessCannotStop
 	}
 	if n.vmm.IsRecovering(pid) {
 		return schema.ErrProcessIsRecovering
@@ -27,7 +27,7 @@ func (n *Node) StopVM(pid string) error {
 	return nil
 }
 
-func (n *Node) ResumeVM(pid string) error {
+func (n *Node) Resume(pid string) error {
 	if n.vmm.IsExists(pid) {
 		return schema.ErrProcessAlreadyExists
 	}
@@ -52,11 +52,11 @@ func (n *Node) ResumeVM(pid string) error {
 	return n.recoveryProcess(pid, maxNonce, ckpId, vmmSchema.ExecModeDryRun)
 }
 
-func (n *Node) GetRunningVMs() []string {
+func (n *Node) Running() []string {
 	return n.vmm.GetVmPids()
 }
 
-func (n *Node) isCoreVM(pid string) bool {
+func (n *Node) isCore(pid string) bool {
 	if pid == "" {
 		return false
 	}

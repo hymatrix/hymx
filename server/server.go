@@ -13,9 +13,9 @@ import (
 var log = common.NewLog("server")
 
 type vmAdmin interface {
-	StopVM(pid string) error
-	ResumeVM(pid string) error
-	GetRunningVMs() []string
+	Stop(pid string) error
+	Resume(pid string) error
+	Running() []string
 }
 
 type Server struct {

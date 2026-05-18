@@ -162,32 +162,32 @@ func (suite *NodeVMLifecycleTestSuite) registerProcess(n *Node, pid string) {
 	assert.NoError(suite.T(), err)
 }
 
-func (suite *NodeVMLifecycleTestSuite) TestStopVMRejectsCoreVM() {
+func (suite *NodeVMLifecycleTestSuite) TestStopRejectsCoreProcess() {
 	n := &Node{info: &nodeSchema.Info{Token: "token-pid", Registry: "registry-pid"}}
 	n.vmm = vmm.New(nil, n.info, nil, nil, nil)
 
-	err := n.StopVM("token-pid")
+	err := n.Stop("token-pid")
 
-	assert.ErrorIs(suite.T(), err, nodeSchema.ErrCoreVmCannotStop)
+	assert.ErrorIs(suite.T(), err, nodeSchema.ErrCoreProcessCannotStop)
 }
 
-func (suite *NodeVMLifecycleTestSuite) TestStopVMCheckpointFailureLeavesVMRunning() {
+func (suite *NodeVMLifecycleTestSuite) TestStopCheckpointFailureLeavesVMRunning() {
 	pid := "pid-1"
 	vm := &lifecycleVM{checkpointErr: errors.New("checkpoint failed")}
 	n := suite.newLifecycleNode(pid, vm, &lifecycleDB{})
 
-	err := n.StopVM(pid)
+	err := n.Stop(pid)
 
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), n.vmm.IsExists(pid))
 }
 
-func (suite *NodeVMLifecycleTestSuite) TestStopVMSaveCheckpointIndexFailureLeavesVMRunning() {
+func (suite *NodeVMLifecycleTestSuite) TestStopSaveCheckpointIndexFailureLeavesVMRunning() {
 	pid := "pid-1"
 	vm := &lifecycleVM{}
 	n := suite.newLifecycleNode(pid, vm, &lifecycleDB{saveCheckpointErr: errors.New("index failed")})
 
-	err := n.StopVM(pid)
+	err := n.Stop(pid)
 
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), n.vmm.IsExists(pid))
@@ -208,13 +208,13 @@ func (suite *NodeVMLifecycleTestSuite) TestSaveCheckpointPersistsItemAndIndex() 
 	assert.Equal(suite.T(), ckpItem.Id, savedItem.Id)
 }
 
-func (suite *NodeVMLifecycleTestSuite) TestStopVMSuccessKillsVM() {
+func (suite *NodeVMLifecycleTestSuite) TestStopSuccessKillsVM() {
 	pid := "pid-1"
 	vm := &lifecycleVM{}
 	db := &lifecycleDB{}
 	n := suite.newLifecycleNode(pid, vm, db)
 
-	err := n.StopVM(pid)
+	err := n.Stop(pid)
 
 	assert.NoError(suite.T(), err)
 	assert.False(suite.T(), n.vmm.IsExists(pid))
@@ -222,37 +222,37 @@ func (suite *NodeVMLifecycleTestSuite) TestStopVMSuccessKillsVM() {
 	assert.NotEmpty(suite.T(), db.saveCheckpointID)
 }
 
-func (suite *NodeVMLifecycleTestSuite) TestResumeVMSuccessRunsRecovery() {
+func (suite *NodeVMLifecycleTestSuite) TestResumeSuccessRunsRecovery() {
 	pid := "pid-1"
 	vm := &lifecycleVM{}
 	db := &lifecycleDB{}
 	n := suite.newLifecycleNode(pid, vm, db)
 	suite.registerProcess(n, pid)
-	err := n.StopVM(pid)
+	err := n.Stop(pid)
 	assert.NoError(suite.T(), err)
 	db.checkpointID = db.saveCheckpointID
 
-	err = n.ResumeVM(pid)
+	err = n.Resume(pid)
 
 	assert.NoError(suite.T(), err)
 	assert.True(suite.T(), n.vmm.IsExists(pid))
 }
 
-func (suite *NodeVMLifecycleTestSuite) TestResumeVMAlreadyRunning() {
+func (suite *NodeVMLifecycleTestSuite) TestResumeAlreadyRunning() {
 	pid := "pid-1"
 	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
 
-	err := n.ResumeVM(pid)
+	err := n.Resume(pid)
 
 	assert.ErrorIs(suite.T(), err, nodeSchema.ErrProcessAlreadyExists)
 }
 
-func (suite *NodeVMLifecycleTestSuite) TestResumeVMUnknownProcess() {
+func (suite *NodeVMLifecycleTestSuite) TestResumeUnknownProcess() {
 	pid := "pid-1"
 	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
 	assert.NoError(suite.T(), n.vmm.Kill(pid))
 
-	err := n.ResumeVM(pid)
+	err := n.Resume(pid)
 
 	assert.ErrorIs(suite.T(), err, nodeSchema.ErrProcessNotFound)
 }

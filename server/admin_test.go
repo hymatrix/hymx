@@ -88,17 +88,17 @@ type fakeVMAdmin struct {
 	err        error
 }
 
-func (f *fakeVMAdmin) StopVM(pid string) error {
+func (f *fakeVMAdmin) Stop(pid string) error {
 	f.stoppedPid = pid
 	return f.err
 }
 
-func (f *fakeVMAdmin) ResumeVM(pid string) error {
+func (f *fakeVMAdmin) Resume(pid string) error {
 	f.resumedPid = pid
 	return f.err
 }
 
-func (f *fakeVMAdmin) GetRunningVMs() []string {
+func (f *fakeVMAdmin) Running() []string {
 	return f.running
 }
 
