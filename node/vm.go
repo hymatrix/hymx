@@ -12,8 +12,11 @@ func (n *Node) Stop(pid string) error {
 	if n.vmm.IsRecovering(pid) {
 		return schema.ErrProcessIsRecovering
 	}
-	if !n.vmm.IsExists(pid) {
+	if registered, _ := n.isRegistered(pid); !registered {
 		return schema.ErrProcessNotFound
+	}
+	if !n.vmm.IsExists(pid) {
+		return schema.ErrProcessStopped
 	}
 
 	_, err := n.saveCheckpoint(pid)
