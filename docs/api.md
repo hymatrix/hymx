@@ -166,7 +166,8 @@ Admin endpoints are served only on the configured `adminPort`. If `adminPort` is
   - Errors:
     - `400` with `{ "error": "err_invalid_params" }` when `pid` is missing
     - `400` with `{ "error": "err_core_process_cannot_stop" }` for token or registry
-    - `400` with `{ "error": "err_process_not_found" }` when the VM is not live
+    - `400` with `{ "error": "err_process_stopped" }` when the process is registered to this node but not running
+    - `400` with `{ "error": "err_process_not_found" }` when the process is not registered to this node
 
 - `POST /admin/vms/resume`
   - Description: Resume a registered but non-running VM by running recovery for that process.

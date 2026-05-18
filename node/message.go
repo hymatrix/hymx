@@ -26,7 +26,7 @@ func (n *Node) handleMessage(
 	}
 
 	// check if the process not found before assignment
-	if registered, _ := n.isRegistered(pid); registered {
+	if registered, _ := n.isRegistered(pid); !registered {
 		err = schema.ErrProcessNotFound
 		log.Error("handle message failed", "pid", pid, "err", err)
 		return

@@ -175,6 +175,7 @@ func (suite *NodeVMLifecycleTestSuite) TestStopCheckpointFailureLeavesVMRunning(
 	pid := "pid-1"
 	vm := &lifecycleVM{checkpointErr: errors.New("checkpoint failed")}
 	n := suite.newLifecycleNode(pid, vm, &lifecycleDB{})
+	suite.registerProcess(n, pid)
 
 	err := n.Stop(pid)
 
@@ -186,6 +187,7 @@ func (suite *NodeVMLifecycleTestSuite) TestStopSaveCheckpointIndexFailureLeavesV
 	pid := "pid-1"
 	vm := &lifecycleVM{}
 	n := suite.newLifecycleNode(pid, vm, &lifecycleDB{saveCheckpointErr: errors.New("index failed")})
+	suite.registerProcess(n, pid)
 
 	err := n.Stop(pid)
 
@@ -213,6 +215,7 @@ func (suite *NodeVMLifecycleTestSuite) TestStopSuccessKillsVM() {
 	vm := &lifecycleVM{}
 	db := &lifecycleDB{}
 	n := suite.newLifecycleNode(pid, vm, db)
+	suite.registerProcess(n, pid)
 
 	err := n.Stop(pid)
 
@@ -220,6 +223,27 @@ func (suite *NodeVMLifecycleTestSuite) TestStopSuccessKillsVM() {
 	assert.False(suite.T(), n.vmm.IsExists(pid))
 	assert.True(suite.T(), vm.closed)
 	assert.NotEmpty(suite.T(), db.saveCheckpointID)
+}
+
+func (suite *NodeVMLifecycleTestSuite) TestStopReturnsStoppedForRegisteredNonRunningProcess() {
+	pid := "pid-1"
+	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
+	suite.registerProcess(n, pid)
+	assert.NoError(suite.T(), n.vmm.Kill(pid))
+
+	err := n.Stop(pid)
+
+	assert.ErrorIs(suite.T(), err, nodeSchema.ErrProcessStopped)
+}
+
+func (suite *NodeVMLifecycleTestSuite) TestStopReturnsNotFoundForUnknownNonRunningProcess() {
+	pid := "pid-1"
+	n := suite.newLifecycleNode(pid, &lifecycleVM{}, &lifecycleDB{})
+	assert.NoError(suite.T(), n.vmm.Kill(pid))
+
+	err := n.Stop(pid)
+
+	assert.ErrorIs(suite.T(), err, nodeSchema.ErrProcessNotFound)
 }
 
 func (suite *NodeVMLifecycleTestSuite) TestResumeSuccessRunsRecovery() {
