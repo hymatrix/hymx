@@ -19,7 +19,7 @@ func (n *Node) Stop(pid string) error {
 		return schema.ErrProcessStopped
 	}
 
-	_, err := n.saveCheckpoint(pid)
+	_, err := n.SaveCheckpoint(pid)
 	if err != nil {
 		return err
 	}

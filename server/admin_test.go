@@ -12,7 +12,6 @@ import (
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/node"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
-	serverSchema "github.com/hymatrix/hymx/server/schema"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	"github.com/permadao/goar"
 	"github.com/stretchr/testify/assert"
@@ -86,9 +85,9 @@ func (suite *AdminTestSuite) TestAdminRunningRouteReturnsNodePids() {
 	engine.ServeHTTP(w, req)
 
 	assert.Equal(suite.T(), http.StatusOK, w.Code)
-	res := serverSchema.ResponseRunningVMs{}
+	res := []string{}
 	assert.NoError(suite.T(), json.Unmarshal(w.Body.Bytes(), &res))
-	assert.Empty(suite.T(), res.Pids)
+	assert.Empty(suite.T(), res)
 }
 
 func (suite *AdminTestSuite) TestAdminRoutesAreRegistered() {

@@ -33,7 +33,3 @@ type TrySendRequest struct {
 type RequestVM struct {
 	Pid string `json:"pid"`
 }
-
-type ResponseRunningVMs struct {
-	Pids []string `json:"pids"`
-}

@@ -28,13 +28,13 @@ func (n *Node) handleMessage(
 	// check if the process not found before assignment
 	if registered, _ := n.isRegistered(pid); !registered {
 		err = schema.ErrProcessNotFound
-		log.Error("handle message failed", "pid", pid, "err", err)
+		log.Warn("handle message failed", "pid", pid, "err", err)
 		return
 	}
 
 	if !n.vmm.IsExists(pid) {
 		err = schema.ErrProcessStopped
-		log.Error("handle message failed", "pid", pid, "err", err)
+		log.Warn("handle message failed", "pid", pid, "err", err)
 		return
 	}
 

@@ -45,8 +45,12 @@ func (s *Server) Run(endpoint, adminEndpoint, startMode string) {
 
 func (s *Server) Close() {
 	log.Info("server is shutting down")
+
 	s.closeAPI()
-	s.closeAdminAPI()
+	if s.adminAPIServer != nil {
+		s.closeAdminAPI()
+	}
+
 	s.node.Close()
 
 	// close payment middleware
