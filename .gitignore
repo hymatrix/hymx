@@ -14,3 +14,6 @@ checkpoint
 release_notes_*.md
 CLAUDE.md
 /.claude
+
+# Local Superpowers planning artifacts
+docs/superpowers/

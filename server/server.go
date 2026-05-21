@@ -16,7 +16,8 @@ type Server struct {
 	node *node.Node
 	pay  *pay.Pay
 
-	apiServer *http.Server
+	apiServer      *http.Server
+	adminAPIServer *http.Server
 }
 
 func New(node *node.Node, pay *pay.Pay) *Server {
@@ -26,7 +27,7 @@ func New(node *node.Node, pay *pay.Pay) *Server {
 	}
 }
 
-func (s *Server) Run(endpoint string, startMode string) {
+func (s *Server) Run(endpoint, adminEndpoint, startMode string) {
 	if s.pay != nil {
 		s.pay.LoadCheckpoint()
 		s.pay.Run()
@@ -35,13 +36,21 @@ func (s *Server) Run(endpoint string, startMode string) {
 	}
 
 	go s.runAPI(endpoint)
+	if adminEndpoint != "" {
+		go s.runAdminAPI(adminEndpoint)
+	}
 
 	s.node.Run(startMode)
 }
 
 func (s *Server) Close() {
 	log.Info("server is shutting down")
+
 	s.closeAPI()
+	if s.adminAPIServer != nil {
+		s.closeAdminAPI()
+	}
+
 	s.node.Close()
 
 	// close payment middleware

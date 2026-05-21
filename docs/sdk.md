@@ -188,6 +188,7 @@ You can persist or upload these items using your own storage flow.
 
 - Tags are `[]goarSchema.Tag` with fields `Name` and `Value`.
 - Helpers: `utils.MessageToTags`, `utils.ProcessToTags`, and `utils.MergeTags`.
+- Crypto tags: use `SendMessageWithEncryptedParams`, `SendMessageWithEncryptedParamsAndWait`, or `EncryptTags`; see [Crypto Tags Guide](./crypto-tags.md).
 - Server response type: `serverSchema.Response { Id, Message }`.
 - Execution result type: `vmmSchema.VmmResult`.
 

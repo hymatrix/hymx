@@ -11,10 +11,11 @@ import (
 )
 
 func LoadNodeConfig() (
-	port, ginMode, redisURL, arweaveURL, hymxURL string,
+	port, adminPort, ginMode, redisURL, arweaveURL, hymxURL string,
 	bundler *goar.Bundler, nodeInfo *nodeSchema.Info, decryptor *cryptor.Cryptor, err error,
 ) {
 	port = viper.GetString("port")
+	adminPort = viper.GetString("adminPort")
 	ginMode = viper.GetString("ginMode")
 	redisURL = viper.GetString("redisURL")
 	arweaveURL = viper.GetString("arweaveURL")

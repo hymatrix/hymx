@@ -29,3 +29,7 @@ type TrySendRequest struct {
 	Pid    string `json:"pid"`
 	Target string `json:"target"`
 }
+
+type RequestVM struct {
+	Pid string `json:"pid"`
+}

@@ -1,4 +1,5 @@
 port: :8080
+adminPort: "" # optional, e.g. :8081; empty disables admin API
 ginMode: debug # debug or release
 
 redisURL: redis://@localhost:6379/0
@@ -14,6 +15,5 @@ nodeDesc: first test node
 nodeURL: http://127.0.0.1:8080
 
 joinNetwork: false
-
 
 

@@ -61,7 +61,7 @@ func run(c *cli.Context) (err error) {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
 	// node config
-	port, ginMode, redisURL, arweaveURL, hymxURL, bundler, nodeInfo, decryptor, err := LoadNodeConfig()
+	port, adminPort, ginMode, redisURL, arweaveURL, hymxURL, bundler, nodeInfo, decryptor, err := LoadNodeConfig()
 	if err != nil {
 		return err
 	}
@@ -96,9 +96,9 @@ func run(c *cli.Context) (err error) {
 	// ex:
 	// s.AddResultHandler(handlers)
 
-	s.Run(port, c.String("mode"))
+	s.Run(port, adminPort, c.String("mode"))
 
-	log.Info("server is running", "protocol version", schema.Variant, "node version", nodeSchema.NodeVersion, "wallet", bundler.Address, "port", port)
+	log.Info("server is running", "protocol version", schema.Variant, "node version", nodeSchema.NodeVersion, "wallet", bundler.Address, "port", port, "adminPort", adminPort)
 
 	<-signals
 	s.Close()

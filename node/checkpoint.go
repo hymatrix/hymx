@@ -21,19 +21,8 @@ func (n *Node) runCheckpoint() {
 	}
 
 	for _, pid := range pids {
-		ckpItem, err := n.Checkpoint(pid)
-		if err != nil {
-			log.Warn("generate checkpoint failed", "pid", pid, "err", err)
-			continue
-		}
-
-		if err := SaveCheckpoint(ckpItem); err != nil {
+		if _, err := n.SaveCheckpoint(pid); err != nil {
 			log.Error("save checkpoint failed", "pid", pid, "err", err)
-			continue
-		}
-
-		if err := n.db.SaveCheckpointIndex(pid, ckpItem.Id); err != nil {
-			log.Error("save checkpoint index to db failed", "pid", pid, "err", err)
 			continue
 		}
 	}
@@ -77,6 +66,20 @@ func (n *Node) Checkpoint(pid string) (ckpItem goarSchema.BundleItem, err error)
 	return n.signCheckpoint(snap)
 }
 
+func (n *Node) SaveCheckpoint(pid string) (ckpItem goarSchema.BundleItem, err error) {
+	ckpItem, err = n.Checkpoint(pid)
+	if err != nil {
+		return
+	}
+
+	if err = saveCheckpoint(ckpItem); err != nil {
+		return
+	}
+
+	err = n.db.SaveCheckpointIndex(pid, ckpItem.Id)
+	return
+}
+
 func (n *Node) signCheckpoint(snap vmmSchema.Snapshot) (ckpItem goarSchema.BundleItem, err error) {
 	ckp := hymxSchema.Checkpoint{
 		Base:    hymxSchema.DefaultCheckpoint,
@@ -97,7 +100,7 @@ func (n *Node) signCheckpoint(snap vmmSchema.Snapshot) (ckpItem goarSchema.Bundl
 	return n.bundler.CreateAndSignItem(by, "", "", tags)
 }
 
-func SaveCheckpoint(ckpItem goarSchema.BundleItem) error {
+func saveCheckpoint(ckpItem goarSchema.BundleItem) error {
 	if err := os.MkdirAll("./ckp", 0755); err != nil {
 		return err
 	}
