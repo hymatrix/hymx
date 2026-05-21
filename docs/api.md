@@ -180,7 +180,7 @@ Admin endpoints are served only on the configured `adminPort`. If `adminPort` is
 
 - `GET /admin/vms/running`
   - Description: List VM pids currently running in this node process.
-  - Success: `200` with `{ "pids": ["<pid>"] }`
+  - Success: `200` with `["<pid>"]`
 
 Clients can derive stopped VMs by comparing `GET /processes/:accid` with `GET /admin/vms/running`.
 

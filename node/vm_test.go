@@ -200,7 +200,7 @@ func (suite *NodeVMLifecycleTestSuite) TestSaveCheckpointPersistsItemAndIndex() 
 	db := &lifecycleDB{}
 	n := suite.newLifecycleNode(pid, &lifecycleVM{}, db)
 
-	ckpItem, err := n.saveCheckpoint(pid)
+	ckpItem, err := n.SaveCheckpoint(pid)
 
 	assert.NoError(suite.T(), err)
 	assert.NotEmpty(suite.T(), ckpItem.Id)
