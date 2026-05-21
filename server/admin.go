@@ -28,10 +28,6 @@ func (s *Server) runAdminAPI(endpoint string) {
 }
 
 func (s *Server) closeAdminAPI() {
-	if s.adminAPIServer == nil {
-		return
-	}
-
 	log.Info("admin api is shutting down")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -71,5 +67,5 @@ func (s *Server) Resume(c *gin.Context) {
 }
 
 func (s *Server) Running(c *gin.Context) {
-	c.JSON(http.StatusOK, schema.ResponseRunningVMs{Pids: s.node.Running()})
+	c.JSON(http.StatusOK, s.node.Running())
 }
