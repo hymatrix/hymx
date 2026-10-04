@@ -122,7 +122,7 @@ type Outbox struct {
 type Snapshot struct {
 	Env    Env    `json:"Env"`
 	Data   string `json:"Data"`
-	Outbox string `json:"Outbox"`
+	Outbox string `json:"Outbox,omitempty"` // Legacy snapshots only; Redis outbox is restored independently.
 	Err    error  `json:"-"`
 }
 

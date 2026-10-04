@@ -25,3 +25,8 @@ const (
 	// MaxUploadingCount is the maximum number of transactions allowed in uploading state
 	MaxUploadingCount = 100000 // 10w
 )
+
+// outbox constants
+const (
+	RdbOutboxPrefix = "outbox:"
+)

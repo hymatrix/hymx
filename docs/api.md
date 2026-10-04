@@ -160,7 +160,7 @@ Response body (array of nodes):
 Admin endpoints are served only on the configured `adminPort`. If `adminPort` is empty or missing, the admin server is not started and these endpoints are unavailable.
 
 - `POST /admin/vms/stop`
-  - Description: Checkpoint and stop a live VM process on this node. The process remains registered in Registry.
+  - Description: Stop a live VM process without creating a checkpoint. Existing checkpoints are retained and the process remains registered in Registry. Resume uses existing checkpoint/history recovery.
   - Request: `{ "pid": "<process-id>" }`
   - Success: `200` with `{ "id": "<pid>", "message": "stopped" }`
   - Errors:
@@ -168,6 +168,13 @@ Admin endpoints are served only on the configured `adminPort`. If `adminPort` is
     - `400` with `{ "error": "err_core_process_cannot_stop" }` for token or registry
     - `400` with `{ "error": "err_process_stopped" }` when the process is registered to this node but not running
     - `400` with `{ "error": "err_process_not_found" }` when the process is not registered to this node
+
+- `POST /admin/vms/stopWithCheckpoint`
+  - Description: Save a checkpoint and then stop a live VM process. If checkpoint generation or persistence fails, the VM remains running. The process remains registered in Registry.
+  - Request: `{ "pid": "<process-id>" }`
+  - Success: `200` with `{ "id": "<pid>", "message": "stopped" }`
+  - Errors: Same validation and lifecycle errors as `/admin/vms/stop`; checkpoint failures return `400` with `{ "error": "<reason>" }`.
+  - Migration: Clients requiring the previous stop-and-save behavior should use this endpoint.
 
 - `POST /admin/vms/resume`
   - Description: Resume a registered but non-running VM by running recovery for that process.

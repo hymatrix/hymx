@@ -99,6 +99,7 @@ func (suite *AdminTestSuite) TestAdminRoutesAreRegistered() {
 		routes = append(routes, route.Method+" "+route.Path)
 	}
 	assert.Contains(suite.T(), routes, "POST /admin/vms/stop")
+	assert.Contains(suite.T(), routes, "POST /admin/vms/stopWithCheckpoint")
 	assert.Contains(suite.T(), routes, "POST /admin/vms/resume")
 	assert.Contains(suite.T(), routes, "GET /admin/vms/running")
 }
@@ -107,6 +108,7 @@ func newTestAdminEngine(s *Server) *gin.Engine {
 	engine := gin.Default()
 	engine.Use(common.CORSMiddleware())
 	engine.POST("/admin/vms/stop", s.Stop)
+	engine.POST("/admin/vms/stopWithCheckpoint", s.StopWithCheckpoint)
 	engine.POST("/admin/vms/resume", s.Resume)
 	engine.GET("/admin/vms/running", s.Running)
 	return engine
@@ -136,4 +138,27 @@ func newTestServerWithNode(t *testing.T) *Server {
 
 func TestAdminTestSuite(t *testing.T) {
 	suite.Run(t, new(AdminTestSuite))
+}
+
+func (suite *AdminTestSuite) TestAdminStopWithCheckpointValidation() {
+	s := newTestServerWithNode(suite.T())
+	engine := newTestAdminEngine(s)
+	for _, tc := range []struct {
+		body string
+		err  string
+	}{
+		{body: `{}`, err: "err_invalid_params"},
+		{body: `{"pid":"unknown"}`, err: "err_process_not_found"},
+	} {
+		suite.Run(tc.err, func() {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/admin/vms/stopWithCheckpoint", bytes.NewBufferString(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			engine.ServeHTTP(w, req)
+
+			assert.Equal(suite.T(), http.StatusBadRequest, w.Code)
+			assert.JSONEq(suite.T(), `{"error":"`+tc.err+`"}`, w.Body.String())
+		})
+	}
 }

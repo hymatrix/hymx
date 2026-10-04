@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
@@ -59,21 +62,33 @@ var (
 		},
 		{
 			Name:  "stop",
-			Usage: "stop server in deamon mode",
+			Usage: "gracefully stop server; skip VM checkpoints by default",
+			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: "checkpoint", Usage: "save all running VM checkpoints before shutdown"},
+			},
 			Action: func(c *cli.Context) error {
 				strb, err := os.ReadFile(Pid)
 				if err != nil {
 					log.Error("stop server failed", "err", err)
 					return err
 				}
-				command := exec.Command("kill", string(strb))
-				if err := command.Start(); err != nil {
+				pid, err := strconv.Atoi(strings.TrimSpace(string(strb)))
+				if err != nil || pid <= 0 {
+					return fmt.Errorf("invalid PID in %s", Pid)
+				}
+				process, err := os.FindProcess(pid)
+				if err != nil {
 					return err
 				}
-				if err := os.Remove(Pid); err != nil {
+				defer process.Release()
+				sig := syscall.SIGTERM
+				if c.Bool("checkpoint") {
+					sig = syscall.SIGUSR1
+				}
+				if err := process.Signal(sig); err != nil {
 					return err
 				}
-				log.Info("server is stopped")
+				log.Info("shutdown requested", "checkpoint", c.Bool("checkpoint"))
 
 				return nil
 			},

@@ -9,7 +9,6 @@ import (
 	"github.com/hymatrix/hymx/chainkit"
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/cryptor"
-	"github.com/hymatrix/hymx/db/cache"
 	"github.com/hymatrix/hymx/db/rdb"
 	"github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/sdk"
@@ -53,8 +52,7 @@ type Node struct {
 	outboxSendingLock map[string]bool
 	outboxLockMu      sync.RWMutex
 
-	db       schema.IDB
-	outboxDB schema.IDBOutbox
+	db schema.IDB
 
 	chainkit *chainkit.Chainkit
 
@@ -107,7 +105,6 @@ func New(
 		outboxSendingLock: map[string]bool{},
 
 		db:               rdb.New(redisURL),
-		outboxDB:         cache.NewOutbox(),
 		recoveryTaskPool: taskPool,
 		chainkit:         chainkit,
 		registrySpawned:  registryCh,
@@ -143,6 +140,15 @@ func (n *Node) Run(startMode string) {
 }
 
 func (n *Node) Close() {
+	n.close(false)
+}
+
+// CloseWithCheckpoint saves all running VMs before closing them.
+func (n *Node) CloseWithCheckpoint() {
+	n.close(true)
+}
+
+func (n *Node) close(checkpoint bool) {
 	log.Info("node is shutting down")
 	n.leave()
 
@@ -151,7 +157,9 @@ func (n *Node) Close() {
 
 	n.recoveryTaskPool.Release()
 
-	n.runCheckpoint()
+	if checkpoint {
+		n.runCheckpoint()
+	}
 	n.vmm.Close()
 
 	if n.chainkit != nil {

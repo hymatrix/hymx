@@ -141,6 +141,44 @@ joinNetwork: false
    INFO[07-25|00:00:01] server is running   module=node-v0.0.1 wallet=0x... port=:8080
    ```
 
+### Stopping
+
+For a daemon started with `hymx start`, run these commands from the same working directory:
+
+```bash
+hymx stop                # graceful shutdown without VM checkpoints
+hymx stop --checkpoint   # save all running VM checkpoints, then shut down
+```
+
+Ctrl+C and SIGTERM also shut down without VM checkpoints. Existing checkpoints are retained;
+startup uses the existing checkpoint/history recovery flow, so skipping a new checkpoint can
+increase recovery time and requires the database history to remain available.
+
+The stop command confirms signal delivery, not shutdown or checkpoint completion. The daemon
+removes its PID file after shutdown; checkpoint failures are logged and shutdown continues.
+`--checkpoint` uses SIGUSR1 and requires a daemon running this version; do not use it with an older daemon.
+
+For embedded use, `Node.Close()` and `Server.Close()` skip VM checkpoints;
+use `CloseWithCheckpoint()` to save them. Single-VM `Node.Stop(pid)` and `POST /admin/vms/stop`
+also skip checkpoints; use `Node.StopWithCheckpoint(pid)` or `POST /admin/vms/stopWithCheckpoint`
+to save before stopping. Payment state persistence is unchanged.
+
+Outbox messages are stored in Redis lists independently of VM checkpoints. VM checkpoint and
+restore no longer save or restore outbox queues; legacy checkpoint outbox fields are ignored.
+Restarting hymx retains messages already written to Redis, but does not automatically resend them.
+Call SDK `TrySend(pid, target)` (or `POST /trysend`) to resume a queue, or let a new message to the
+same queue trigger sending. Redis durability depends on its persistence and eviction configuration;
+outputs not yet written to Redis and failed writes are not protected by this change.
+Before upgrading, drain pending messages from the old version: neither its in-memory outbox nor
+outbox data in old VM checkpoints is automatically imported into Redis.
+
+Local verification: `python3 scripts/checkpoint-local-network.py` starts isolated Redis and node
+processes, checks Token/Registry operations and both shutdown/recovery paths, then cleans up its processes.
+
+For the single-VM admin APIs, run `HYMX_INTEGRATION=1 go test ./server -run '^TestAdminIntegrationTestSuite$' -count=1 -timeout=90s -v`.
+This starts a real local node and isolated Redis with a test-only non-core VM, verifying stop,
+stopWithCheckpoint, resume and checkpoint failure behavior. It is skipped in ordinary test runs.
+
 ## Join the Network
 
 To join the HyMatrix network as a node operator:

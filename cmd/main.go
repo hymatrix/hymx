@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/gin-gonic/gin"
@@ -32,6 +34,7 @@ func main() {
 
 	if err := app.Run(os.Args); err != nil {
 		log.Error("run server failed", "err", err)
+		os.Exit(1)
 	}
 }
 
@@ -58,7 +61,8 @@ func action(c *cli.Context) error {
 
 func run(c *cli.Context) (err error) {
 	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM, syscall.SIGUSR1)
+	defer signal.Stop(signals)
 
 	// node config
 	port, adminPort, ginMode, redisURL, arweaveURL, hymxURL, bundler, nodeInfo, decryptor, err := LoadNodeConfig()
@@ -100,8 +104,16 @@ func run(c *cli.Context) (err error) {
 
 	log.Info("server is running", "protocol version", schema.Variant, "node version", nodeSchema.NodeVersion, "wallet", bundler.Address, "port", port, "adminPort", adminPort)
 
-	<-signals
-	s.Close()
+	if sig := <-signals; sig == syscall.SIGUSR1 {
+		s.CloseWithCheckpoint()
+	} else {
+		s.Close()
+	}
+	if data, err := os.ReadFile(Pid); err == nil && strings.TrimSpace(string(data)) == strconv.Itoa(os.Getpid()) {
+		if err := os.Remove(Pid); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

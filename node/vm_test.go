@@ -1,21 +1,25 @@
 package node
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/hymatrix/hymx/db/cache"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/vmm"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
+	"github.com/panjf2000/ants/v2"
 	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
+	goarUtils "github.com/permadao/goar/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -67,8 +71,19 @@ func (db *lifecycleDB) SaveCheckpointIndex(pid, id string) error {
 func (db *lifecycleDB) GetCache(pid, key string) (string, error) { return "", nil }
 func (db *lifecycleDB) SaveCache(pid, key, value string) error   { return nil }
 
+func (db *lifecycleDB) PushOutbox(pid, target string, message goarSchema.BundleItem) error {
+	return errors.New("unexpected outbox push in VM lifecycle")
+}
+func (db *lifecycleDB) PeekOutbox(pid, target string) (*goarSchema.BundleItem, error) {
+	return nil, errors.New("unexpected outbox peek in VM lifecycle")
+}
+func (db *lifecycleDB) CommitOutbox(pid, target string) error {
+	return errors.New("unexpected outbox commit in VM lifecycle")
+}
+
 type lifecycleVM struct {
 	checkpointErr error
+	checkpoints   int
 	closed        bool
 }
 
@@ -76,6 +91,7 @@ func (vm *lifecycleVM) Apply(from string, meta vmmSchema.Meta) vmmSchema.Result 
 	return vmmSchema.Result{}
 }
 func (vm *lifecycleVM) Checkpoint() (string, error) {
+	vm.checkpoints++
 	return "vm-state", vm.checkpointErr
 }
 func (vm *lifecycleVM) Restore(data string) error { return nil }
@@ -100,10 +116,9 @@ func (suite *NodeVMLifecycleTestSuite) newLifecycleNode(pid string, vm vmmSchema
 	})
 
 	n := &Node{
-		info:     &nodeSchema.Info{Node: registrySchema.Node{AccId: "local-node"}},
-		bundler:  bundler,
-		db:       db,
-		outboxDB: cache.NewOutbox(),
+		info:    &nodeSchema.Info{Node: registrySchema.Node{AccId: "local-node"}},
+		bundler: bundler,
+		db:      db,
 	}
 	n.vmm = vmm.New(
 		nil,
@@ -171,25 +186,25 @@ func (suite *NodeVMLifecycleTestSuite) TestStopRejectsCoreProcess() {
 	assert.ErrorIs(suite.T(), err, nodeSchema.ErrCoreProcessCannotStop)
 }
 
-func (suite *NodeVMLifecycleTestSuite) TestStopCheckpointFailureLeavesVMRunning() {
+func (suite *NodeVMLifecycleTestSuite) TestStopWithCheckpointFailureLeavesVMRunning() {
 	pid := "pid-1"
 	vm := &lifecycleVM{checkpointErr: errors.New("checkpoint failed")}
 	n := suite.newLifecycleNode(pid, vm, &lifecycleDB{})
 	suite.registerProcess(n, pid)
 
-	err := n.Stop(pid)
+	err := n.StopWithCheckpoint(pid)
 
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), n.vmm.IsExists(pid))
 }
 
-func (suite *NodeVMLifecycleTestSuite) TestStopSaveCheckpointIndexFailureLeavesVMRunning() {
+func (suite *NodeVMLifecycleTestSuite) TestStopWithCheckpointIndexFailureLeavesVMRunning() {
 	pid := "pid-1"
 	vm := &lifecycleVM{}
 	n := suite.newLifecycleNode(pid, vm, &lifecycleDB{saveCheckpointErr: errors.New("index failed")})
 	suite.registerProcess(n, pid)
 
-	err := n.Stop(pid)
+	err := n.StopWithCheckpoint(pid)
 
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), n.vmm.IsExists(pid))
@@ -208,11 +223,35 @@ func (suite *NodeVMLifecycleTestSuite) TestSaveCheckpointPersistsItemAndIndex() 
 	savedItem, err := LoadCheckpoint(ckpItem.Id)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), ckpItem.Id, savedItem.Id)
+	data, err := goarUtils.Base64Decode(savedItem.Data)
+	require.NoError(suite.T(), err)
+	var snapshot map[string]json.RawMessage
+	require.NoError(suite.T(), json.Unmarshal(data, &snapshot))
+	assert.NotContains(suite.T(), snapshot, "Outbox")
+}
+
+func (suite *NodeVMLifecycleTestSuite) TestRestoreIgnoresLegacyOutbox() {
+	n := suite.newLifecycleNode("pid-1", &lifecycleVM{}, &lifecycleDB{})
+	snapshot, err := n.vmm.Checkpoint("pid-1")
+	require.NoError(suite.T(), err)
+	snapshot.Env.Nonce = 7
+	// Even malformed legacy outbox data must not be restored with the VM.
+	snapshot.Outbox = "invalid legacy outbox"
+	item, err := n.signCheckpoint(snapshot)
+	require.NoError(suite.T(), err)
+	require.NoError(suite.T(), saveCheckpoint(item))
+	require.NoError(suite.T(), n.vmm.Kill("pid-1"))
+
+	nonce, err := n.Restore(item.Id)
+
+	require.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(7), nonce)
+	assert.True(suite.T(), n.vmm.IsExists("pid-1"))
 }
 
 func (suite *NodeVMLifecycleTestSuite) TestStopSuccessKillsVM() {
 	pid := "pid-1"
-	vm := &lifecycleVM{}
+	vm := &lifecycleVM{checkpointErr: errors.New("checkpoint must not be called")}
 	db := &lifecycleDB{}
 	n := suite.newLifecycleNode(pid, vm, db)
 	suite.registerProcess(n, pid)
@@ -222,7 +261,25 @@ func (suite *NodeVMLifecycleTestSuite) TestStopSuccessKillsVM() {
 	assert.NoError(suite.T(), err)
 	assert.False(suite.T(), n.vmm.IsExists(pid))
 	assert.True(suite.T(), vm.closed)
-	assert.NotEmpty(suite.T(), db.saveCheckpointID)
+	assert.Empty(suite.T(), db.saveCheckpointID)
+	assert.Zero(suite.T(), vm.checkpoints)
+}
+
+func (suite *NodeVMLifecycleTestSuite) TestStopWithCheckpointSavesAndKillsVM() {
+	pid := "pid-1"
+	vm := &lifecycleVM{}
+	db := &lifecycleDB{}
+	n := suite.newLifecycleNode(pid, vm, db)
+	suite.registerProcess(n, pid)
+
+	err := n.StopWithCheckpoint(pid)
+
+	require.NoError(suite.T(), err)
+	assert.True(suite.T(), vm.closed)
+	assert.False(suite.T(), n.vmm.IsExists(pid))
+	assert.Equal(suite.T(), 1, vm.checkpoints)
+	_, err = LoadCheckpoint(db.saveCheckpointID)
+	assert.NoError(suite.T(), err)
 }
 
 func (suite *NodeVMLifecycleTestSuite) TestStopReturnsStoppedForRegisteredNonRunningProcess() {
@@ -252,7 +309,7 @@ func (suite *NodeVMLifecycleTestSuite) TestResumeSuccessRunsRecovery() {
 	db := &lifecycleDB{}
 	n := suite.newLifecycleNode(pid, vm, db)
 	suite.registerProcess(n, pid)
-	err := n.Stop(pid)
+	err := n.StopWithCheckpoint(pid)
 	assert.NoError(suite.T(), err)
 	db.checkpointID = db.saveCheckpointID
 
@@ -295,4 +352,44 @@ func (suite *NodeVMLifecycleTestSuite) TestHandleMessageReturnsStoppedErrorForRe
 
 func TestNodeVMLifecycleTestSuite(t *testing.T) {
 	suite.Run(t, new(NodeVMLifecycleTestSuite))
+}
+
+func (suite *NodeVMLifecycleTestSuite) TestCloseCheckpointOption() {
+	for _, checkpoint := range []bool{false, true} {
+		suite.Run(fmt.Sprintf("checkpoint=%t", checkpoint), func() {
+			vm := &lifecycleVM{}
+			db := &lifecycleDB{}
+			n := suite.newLifecycleNode("pid-1", vm, db)
+			n.ctx, n.cancel = context.WithCancel(context.Background())
+			var err error
+			n.recoveryTaskPool, err = ants.NewPool(1)
+			require.NoError(suite.T(), err)
+
+			if checkpoint {
+				n.CloseWithCheckpoint()
+				assert.Equal(suite.T(), 1, vm.checkpoints)
+				assert.NotEmpty(suite.T(), db.saveCheckpointID)
+			} else {
+				n.Close()
+				assert.Zero(suite.T(), vm.checkpoints)
+				assert.Empty(suite.T(), db.saveCheckpointID)
+			}
+			assert.True(suite.T(), vm.closed)
+			assert.Empty(suite.T(), n.Running())
+		})
+	}
+}
+
+func (suite *NodeVMLifecycleTestSuite) TestCloseCheckpointFailureStillClosesVM() {
+	vm := &lifecycleVM{checkpointErr: errors.New("checkpoint failed")}
+	n := suite.newLifecycleNode("pid-1", vm, &lifecycleDB{})
+	n.ctx, n.cancel = context.WithCancel(context.Background())
+	var err error
+	n.recoveryTaskPool, err = ants.NewPool(1)
+	require.NoError(suite.T(), err)
+
+	n.CloseWithCheckpoint()
+
+	assert.Equal(suite.T(), 1, vm.checkpoints)
+	assert.True(suite.T(), vm.closed)
 }
