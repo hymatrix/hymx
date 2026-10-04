@@ -44,6 +44,15 @@ func (s *Server) Run(endpoint, adminEndpoint, startMode string) {
 }
 
 func (s *Server) Close() {
+	s.close(false)
+}
+
+// CloseWithCheckpoint saves all running VMs during shutdown.
+func (s *Server) CloseWithCheckpoint() {
+	s.close(true)
+}
+
+func (s *Server) close(checkpoint bool) {
 	log.Info("server is shutting down")
 
 	s.closeAPI()
@@ -51,7 +60,11 @@ func (s *Server) Close() {
 		s.closeAdminAPI()
 	}
 
-	s.node.Close()
+	if checkpoint {
+		s.node.CloseWithCheckpoint()
+	} else {
+		s.node.Close()
+	}
 
 	// close payment middleware
 	if s.pay != nil {

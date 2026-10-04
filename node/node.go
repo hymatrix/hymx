@@ -143,6 +143,15 @@ func (n *Node) Run(startMode string) {
 }
 
 func (n *Node) Close() {
+	n.close(false)
+}
+
+// CloseWithCheckpoint saves all running VMs before closing them.
+func (n *Node) CloseWithCheckpoint() {
+	n.close(true)
+}
+
+func (n *Node) close(checkpoint bool) {
 	log.Info("node is shutting down")
 	n.leave()
 
@@ -151,7 +160,9 @@ func (n *Node) Close() {
 
 	n.recoveryTaskPool.Release()
 
-	n.runCheckpoint()
+	if checkpoint {
+		n.runCheckpoint()
+	}
 	n.vmm.Close()
 
 	if n.chainkit != nil {

@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -13,9 +14,11 @@ import (
 	"github.com/hymatrix/hymx/vmm"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
+	"github.com/panjf2000/ants/v2"
 	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -69,6 +72,7 @@ func (db *lifecycleDB) SaveCache(pid, key, value string) error   { return nil }
 
 type lifecycleVM struct {
 	checkpointErr error
+	checkpoints   int
 	closed        bool
 }
 
@@ -76,6 +80,7 @@ func (vm *lifecycleVM) Apply(from string, meta vmmSchema.Meta) vmmSchema.Result 
 	return vmmSchema.Result{}
 }
 func (vm *lifecycleVM) Checkpoint() (string, error) {
+	vm.checkpoints++
 	return "vm-state", vm.checkpointErr
 }
 func (vm *lifecycleVM) Restore(data string) error { return nil }
@@ -295,4 +300,44 @@ func (suite *NodeVMLifecycleTestSuite) TestHandleMessageReturnsStoppedErrorForRe
 
 func TestNodeVMLifecycleTestSuite(t *testing.T) {
 	suite.Run(t, new(NodeVMLifecycleTestSuite))
+}
+
+func (suite *NodeVMLifecycleTestSuite) TestCloseCheckpointOption() {
+	for _, checkpoint := range []bool{false, true} {
+		suite.Run(fmt.Sprintf("checkpoint=%t", checkpoint), func() {
+			vm := &lifecycleVM{}
+			db := &lifecycleDB{}
+			n := suite.newLifecycleNode("pid-1", vm, db)
+			n.ctx, n.cancel = context.WithCancel(context.Background())
+			var err error
+			n.recoveryTaskPool, err = ants.NewPool(1)
+			require.NoError(suite.T(), err)
+
+			if checkpoint {
+				n.CloseWithCheckpoint()
+				assert.Equal(suite.T(), 1, vm.checkpoints)
+				assert.NotEmpty(suite.T(), db.saveCheckpointID)
+			} else {
+				n.Close()
+				assert.Zero(suite.T(), vm.checkpoints)
+				assert.Empty(suite.T(), db.saveCheckpointID)
+			}
+			assert.True(suite.T(), vm.closed)
+			assert.Empty(suite.T(), n.Running())
+		})
+	}
+}
+
+func (suite *NodeVMLifecycleTestSuite) TestCloseCheckpointFailureStillClosesVM() {
+	vm := &lifecycleVM{checkpointErr: errors.New("checkpoint failed")}
+	n := suite.newLifecycleNode("pid-1", vm, &lifecycleDB{})
+	n.ctx, n.cancel = context.WithCancel(context.Background())
+	var err error
+	n.recoveryTaskPool, err = ants.NewPool(1)
+	require.NoError(suite.T(), err)
+
+	n.CloseWithCheckpoint()
+
+	assert.Equal(suite.T(), 1, vm.checkpoints)
+	assert.True(suite.T(), vm.closed)
 }

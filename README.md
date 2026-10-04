@@ -141,6 +141,30 @@ joinNetwork: false
    INFO[07-25|00:00:01] server is running   module=node-v0.0.1 wallet=0x... port=:8080
    ```
 
+### Stopping
+
+For a daemon started with `hymx start`, run these commands from the same working directory:
+
+```bash
+hymx stop                # graceful shutdown without VM checkpoints
+hymx stop --checkpoint   # save all running VM checkpoints, then shut down
+```
+
+Ctrl+C and SIGTERM also shut down without VM checkpoints. Existing checkpoints are retained;
+startup uses the existing checkpoint/history recovery flow, so skipping a new checkpoint can
+increase recovery time and requires the database history to remain available.
+
+The stop command confirms signal delivery, not shutdown or checkpoint completion. The daemon
+removes its PID file after shutdown; checkpoint failures are logged and shutdown continues.
+`--checkpoint` uses SIGUSR1 and requires a daemon running this version; do not use it with an older daemon.
+
+For embedded use, `Node.Close()` and `Server.Close()` skip VM checkpoints;
+use `CloseWithCheckpoint()` to save them. Single-VM stop, explicit checkpoint APIs and payment
+state persistence retain their existing behavior.
+
+Local verification: `python3 scripts/checkpoint-local-network.py` starts isolated Redis and node
+processes, checks Token/Registry operations and both shutdown/recovery paths, then cleans up its processes.
+
 ## Join the Network
 
 To join the HyMatrix network as a node operator:
