@@ -21,11 +21,13 @@ type Vmm struct {
 	info     *nodeSchema.Info
 	registry *registry.Registry
 	token    *token.Token
+	coreMu   sync.RWMutex
 
 	vmFactors map[string]schema.VmSpawnFunc // moduleFormat -> vmSpawnFunc
-	vms       map[string]schema.Vm          // pid -> virtual machine
-	vmsEnv    map[string]*schema.Env        // pid -> vm env, eg: module, prcoess, nonce, ref
+	vms       map[string]*schema.VmInstance // pid -> serial VM instance
 	vmsLockMu sync.RWMutex
+	closed    bool
+	closeOnce sync.Once
 
 	vmsRecoveryLock map[string]bool // vm lock: key pid, value true/false
 
@@ -35,9 +37,8 @@ type Vmm struct {
 
 	resultChan      chan<- schema.VmmResult
 	outboxChan      chan<- schema.Outbox
-	applyChan       chan schema.Meta
-	ckpChan         chan schema.Checkpoint
 	registrySpawned chan struct{}
+	registryReady   sync.Once
 }
 
 func New(cryptor *cryptor.Cryptor, info *nodeSchema.Info, resultChan chan<- schema.VmmResult, outboxChan chan<- schema.Outbox, registrySpawned chan struct{}) *Vmm {
@@ -48,8 +49,7 @@ func New(cryptor *cryptor.Cryptor, info *nodeSchema.Info, resultChan chan<- sche
 		info: info,
 
 		vmFactors: map[string]schema.VmSpawnFunc{},
-		vms:       map[string]schema.Vm{},
-		vmsEnv:    map[string]*schema.Env{},
+		vms:       map[string]*schema.VmInstance{},
 
 		vmsRecoveryLock: map[string]bool{},
 
@@ -58,8 +58,6 @@ func New(cryptor *cryptor.Cryptor, info *nodeSchema.Info, resultChan chan<- sche
 
 		resultChan:      resultChan,
 		outboxChan:      outboxChan,
-		applyChan:       make(chan schema.Meta, 1000),
-		ckpChan:         make(chan schema.Checkpoint, 100),
 		registrySpawned: registrySpawned,
 	}
 }
@@ -68,21 +66,36 @@ func (v *Vmm) Run() {
 	// mount core token & registry spawner
 	v.Mount(schema.ModuleFormatToken, v.spawnToken)
 	v.Mount(schema.ModuleFormatRegistry, v.spawnRegistry)
-
-	go v.runChanHandler()
 }
 
 func (v *Vmm) Apply(m schema.Meta) {
-	v.applyChan <- m
+	instance, err := v.getInstance(m.Pid)
+	if err == nil {
+		m = cloneMeta(m)
+		err = v.submit(instance, &schema.VmTask{Run: func(instance *schema.VmInstance) error {
+			return v.apply(instance.Vm, instance.Env, m)
+		}})
+	}
+	if err != nil {
+		log.Error("apply failed", "pid", m.Pid, "itemId", m.ItemId, "err", err)
+	}
 }
 
 func (v *Vmm) Close() {
-	log.Info("vmm is shutting down")
-
-	v.cancel()
-	v.wg.Wait()
-
-	v.KillAll()
-
-	log.Info("vmm has been shut down")
+	v.closeOnce.Do(func() {
+		log.Info("vmm is shutting down")
+		v.vmsLockMu.Lock()
+		v.closed = true
+		instances := make([]*schema.VmInstance, 0, len(v.vms))
+		for _, instance := range v.vms {
+			instances = append(instances, instance)
+		}
+		v.vmsLockMu.Unlock()
+		v.cancel()
+		for _, instance := range instances {
+			v.stopInstance(instance)
+		}
+		v.wg.Wait()
+		log.Info("vmm has been shut down")
+	})
 }

@@ -15,20 +15,14 @@ func (v *Vmm) Mount(moduleFormat string, spawner schema.VmSpawnFunc) error {
 }
 
 func (v *Vmm) Kill(pid string) (err error) {
-	vm, _, err := v.GetVm(pid)
+	instance, err := v.getInstance(pid)
 	if err != nil {
 		return
 	}
 
-	v.vmsLockMu.Lock()
-	defer v.vmsLockMu.Unlock()
-	if err = vm.Close(); err != nil {
-		return err
-	}
-	delete(v.vms, pid)
-	delete(v.vmsEnv, pid)
-
-	return
+	v.stopInstance(instance)
+	<-instance.Done
+	return instance.CloseErr
 }
 
 func (v *Vmm) KillAll() {
@@ -53,17 +47,17 @@ func (v *Vmm) IsExists(pid string) (ok bool) {
 }
 
 func (v *Vmm) GetVm(pid string) (vm schema.Vm, env *schema.Env, err error) {
-	v.vmsLockMu.RLock()
-	defer v.vmsLockMu.RUnlock()
-
-	ok := false
-	if vm, ok = v.vms[pid]; !ok {
-		err = schema.ErrProcessNotFound
-		return
+	instance, err := v.getInstance(pid)
+	if err != nil {
+		return nil, nil, err
 	}
-	if env, ok = v.vmsEnv[pid]; !ok {
-		err = schema.ErrProcessEnvNotFound
-	}
+	// Return an environment copy; operations on Vm must still use the task loop.
+	err = v.call(instance, func(instance *schema.VmInstance) error {
+		vm = instance.Vm
+		copy := cloneEnv(*instance.Env)
+		env = &copy
+		return nil
+	})
 	return
 }
 
@@ -122,68 +116,57 @@ func (v *Vmm) IsRecovering(pid string) bool {
 }
 
 func (v *Vmm) Checkpoint(pid string) (snap schema.Snapshot, err error) {
-	if !v.IsExists(pid) {
-		err = schema.ErrProcessNotFound
+	instance, err := v.getInstance(pid)
+	if err != nil {
 		return
 	}
-
-	res := make(chan schema.Snapshot)
-	defer close(res)
-
-	v.ckpChan <- schema.Checkpoint{
-		Pid: pid,
-		Res: res,
-	}
-
-	snap = <-res
-	if snap.Err != nil {
-		err = snap.Err
-	}
+	err = v.call(instance, func(instance *schema.VmInstance) error {
+		snap.Data, snap.Err = instance.Vm.Checkpoint()
+		snap.Env = cloneEnv(*instance.Env)
+		return snap.Err
+	})
+	snap.Err = err
 	return
 }
 
 func (v *Vmm) Restore(snap schema.Snapshot) error {
-	vm, _, err := v.GetVm(snap.Env.Meta.Pid)
-	if err != nil {
-		if vm, err = v.spawn(snap.Env); err != nil {
+	snap.Env = cloneEnv(snap.Env)
+	restore := func(instance *schema.VmInstance) error {
+		if instance.Vm == nil {
+			vm, err := v.spawn(cloneEnv(snap.Env))
+			if err != nil {
+				return err
+			}
+			instance.Vm = vm
+		}
+		if err := instance.Vm.Restore(snap.Data); err != nil {
 			return err
 		}
+		instance.Env = &snap.Env
+		return nil
 	}
-
-	if err = vm.Restore(snap.Data); err != nil {
+	instance, task, err := v.createInstance(snap.Env.Meta.Pid, restore)
+	if err == schema.ErrProcessAlreadyExists {
+		return v.call(instance, restore)
+	}
+	if err != nil {
 		return err
 	}
-	v.addVm(vm, &snap.Env)
-	return nil
-}
-
-func (v *Vmm) checkpoint(pid string, res chan<- schema.Snapshot) {
-	vm, env, err := v.GetVm(pid)
-	if err != nil {
-		res <- schema.Snapshot{
-			Err: err,
-		}
-		return
+	<-task.Done
+	if task.Err != nil {
+		<-instance.Done
 	}
-
-	data, err := vm.Checkpoint()
-	if err != nil {
-		res <- schema.Snapshot{
-			Err: err,
-		}
-		return
-	}
-
-	res <- schema.Snapshot{
-		Env:  *env,
-		Data: data,
-	}
+	return task.Err
 }
 
 func (v *Vmm) addVm(vm schema.Vm, env *schema.Env) {
-	v.vmsLockMu.Lock()
-	defer v.vmsLockMu.Unlock()
-
-	v.vms[env.Meta.Pid] = vm
-	v.vmsEnv[env.Meta.Pid] = env
+	_, task, err := v.createInstance(env.Meta.Pid, func(instance *schema.VmInstance) error {
+		copy := cloneEnv(*env)
+		instance.Vm = vm
+		instance.Env = &copy
+		return nil
+	})
+	if err == nil {
+		<-task.Done
+	}
 }
