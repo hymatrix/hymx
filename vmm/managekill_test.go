@@ -32,19 +32,6 @@ func newKillTestVMM() *Vmm {
 	return New(nil, &nodeSchema.Info{}, nil, nil, nil)
 }
 
-func (v *Vmm) addVm(vm schema.Vm, env *schema.Env) {
-	copy := cloneEnv(*env)
-	if err := v.request(copy.Meta.Pid, true, func(instance *schema.VmInstance) error {
-		if instance.Vm != nil {
-			return schema.ErrProcessAlreadyExists
-		}
-		publishVm(instance, vm, copy)
-		return nil
-	}); err != nil {
-		log.Error("add VM failed", "err", err)
-	}
-}
-
 func (suite *VmmKillTestSuite) TestKillClosesAndRemovesVM() {
 	v := newKillTestVMM()
 	vm := &killTestVM{}

@@ -10,41 +10,56 @@ import (
 	goarSchema "github.com/permadao/goar/schema"
 )
 
-func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.Module) error {
-	env := cloneEnv(schema.Env{Meta: meta, Process: process, Module: module, Sequence: -1, ReceivedSeq: map[string]int64{}})
-	return v.request(meta.Pid, true, func(instance *schema.VmInstance) error {
-		if instance.Vm != nil {
-			return schema.ErrProcessAlreadyExists
+func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.Module) (err error) {
+	pid := meta.Pid
+
+	if v.IsExists(pid) {
+		return schema.ErrProcessAlreadyExists
+	}
+	if v.registry == nil && module.ModuleFormat != schema.ModuleFormatRegistry && module.ModuleFormat != schema.ModuleFormatToken {
+		log.Debug("wait for registry spawned", "pid", pid)
+		select {
+		case <-v.ctx.Done():
+			return schema.ErrRegistryNotFound
+		case <-v.registrySpawned:
+			log.Debug("registry spawned! go on", "pid", pid)
 		}
-		if v.RegistryId() == "" && module.ModuleFormat != schema.ModuleFormatRegistry && module.ModuleFormat != schema.ModuleFormatToken {
-			select {
-			case <-v.ctx.Done():
-				return schema.ErrRegistryNotFound
-			case <-v.registrySpawned:
-			}
-		}
-		vm, err := v.spawn(cloneEnv(env))
-		if err != nil {
-			return err
-		}
-		publishVm(instance, vm, env)
-		result := v.genSpawnResult(&instance.Env)
-		result.Mode = meta.Mode
-		v.outbox(&instance.Env, result)
-		if meta.Mode != schema.ExecModeApply && meta.Nonce == meta.RecoveryMaxNonce {
-			v.RecoveryUnlock(meta.Pid)
-		}
-		return nil
-	})
+	}
+
+	env := &schema.Env{
+		Meta:        meta,
+		Process:     process,
+		Module:      module,
+		Nonce:       0,
+		Sequence:    -1,
+		ReceivedSeq: map[string]int64{},
+	}
+
+	vm, err := v.spawn(*env)
+	if err != nil {
+		return
+	}
+	v.addVm(vm, env)
+
+	result := v.genSpawnResult(env)
+	result.Mode = meta.Mode
+	// send to outbox
+	v.outbox(env, result)
+	if meta.Mode != schema.ExecModeApply && meta.Nonce == meta.RecoveryMaxNonce {
+		v.RecoveryUnlock(meta.Pid)
+	}
+
+	return
 }
 func (v *Vmm) spawn(env schema.Env) (vm schema.Vm, err error) {
 	v.vmsLockMu.RLock()
 
 	vmFunc, ok := v.vmFactors[env.Module.ModuleFormat]
-	v.vmsLockMu.RUnlock()
 	if !ok {
+		v.vmsLockMu.RUnlock()
 		return nil, schema.ErrInvalidModuleFormat
 	}
+	v.vmsLockMu.RUnlock()
 
 	return vmFunc(env)
 }
@@ -65,9 +80,9 @@ func (v *Vmm) genSpawnResult(env *schema.Env) (result *schema.VmmResult) {
 	}
 
 	// registry process
-	if registryID := v.RegistryId(); registryID != "" {
+	if v.registry != nil {
 		registerMsg := &schema.ResMessage{
-			Target: registryID,
+			Target: v.registry.GetId(),
 			Tags: []goarSchema.Tag{
 				{Name: "Action", Value: "RegisterProcess"},
 				{Name: "Pid", Value: env.Meta.Pid},
