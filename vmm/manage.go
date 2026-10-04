@@ -26,14 +26,21 @@ func (v *Vmm) Kill(pid string) (err error) {
 }
 
 func (v *Vmm) KillAll() {
-	pids := v.GetVmPids()
-	if len(pids) == 0 {
-		return
+	v.vmsLockMu.RLock()
+	instances := make([]*schema.VmInstance, 0, len(v.vms))
+	for _, instance := range v.vms {
+		instances = append(instances, instance)
 	}
+	v.vmsLockMu.RUnlock()
 
-	for _, pid := range pids {
-		if err := v.Kill(pid); err != nil {
-			log.Error("kill process failed", "pid", pid)
+	// Stop admission on every instance before waiting for any one to exit.
+	for _, instance := range instances {
+		v.stopInstance(instance)
+	}
+	for _, instance := range instances {
+		<-instance.Done
+		if instance.CloseErr != nil {
+			log.Error("kill process failed", "pid", instance.Pid, "err", instance.CloseErr)
 		}
 	}
 }

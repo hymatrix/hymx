@@ -17,12 +17,13 @@ import (
 type VmmInstanceTestSuite struct{ suite.Suite }
 
 type instanceTestVM struct {
-	entered    chan struct{}
-	release    chan struct{}
-	closed     chan struct{}
-	nonces     []int64
-	restoreErr error
-	restores   int
+	entered           chan struct{}
+	checkpointEntered chan struct{}
+	release           chan struct{}
+	closed            chan struct{}
+	nonces            []int64
+	restoreErr        error
+	restores          int
 }
 
 func (vm *instanceTestVM) Apply(_ string, meta schema.Meta) schema.Result {
@@ -33,7 +34,13 @@ func (vm *instanceTestVM) Apply(_ string, meta schema.Meta) schema.Result {
 	vm.nonces = append(vm.nonces, meta.Nonce)
 	return schema.Result{}
 }
-func (vm *instanceTestVM) Checkpoint() (string, error) { return "state", nil }
+func (vm *instanceTestVM) Checkpoint() (string, error) {
+	if vm.checkpointEntered != nil {
+		close(vm.checkpointEntered)
+		<-vm.release
+	}
+	return "state", nil
+}
 func (vm *instanceTestVM) Restore(string) error {
 	vm.restores++
 	return vm.restoreErr
@@ -109,6 +116,60 @@ func (suite *VmmInstanceTestSuite) TestCapacityFIFOAndIndependentVM() {
 	for i, nonce := range a.nonces {
 		assert.Equal(suite.T(), int64(i+1), nonce)
 	}
+}
+
+func (suite *VmmInstanceTestSuite) TestCheckpointDoesNotBlockOtherVMOperations() {
+	v, _ := suite.newVmm()
+	a := &instanceTestVM{checkpointEntered: make(chan struct{}), release: make(chan struct{})}
+	b := &instanceTestVM{}
+	v.addVm(a, &schema.Env{Meta: schema.Meta{Pid: "a"}})
+	v.addVm(b, &schema.Env{Meta: schema.Meta{Pid: "b"}})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(a.release) }) }
+	var pending sync.WaitGroup
+	suite.T().Cleanup(func() {
+		unblock()
+		done := make(chan struct{})
+		go func() { pending.Wait(); close(done) }()
+		suite.wait(done)
+	})
+
+	var aSnapshot schema.Snapshot
+	var aErr error
+	aDone := make(chan struct{})
+	pending.Add(1)
+	go func() {
+		defer pending.Done()
+		aSnapshot, aErr = v.Checkpoint("a")
+		close(aDone)
+	}()
+	suite.wait(a.checkpointEntered)
+
+	var bSnapshot schema.Snapshot
+	var bErr error
+	bDone := make(chan struct{})
+	pending.Add(1)
+	go func() {
+		defer pending.Done()
+		v.Apply(schema.Meta{Pid: "b", Nonce: 1})
+		bSnapshot, bErr = v.Checkpoint("b")
+		close(bDone)
+	}()
+	suite.wait(bDone)
+	require.NoError(suite.T(), bErr)
+	assert.Equal(suite.T(), []int64{1}, b.nonces)
+	assert.Equal(suite.T(), int64(1), bSnapshot.Env.Nonce)
+	assert.Equal(suite.T(), "state", bSnapshot.Data)
+	select {
+	case <-aDone:
+		require.FailNow(suite.T(), "A checkpoint completed before release")
+	default:
+	}
+
+	unblock()
+	suite.wait(aDone)
+	require.NoError(suite.T(), aErr)
+	assert.Equal(suite.T(), "state", aSnapshot.Data)
 }
 
 func (suite *VmmInstanceTestSuite) TestCheckpointAndRestoreAreSerialAndSnapshotsIndependent() {

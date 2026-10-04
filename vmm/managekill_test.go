@@ -2,7 +2,9 @@ package vmm
 
 import (
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
@@ -18,8 +20,10 @@ type VmmKillTestSuite struct {
 }
 
 type killTestVM struct {
-	closed bool
-	err    error
+	closed       bool
+	err          error
+	closeEntered chan struct{}
+	release      chan struct{}
 }
 
 func (v *killTestVM) Apply(from string, meta schema.Meta) schema.Result { return schema.Result{} }
@@ -27,6 +31,10 @@ func (v *killTestVM) Checkpoint() (string, error)                       { return
 func (v *killTestVM) Restore(data string) error                         { return nil }
 func (v *killTestVM) Close() error {
 	v.closed = true
+	if v.closeEntered != nil {
+		close(v.closeEntered)
+		<-v.release
+	}
 	return v.err
 }
 
@@ -97,6 +105,58 @@ func (suite *VmmKillTestSuite) TestKillMissingProcessReturnsProcessNotFound() {
 	err := v.Kill("missing")
 
 	assert.ErrorIs(suite.T(), err, schema.ErrProcessNotFound)
+}
+
+func (suite *VmmKillTestSuite) wait(done <-chan struct{}) {
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		require.FailNow(suite.T(), "timed out")
+	}
+}
+
+func (suite *VmmKillTestSuite) TestKillAllStopsAllInstancesBeforeWaiting() {
+	v := newKillTestVMM()
+	suite.T().Cleanup(v.Close)
+	a := &killTestVM{closeEntered: make(chan struct{}), release: make(chan struct{})}
+	b := &killTestVM{closeEntered: make(chan struct{}), release: make(chan struct{}), err: errors.New("close failed")}
+	v.addVm(a, &schema.Env{Meta: schema.Meta{Pid: "a"}})
+	v.addVm(b, &schema.Env{Meta: schema.Meta{Pid: "b"}})
+	var releaseA, releaseB sync.Once
+	unblockA := func() { releaseA.Do(func() { close(a.release) }) }
+	unblockB := func() { releaseB.Do(func() { close(b.release) }) }
+	done := make(chan struct{})
+	suite.T().Cleanup(func() {
+		unblockA()
+		unblockB()
+		suite.wait(done)
+	})
+	go func() { v.KillAll(); close(done) }()
+
+	// Both Close calls must start before either is released, regardless of map order.
+	suite.wait(a.closeEntered)
+	suite.wait(b.closeEntered)
+	_, err := v.Checkpoint("a")
+	assert.ErrorIs(suite.T(), err, schema.ErrVmStopping)
+	_, err = v.Checkpoint("b")
+	assert.ErrorIs(suite.T(), err, schema.ErrVmStopping)
+	bInstance, err := v.getInstance("b")
+	require.NoError(suite.T(), err)
+	unblockB()
+	suite.wait(bInstance.Done)
+	assert.ErrorIs(suite.T(), bInstance.CloseErr, b.err)
+	assert.False(suite.T(), v.IsExists("b"))
+	assert.True(suite.T(), v.IsExists("a"))
+	select {
+	case <-done:
+		require.FailNow(suite.T(), "KillAll returned before A closed")
+	default:
+	}
+
+	unblockA()
+	suite.wait(done)
+	assert.Empty(suite.T(), v.GetVmPids())
+	assert.Zero(suite.T(), v.GetVmCount())
 }
 
 func TestVmmKillTestSuite(t *testing.T) {
