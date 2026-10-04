@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""P0 characterization: isolated Redis + real node, stop checkpoints and recovery.
+"""Local integration: core VM actions, stop checkpoints and recovery.
 Run from the repository: python3 scripts/p0-local-network.py
 Creates temporary artifacts and cleans up only its own subprocesses. No public
 network, chainkit or payment is enabled. Requires Go and redis-server.
@@ -89,25 +89,67 @@ def main():
         helper = work / 'seed.go'
         helper.write_text('''package main
 import (
+ "encoding/json"
  "fmt"
  "os"
  "github.com/hymatrix/hymx/sdk"
+ vs "github.com/hymatrix/hymx/vmm/schema"
  gs "github.com/permadao/goar/schema"
 )
 func main() {
  s:=sdk.New(os.Args[1],os.Args[2]); defer s.Close()
  t,e:=s.SpawnAndWait("1i03Vpe8DljkUMBEEEvR0VmbJjvgZtP_ytZdThkVSMw",s.GetAddress(),nil); if e!=nil {panic(e)}
  r,e:=s.SpawnAndWait("MVTil0kn5SRiJELW7W2jLZ6cBr3QUGj1nJ67I2Wi4Ps",s.GetAddress(),[]gs.Tag{{Name:"Token-Pid",Value:t.Id},{Name:"Name",Value:"p0-local"},{Name:"URL",Value:os.Args[1]}}); if e!=nil {panic(e)}
+ for _, response := range []string{t.Message,r.Message} {
+  var result vs.VmmResult
+  if e=json.Unmarshal([]byte(response),&result); e!=nil {panic(e)}
+  if result.Error!="" {panic(result.Error)}
+ }
+ send := func(pid, action string, tags ...gs.Tag) vs.VmmResult {
+  response,err:=s.SendMessageAndWait(pid,"",append([]gs.Tag{{Name:"Action",Value:action}},tags...)); if err!=nil {panic(err)}
+  var result vs.VmmResult
+  if err=json.Unmarshal([]byte(response.Message),&result); err!=nil {panic(err)}
+  if result.Error!="" {panic(result.Error)}
+  fmt.Println("action passed",action,response.Id)
+  return result
+ }
+ for _, action:=range []string{"Info","Balance","Total-Supply"} {
+  if len(send(t.Id,action).Messages)==0 {panic("missing token response: "+action)}
+ }
+ recipient:="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+ send(t.Id,"Transfer",gs.Tag{Name:"Recipient",Value:recipient},gs.Tag{Name:"Quantity",Value:"123"})
+ send(t.Id,"Stake",gs.Tag{Name:"Registry",Value:r.Id},gs.Tag{Name:"Quantity",Value:"1000"},gs.Tag{Name:"Acc-Id",Value:s.GetAddress()},gs.Tag{Name:"Name",Value:"core-vm-verified"},gs.Tag{Name:"Desc",Value:"local integration"},gs.Tag{Name:"URL",Value:os.Args[1]})
+ data,err:=json.Marshal(map[string]string{"account":s.GetAddress(),"recipient":recipient,"token":t.Id,"registry":r.Id}); if err!=nil {panic(err)}
+ if err=os.WriteFile(os.Args[3],data,0600); err!=nil {panic(err)}
  fmt.Println("seeded",t.Id,r.Id)
 }
 ''')
         with open(work / 'seed.log', 'w') as out:
-            subprocess.run(['go', 'run', str(helper), base, str(ROOT / 'cmd/test_keyfile.json')],
+            subprocess.run(['go', 'run', str(helper), base, str(ROOT / 'cmd/test_keyfile.json'), str(work/'seed.json')],
                            cwd=ROOT, stdout=out, stderr=out, check=True, timeout=60)
         pids = wait_for(lambda: (v if len(v:=get(adm+'/admin/vms/running'))==2 else None), 'two VMs')
         summary['vm_count'] = len(pids)
         summary['pids'] = sorted(pids)
-        nodes_before = get(base + '/nodes')
+        seed = json.loads((work/'seed.json').read_text())
+        def core_state():
+            nodes = get(base + '/nodes')
+            assert nodes[seed['account']]['Name'] == 'core-vm-verified', nodes
+            balances = {account: int(get(base+'/balanceOf/'+account))
+                        for account in (seed['account'], seed['recipient'])}
+            assert balances[seed['account']] == 20000000000000000000 - 123 - 1000, balances
+            assert balances[seed['recipient']] == 123, balances
+            stake = int(get(base+'/stakeOf/'+seed['account']))
+            assert stake == 1000000000000000000 + 1000, stake
+            registered = get(base+'/processes/'+seed['account'])
+            assert seed['token'] in registered and seed['registry'] in registered, registered
+            return {'nodes': nodes, 'balances': balances, 'stake': stake,
+                    'registered_processes': sorted(registered)}
+        def registry_updated():
+            nodes = get(base+'/nodes')
+            return nodes and nodes.get(seed['account'], {}).get('Name') == 'core-vm-verified'
+        wait_for(registry_updated, 'Token Stake delivered Registry Register')
+        summary['core_state_before'] = core_state()
+        nodes_before = summary['core_state_before']['nodes']
         assert not list((work/'ckp').glob('ckp-*.json'))
         def stop(p, label):
             began = time.monotonic()
@@ -140,6 +182,8 @@ func main() {
         summary['recovered_pids'] = sorted(recovered)
         wait_for(lambda: get(base + '/nodes') == nodes_before, 'restored registry state')
         summary['registry_state_restored'] = True
+        summary['core_state_after'] = core_state()
+        assert summary['core_state_after'] == summary['core_state_before']
         summary['second_stop'] = stop(node, 'recovery')
         print(json.dumps(summary, indent=2), flush=True)
         (work/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')

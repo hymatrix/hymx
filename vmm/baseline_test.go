@@ -12,8 +12,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// VmmBaselineTestSuite tests the current global queue blocking behavior.
-// Replace these assertions with cross-PID progress checks during P2.
+// VmmBaselineTestSuite tests cross-PID execution isolation.
 type VmmBaselineTestSuite struct {
 	suite.Suite
 }
@@ -53,7 +52,7 @@ func (suite *VmmBaselineTestSuite) waitForOperation(ch <-chan struct{}) {
 	}
 }
 
-func (suite *VmmBaselineTestSuite) checkGlobalQueueBlocking(blockApply bool) {
+func (suite *VmmBaselineTestSuite) checkIndependentProgress(blockApply bool) {
 	suite.T().Helper()
 
 	release := make(chan struct{})
@@ -87,45 +86,31 @@ func (suite *VmmBaselineTestSuite) checkGlobalQueueBlocking(blockApply bool) {
 		v.Apply(schema.Meta{Pid: "pid-a", Nonce: 1, Mode: schema.ExecModeDryRun})
 		suite.waitForOperation(a.applyEntered)
 	} else {
-		v.ckpChan <- schema.Checkpoint{Pid: "pid-a", Res: make(chan schema.Snapshot, 1)}
+		go func() { _, _ = v.Checkpoint("pid-a") }()
 		suite.waitForOperation(a.checkpointEntered)
 	}
 
 	v.Apply(schema.Meta{Pid: "pid-b", Nonce: 1, Mode: schema.ExecModeDryRun})
-	reply := make(chan schema.Snapshot, 1)
-	v.ckpChan <- schema.Checkpoint{Pid: "pid-b", Res: reply}
-
-	// A cannot return until released; both B operations remain queued.
-	assert.Len(suite.T(), v.applyChan, 1)
-	assert.Len(suite.T(), v.ckpChan, 1)
-	select {
-	case <-b.applyEntered:
-		assert.Fail(suite.T(), "B executed while A was blocked")
-	default:
-	}
-	select {
-	case <-b.checkpointEntered:
-		assert.Fail(suite.T(), "B checkpoint executed while A was blocked")
-	default:
-	}
-
-	unblock()
+	reply := make(chan error, 1)
+	go func() { _, err := v.Checkpoint("pid-b"); reply <- err }()
 	suite.waitForOperation(b.applyEntered)
 	suite.waitForOperation(b.checkpointEntered)
 	select {
-	case snap := <-reply:
-		assert.NoError(suite.T(), snap.Err)
+	case err := <-reply:
+		assert.NoError(suite.T(), err)
 	case <-time.After(5 * time.Second):
-		require.FailNow(suite.T(), "checkpoint reply missing")
+		require.FailNow(suite.T(), "B checkpoint blocked behind A")
 	}
+	unblock()
+
 }
 
-func (suite *VmmBaselineTestSuite) TestApplyBlocksOtherVMOperations() {
-	suite.checkGlobalQueueBlocking(true)
+func (suite *VmmBaselineTestSuite) TestApplyDoesNotBlockOtherVMOperations() {
+	suite.checkIndependentProgress(true)
 }
 
-func (suite *VmmBaselineTestSuite) TestCheckpointBlocksOtherVMOperations() {
-	suite.checkGlobalQueueBlocking(false)
+func (suite *VmmBaselineTestSuite) TestCheckpointDoesNotBlockOtherVMOperations() {
+	suite.checkIndependentProgress(false)
 }
 
 func TestVmmBaselineTestSuite(t *testing.T) {

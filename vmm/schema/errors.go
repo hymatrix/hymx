@@ -3,6 +3,8 @@ package schema
 import "errors"
 
 var (
+	ErrVmmClosed              = errors.New("err_vmm_closed")
+	ErrVmStopping             = errors.New("err_vm_stopping")
 	ErrRegistryAlreadyCreated = errors.New("err_registry_already_created")
 	ErrTokenAlreadyCreated    = errors.New("err_token_already_created")
 	ErrInvalidModuleFormat    = errors.New("err_invalid_module_format")
