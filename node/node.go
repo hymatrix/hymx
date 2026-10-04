@@ -31,14 +31,15 @@ type Node struct {
 
 	vmm *vmm.Vmm
 
-	wg     sync.WaitGroup
-	ctx    context.Context
-	cancel context.CancelFunc
+	wg       sync.WaitGroup
+	outputWg sync.WaitGroup
+	ctx      context.Context
+	cancel   context.CancelFunc
 
 	assignMesChan  chan schema.AssignMessage
 	assignProcChan chan schema.AssignProcess
 	assignResChan  chan schema.AssignmentResult
-	resultChan     <-chan vmmSchema.VmmResult
+	resultChan     chan vmmSchema.VmmResult
 
 	// handler
 	itemHandlers           []schema.ItemHandler
@@ -48,7 +49,7 @@ type Node struct {
 	resultHandlers         []schema.ResultHandler
 	resultHandlerLockMu    sync.RWMutex
 
-	outboxChan        <-chan vmmSchema.Outbox
+	outboxChan        chan vmmSchema.Outbox
 	outboxSendingLock map[string]bool
 	outboxLockMu      sync.RWMutex
 
@@ -118,6 +119,8 @@ func (n *Node) Run(startMode string) {
 	}
 
 	n.vmm.Run()
+	n.wg.Add(2)
+	n.outputWg.Add(3)
 	go n.runMsgChan()
 	go n.runProcChan()
 	go n.runResultChan()
@@ -154,6 +157,9 @@ func (n *Node) close(checkpoint bool) {
 
 	n.cancel()
 	n.wg.Wait()
+	if n.assignResChan != nil {
+		close(n.assignResChan)
+	}
 
 	n.recoveryTaskPool.Release()
 
@@ -161,6 +167,14 @@ func (n *Node) close(checkpoint bool) {
 		n.runCheckpoint()
 	}
 	n.vmm.Close()
+	// Keep consumers alive until VM output is complete, then drain the buffers.
+	if n.resultChan != nil {
+		close(n.resultChan)
+	}
+	if n.outboxChan != nil {
+		close(n.outboxChan)
+	}
+	n.outputWg.Wait()
 
 	if n.chainkit != nil {
 		n.chainkit.Close()
