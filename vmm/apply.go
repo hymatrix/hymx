@@ -7,11 +7,8 @@ import (
 	"github.com/hymatrix/hymx/vmm/schema"
 )
 
-func (v *Vmm) apply(meta schema.Meta) error {
-	vm, env, err := v.GetVm(meta.Pid)
-	if err != nil {
-		return err
-	}
+func (v *Vmm) apply(instance *schema.VmInstance, meta schema.Meta) error {
+	vm, env := instance.Vm, &instance.Env
 	log.Debug("===> apply", "meta", meta, "env", env)
 
 	vmmRes := schema.VmmResult{

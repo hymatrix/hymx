@@ -14,66 +14,90 @@ func (v *Vmm) Mount(moduleFormat string, spawner schema.VmSpawnFunc) error {
 	return nil
 }
 
-func (v *Vmm) Kill(pid string) (err error) {
-	vm, _, err := v.GetVm(pid)
-	if err != nil {
-		return
+func (v *Vmm) stop(pid string, instance *schema.VmInstance) *schema.VmTask {
+	instance.Mu.Lock()
+	defer instance.Mu.Unlock()
+	if instance.StopTask != nil {
+		return instance.StopTask
 	}
+	task := &schema.VmTask{Done: make(chan struct{}), Stop: true}
+	task.Run = func(instance *schema.VmInstance) error {
+		if instance.Vm != nil {
+			if err := instance.Vm.Close(); err != nil {
+				return err
+			}
+		}
+		v.vmsLockMu.Lock()
+		if v.vms[pid] == instance {
+			delete(v.vms, pid)
+			delete(v.vmsRecoveryLock, pid)
+		}
+		v.vmsLockMu.Unlock()
+		return nil
+	}
+	instance.StopTask = task
+	// Stop admission without needing a free slot in the task channel.
+	close(instance.Stopping)
+	return task
+}
 
-	v.vmsLockMu.Lock()
-	defer v.vmsLockMu.Unlock()
-	if err = vm.Close(); err != nil {
+func (v *Vmm) Kill(pid string) error {
+	instance, err := v.instance(pid, false)
+	if err != nil {
 		return err
 	}
-	delete(v.vms, pid)
-	delete(v.vmsEnv, pid)
-
-	return
+	task := v.stop(pid, instance)
+	<-task.Done
+	return task.Err
 }
 
 func (v *Vmm) KillAll() {
-	pids := v.GetVmPids()
-	if len(pids) == 0 {
-		return
+	v.vmsLockMu.RLock()
+	tasks := make(map[string]*schema.VmTask, len(v.vms))
+	for pid, instance := range v.vms {
+		tasks[pid] = v.stop(pid, instance)
 	}
-
-	for _, pid := range pids {
-		if err := v.Kill(pid); err != nil {
-			log.Error("kill process failed", "pid", pid)
+	v.vmsLockMu.RUnlock()
+	for pid, task := range tasks {
+		<-task.Done
+		if task.Err != nil {
+			log.Error("kill process failed", "pid", pid, "err", task.Err)
 		}
 	}
 }
 
-func (v *Vmm) IsExists(pid string) (ok bool) {
+func (v *Vmm) IsExists(pid string) bool {
 	v.vmsLockMu.RLock()
-	defer v.vmsLockMu.RUnlock()
-
-	_, ok = v.vms[pid]
-	return
+	instance := v.vms[pid]
+	v.vmsLockMu.RUnlock()
+	if instance == nil {
+		return false
+	}
+	instance.Mu.Lock()
+	defer instance.Mu.Unlock()
+	return instance.Loaded
 }
 
+// GetVm preserves the legacy interface and returns an independent Env.
+// Direct calls on the returned VM bypass VMM serialization.
 func (v *Vmm) GetVm(pid string) (vm schema.Vm, env *schema.Env, err error) {
-	v.vmsLockMu.RLock()
-	defer v.vmsLockMu.RUnlock()
-
-	ok := false
-	if vm, ok = v.vms[pid]; !ok {
-		err = schema.ErrProcessNotFound
-		return
-	}
-	if env, ok = v.vmsEnv[pid]; !ok {
-		err = schema.ErrProcessEnvNotFound
-	}
+	err = v.request(pid, false, func(instance *schema.VmInstance) error {
+		copy := cloneEnv(instance.Env)
+		vm, env = instance.Vm, &copy
+		return nil
+	})
 	return
 }
 
 func (v *Vmm) GetVmPids() (pids []string) {
 	v.vmsLockMu.RLock()
 	defer v.vmsLockMu.RUnlock()
-
-	pids = make([]string, 0, len(v.vms))
-	for pid := range v.vms {
-		pids = append(pids, pid)
+	for pid, instance := range v.vms {
+		instance.Mu.Lock()
+		if instance.Loaded {
+			pids = append(pids, pid)
+		}
+		instance.Mu.Unlock()
 	}
 	return
 }
@@ -89,12 +113,7 @@ func (v *Vmm) GetModuleNames() (names []string) {
 	return
 }
 
-func (v *Vmm) GetVmCount() int64 {
-	v.vmsLockMu.RLock()
-	defer v.vmsLockMu.RUnlock()
-
-	return int64(len(v.vms))
-}
+func (v *Vmm) GetVmCount() int64 { return int64(len(v.GetVmPids())) }
 
 func (v *Vmm) RecoveryLock(pid string) {
 	v.vmsLockMu.Lock()
@@ -114,76 +133,36 @@ func (v *Vmm) IsRecovering(pid string) bool {
 	v.vmsLockMu.RLock()
 	defer v.vmsLockMu.RUnlock()
 
-	locked, ok := v.vmsRecoveryLock[pid]
-	if !ok {
-		return false
-	}
-	return locked
+	return v.vmsRecoveryLock[pid]
 }
 
 func (v *Vmm) Checkpoint(pid string) (snap schema.Snapshot, err error) {
-	if !v.IsExists(pid) {
-		err = schema.ErrProcessNotFound
-		return
-	}
-
-	res := make(chan schema.Snapshot)
-	defer close(res)
-
-	v.ckpChan <- schema.Checkpoint{
-		Pid: pid,
-		Res: res,
-	}
-
-	snap = <-res
-	if snap.Err != nil {
-		err = snap.Err
-	}
+	err = v.request(pid, false, func(instance *schema.VmInstance) error {
+		snap.Data, snap.Err = instance.Vm.Checkpoint()
+		snap.Env = cloneEnv(instance.Env)
+		return snap.Err
+	})
 	return
 }
 
 func (v *Vmm) Restore(snap schema.Snapshot) error {
-	vm, _, err := v.GetVm(snap.Env.Meta.Pid)
-	if err != nil {
-		if vm, err = v.spawn(snap.Env); err != nil {
+	snap.Env = cloneEnv(snap.Env)
+	return v.request(snap.Env.Meta.Pid, true, func(instance *schema.VmInstance) error {
+		vm := instance.Vm
+		if vm == nil {
+			var err error
+			vm, err = v.spawn(cloneEnv(snap.Env))
+			if err != nil {
+				return err
+			}
+		}
+		if err := vm.Restore(snap.Data); err != nil {
+			if instance.Vm == nil {
+				_ = vm.Close()
+			}
 			return err
 		}
-	}
-
-	if err = vm.Restore(snap.Data); err != nil {
-		return err
-	}
-	v.addVm(vm, &snap.Env)
-	return nil
-}
-
-func (v *Vmm) checkpoint(pid string, res chan<- schema.Snapshot) {
-	vm, env, err := v.GetVm(pid)
-	if err != nil {
-		res <- schema.Snapshot{
-			Err: err,
-		}
-		return
-	}
-
-	data, err := vm.Checkpoint()
-	if err != nil {
-		res <- schema.Snapshot{
-			Err: err,
-		}
-		return
-	}
-
-	res <- schema.Snapshot{
-		Env:  *env,
-		Data: data,
-	}
-}
-
-func (v *Vmm) addVm(vm schema.Vm, env *schema.Env) {
-	v.vmsLockMu.Lock()
-	defer v.vmsLockMu.Unlock()
-
-	v.vms[env.Meta.Pid] = vm
-	v.vmsEnv[env.Meta.Pid] = env
+		publishVm(instance, vm, snap.Env)
+		return nil
+	})
 }
