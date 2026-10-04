@@ -23,7 +23,10 @@ func (v *Vmm) instance(pid string, create bool) (*schema.VmInstance, error) {
 	}
 	instance := v.vms[pid]
 	if instance == nil && create {
-		instance = &schema.VmInstance{Wake: make(chan struct{}, schema.VmWakeCapacity)}
+		instance = &schema.VmInstance{
+			Tasks:    make(chan *schema.VmTask, schema.VmQueueCapacity),
+			Stopping: make(chan struct{}),
+		}
 		v.vms[pid] = instance
 		v.wg.Add(1)
 		go v.runInstance(pid, instance)
@@ -34,30 +37,46 @@ func (v *Vmm) instance(pid string, create bool) (*schema.VmInstance, error) {
 	return instance, nil
 }
 
-// queueTask requires Mu. Queue growth never waits for the executing VM.
-func queueTask(instance *schema.VmInstance, task *schema.VmTask) {
-	instance.Tasks = append(instance.Tasks, task)
-	select {
-	case instance.Wake <- struct{}{}:
-	default:
-	}
-}
-
 func (v *Vmm) submit(pid string, create bool, task *schema.VmTask) error {
 	instance, err := v.instance(pid, create)
 	if err != nil {
 		return err
 	}
 	instance.Mu.Lock()
-	defer instance.Mu.Unlock()
+	if v.ctx.Err() != nil {
+		instance.Mu.Unlock()
+		return schema.ErrVmmClosed
+	}
 	if instance.StopTask != nil {
+		instance.Mu.Unlock()
 		return schema.ErrVmStopping
 	}
 	if !create && !instance.Loaded {
+		instance.Mu.Unlock()
 		return schema.ErrProcessNotFound
 	}
-	queueTask(instance, task)
-	return nil
+	instance.Sending++
+	instance.Senders.Add(1)
+	task.Admitted = make(chan struct{})
+	instance.Mu.Unlock()
+	defer func() {
+		instance.Mu.Lock()
+		instance.Sending--
+		instance.Mu.Unlock()
+		instance.Senders.Done()
+		close(task.Admitted)
+	}()
+	select {
+	case instance.Tasks <- task:
+		return nil
+	case <-v.ctx.Done():
+		return schema.ErrVmmClosed
+	case <-instance.Stopping:
+		if v.ctx.Err() != nil {
+			return schema.ErrVmmClosed
+		}
+		return schema.ErrVmStopping
+	}
 }
 
 func (v *Vmm) request(pid string, create bool, run func(*schema.VmInstance) error) error {

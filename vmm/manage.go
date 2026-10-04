@@ -36,7 +36,8 @@ func (v *Vmm) stop(pid string, instance *schema.VmInstance) *schema.VmTask {
 		return nil
 	}
 	instance.StopTask = task
-	queueTask(instance, task)
+	// Stop admission without needing a free slot in the task channel.
+	close(instance.Stopping)
 	return task
 }
 
