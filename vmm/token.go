@@ -10,8 +10,6 @@ import (
 )
 
 func (v *Vmm) TokenId() string {
-	v.coreMu.RLock()
-	defer v.coreMu.RUnlock()
 	if v.token == nil {
 		return ""
 	}
@@ -19,8 +17,6 @@ func (v *Vmm) TokenId() string {
 }
 
 func (v *Vmm) BalanceOf(accid string) (*big.Int, error) {
-	v.coreMu.RLock()
-	defer v.coreMu.RUnlock()
 	if v.token == nil {
 		return nil, nil
 	}
@@ -28,8 +24,6 @@ func (v *Vmm) BalanceOf(accid string) (*big.Int, error) {
 }
 
 func (v *Vmm) StakeOf(accid string) (*big.Int, error) {
-	v.coreMu.RLock()
-	defer v.coreMu.RUnlock()
 	if v.token == nil {
 		return nil, nil
 	}
@@ -37,8 +31,6 @@ func (v *Vmm) StakeOf(accid string) (*big.Int, error) {
 }
 
 func (v *Vmm) spawnToken(env schema.Env) (vm schema.Vm, err error) {
-	v.coreMu.Lock()
-	defer v.coreMu.Unlock()
 	if v.token != nil {
 		return nil, schema.ErrTokenAlreadyCreated
 	}

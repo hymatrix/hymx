@@ -2,7 +2,6 @@ package vmm
 
 import (
 	"context"
-	"maps"
 	"sync"
 
 	"github.com/hymatrix/hymx/common"
@@ -21,11 +20,11 @@ type Vmm struct {
 
 	info     *nodeSchema.Info
 	registry *registry.Registry
-	coreMu   sync.RWMutex
 	token    *token.Token
 
 	vmFactors map[string]schema.VmSpawnFunc // moduleFormat -> vmSpawnFunc
-	vms       map[string]*schema.VmInstance // pid -> worker, VM and environment
+	vms       map[string]schema.Vm          // pid -> virtual machine
+	vmsEnv    map[string]*schema.Env        // pid -> vm env, eg: module, prcoess, nonce, ref
 	vmsLockMu sync.RWMutex
 
 	vmsRecoveryLock map[string]bool // vm lock: key pid, value true/false
@@ -36,8 +35,8 @@ type Vmm struct {
 
 	resultChan      chan<- schema.VmmResult
 	outboxChan      chan<- schema.Outbox
-	closing         bool
-	closeOnce       sync.Once
+	applyChan       chan schema.Meta
+	ckpChan         chan schema.Checkpoint
 	registrySpawned chan struct{}
 }
 
@@ -49,7 +48,8 @@ func New(cryptor *cryptor.Cryptor, info *nodeSchema.Info, resultChan chan<- sche
 		info: info,
 
 		vmFactors: map[string]schema.VmSpawnFunc{},
-		vms:       map[string]*schema.VmInstance{},
+		vms:       map[string]schema.Vm{},
+		vmsEnv:    map[string]*schema.Env{},
 
 		vmsRecoveryLock: map[string]bool{},
 
@@ -58,6 +58,8 @@ func New(cryptor *cryptor.Cryptor, info *nodeSchema.Info, resultChan chan<- sche
 
 		resultChan:      resultChan,
 		outboxChan:      outboxChan,
+		applyChan:       make(chan schema.Meta, 1000),
+		ckpChan:         make(chan schema.Checkpoint, 100),
 		registrySpawned: registrySpawned,
 	}
 }
@@ -67,24 +69,20 @@ func (v *Vmm) Run() {
 	v.Mount(schema.ModuleFormatToken, v.spawnToken)
 	v.Mount(schema.ModuleFormatRegistry, v.spawnRegistry)
 
+	go v.runChanHandler()
 }
 
 func (v *Vmm) Apply(m schema.Meta) {
-	m.Params = maps.Clone(m.Params)
-	if err := v.submit(m.Pid, false, &schema.VmTask{Run: func(instance *schema.VmInstance) error {
-		return v.apply(instance, m)
-	}}); err != nil {
-		log.Error("apply admission failed", "pid", m.Pid, "err", err)
-	}
+	v.applyChan <- m
 }
 
 func (v *Vmm) Close() {
-	v.closeOnce.Do(func() {
-		v.vmsLockMu.Lock()
-		v.closing = true
-		v.cancel()
-		v.vmsLockMu.Unlock()
-		v.KillAll()
-		v.wg.Wait()
-	})
+	log.Info("vmm is shutting down")
+
+	v.cancel()
+	v.wg.Wait()
+
+	v.KillAll()
+
+	log.Info("vmm has been shut down")
 }

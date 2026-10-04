@@ -9,8 +9,6 @@ import (
 )
 
 func (v *Vmm) RegistryId() string {
-	v.coreMu.RLock()
-	defer v.coreMu.RUnlock()
 	if v.registry == nil {
 		return ""
 	}
@@ -18,8 +16,6 @@ func (v *Vmm) RegistryId() string {
 }
 
 func (v *Vmm) GetNode(accid string) (*registrySchema.Node, error) {
-	v.coreMu.RLock()
-	defer v.coreMu.RUnlock()
 	if v.registry == nil {
 		return nil, nil
 	}
@@ -27,8 +23,6 @@ func (v *Vmm) GetNode(accid string) (*registrySchema.Node, error) {
 }
 
 func (v *Vmm) GetNodes() (map[string]registrySchema.Node, error) {
-	v.coreMu.RLock()
-	defer v.coreMu.RUnlock()
 	if v.registry == nil {
 		return nil, nil
 	}
@@ -36,8 +30,6 @@ func (v *Vmm) GetNodes() (map[string]registrySchema.Node, error) {
 }
 
 func (v *Vmm) GetProcesses(accid string) ([]string, error) {
-	v.coreMu.RLock()
-	defer v.coreMu.RUnlock()
 	if v.registry == nil {
 		return nil, nil
 	}
@@ -45,8 +37,6 @@ func (v *Vmm) GetProcesses(accid string) ([]string, error) {
 }
 
 func (v *Vmm) GetNodesByProcess(pid string) ([]registrySchema.Node, error) {
-	v.coreMu.RLock()
-	defer v.coreMu.RUnlock()
 	if v.registry == nil {
 		return nil, nil
 	}
@@ -54,8 +44,6 @@ func (v *Vmm) GetNodesByProcess(pid string) ([]registrySchema.Node, error) {
 }
 
 func (v *Vmm) spawnRegistry(env schema.Env) (vm schema.Vm, err error) {
-	v.coreMu.Lock()
-	defer v.coreMu.Unlock()
 	if v.registry != nil {
 		return nil, schema.ErrRegistryAlreadyCreated
 	}
