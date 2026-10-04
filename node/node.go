@@ -58,7 +58,6 @@ type Node struct {
 	chainkit *chainkit.Chainkit
 
 	recoveryTaskPool *ants.Pool
-	registrySpawned  chan struct{}
 }
 
 func New(
@@ -108,7 +107,6 @@ func New(
 		db:               rdb.New(redisURL),
 		recoveryTaskPool: taskPool,
 		chainkit:         chainkit,
-		registrySpawned:  registryCh,
 	}
 }
 
@@ -325,12 +323,4 @@ func (n *Node) isSelf(node registrySchema.Node) bool {
 		}
 	}
 	return false
-}
-
-func (n *Node) waitRegistrySpawned() {
-	if n.vmm.RegistryId() != "" {
-		return
-	}
-	// wait for registry spawned
-	<-n.registrySpawned
 }
