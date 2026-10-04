@@ -161,7 +161,16 @@ removes its PID file after shutdown; checkpoint failures are logged and shutdown
 For embedded use, `Node.Close()` and `Server.Close()` skip VM checkpoints;
 use `CloseWithCheckpoint()` to save them. Single-VM `Node.Stop(pid)` and `POST /admin/vms/stop`
 also skip checkpoints; use `Node.StopWithCheckpoint(pid)` or `POST /admin/vms/stopWithCheckpoint`
-to save before stopping. Explicit checkpoint APIs and payment state persistence are unchanged.
+to save before stopping. Payment state persistence is unchanged.
+
+Outbox messages are stored in Redis lists independently of VM checkpoints. VM checkpoint and
+restore no longer save or restore outbox queues; legacy checkpoint outbox fields are ignored.
+Restarting hymx retains messages already written to Redis, but does not automatically resend them.
+Call SDK `TrySend(pid, target)` (or `POST /trysend`) to resume a queue, or let a new message to the
+same queue trigger sending. Redis durability depends on its persistence and eviction configuration;
+outputs not yet written to Redis and failed writes are not protected by this change.
+Before upgrading, drain pending messages from the old version: neither its in-memory outbox nor
+outbox data in old VM checkpoints is automatically imported into Redis.
 
 Local verification: `python3 scripts/checkpoint-local-network.py` starts isolated Redis and node
 processes, checks Token/Registry operations and both shutdown/recovery paths, then cleans up its processes.

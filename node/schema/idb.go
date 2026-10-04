@@ -29,13 +29,9 @@ type IDB interface {
 	// cache
 	GetCache(pid, key string) (value string, err error)
 	SaveCache(pid, key, value string) (err error)
-}
 
-type IDBOutbox interface {
-	Push(pid, target string, message goarSchema.BundleItem) error
-	Peek(pid, target string) (*goarSchema.BundleItem, error)
-	Commit(pid, target string, assign goarSchema.BundleItem) error
-
-	Checkpoint(pid string) (string, error)
-	Restore(data string) error
+	// outbox
+	PushOutbox(pid, target string, message goarSchema.BundleItem) error
+	PeekOutbox(pid, target string) (*goarSchema.BundleItem, error)
+	CommitOutbox(pid, target string) error
 }

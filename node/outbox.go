@@ -40,7 +40,7 @@ func (n *Node) outbox(outbox vmmSchema.Outbox) {
 	if outbox.Type == hymxSchema.TypeProcess {
 		targetProcId = item.Id
 	}
-	if err := n.outboxDB.Push(outbox.From, targetProcId, item); err != nil {
+	if err := n.db.PushOutbox(outbox.From, targetProcId, item); err != nil {
 		log.Error("outbox push failed", "err", err)
 		return
 	}
@@ -56,7 +56,7 @@ func (n *Node) trySend(pid, target string) {
 	n.sendingLock(pid, target)
 	defer n.sendingUnlock(pid, target)
 	for {
-		item, err := n.outboxDB.Peek(pid, target)
+		item, err := n.db.PeekOutbox(pid, target)
 		if err != nil {
 			log.Error("outbox peek failed", "err", err)
 			return
@@ -101,23 +101,22 @@ func (n *Node) trySend(pid, target string) {
 			return
 		}
 
-		var assignItem goarSchema.BundleItem
 		if n.isSelf(nodes[0]) {
-			assignItem, err = n.tryGetLocalAssign(*item)
+			_, err = n.tryGetLocalAssign(*item)
 			if err != nil {
 				log.Error("outbox try get local assignment failed", "pid", pid, "target", target, "itemId", item.Id, "err", err)
 				return
 			}
 
 		} else {
-			assignItem, err = n.tryGetAssign(item.Id, nodes, itemBin)
+			_, err = n.tryGetAssign(item.Id, nodes, itemBin)
 			if err != nil {
 				log.Error("outbox try get assignment failed", "pid", pid, "target", target, "itemId", item.Id, "err", err)
 				return
 			}
 		}
 
-		if err = n.outboxDB.Commit(pid, target, assignItem); err != nil {
+		if err = n.db.CommitOutbox(pid, target); err != nil {
 			log.Error("outbox commit failed", "pid", pid, "target", target, "err", err)
 			return
 		}

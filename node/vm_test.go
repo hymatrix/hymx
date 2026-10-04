@@ -2,13 +2,13 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/hymatrix/hymx/db/cache"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/vmm"
@@ -17,6 +17,7 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
+	goarUtils "github.com/permadao/goar/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -70,6 +71,16 @@ func (db *lifecycleDB) SaveCheckpointIndex(pid, id string) error {
 func (db *lifecycleDB) GetCache(pid, key string) (string, error) { return "", nil }
 func (db *lifecycleDB) SaveCache(pid, key, value string) error   { return nil }
 
+func (db *lifecycleDB) PushOutbox(pid, target string, message goarSchema.BundleItem) error {
+	return errors.New("unexpected outbox push in VM lifecycle")
+}
+func (db *lifecycleDB) PeekOutbox(pid, target string) (*goarSchema.BundleItem, error) {
+	return nil, errors.New("unexpected outbox peek in VM lifecycle")
+}
+func (db *lifecycleDB) CommitOutbox(pid, target string) error {
+	return errors.New("unexpected outbox commit in VM lifecycle")
+}
+
 type lifecycleVM struct {
 	checkpointErr error
 	checkpoints   int
@@ -105,10 +116,9 @@ func (suite *NodeVMLifecycleTestSuite) newLifecycleNode(pid string, vm vmmSchema
 	})
 
 	n := &Node{
-		info:     &nodeSchema.Info{Node: registrySchema.Node{AccId: "local-node"}},
-		bundler:  bundler,
-		db:       db,
-		outboxDB: cache.NewOutbox(),
+		info:    &nodeSchema.Info{Node: registrySchema.Node{AccId: "local-node"}},
+		bundler: bundler,
+		db:      db,
 	}
 	n.vmm = vmm.New(
 		nil,
@@ -213,6 +223,30 @@ func (suite *NodeVMLifecycleTestSuite) TestSaveCheckpointPersistsItemAndIndex() 
 	savedItem, err := LoadCheckpoint(ckpItem.Id)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), ckpItem.Id, savedItem.Id)
+	data, err := goarUtils.Base64Decode(savedItem.Data)
+	require.NoError(suite.T(), err)
+	var snapshot map[string]json.RawMessage
+	require.NoError(suite.T(), json.Unmarshal(data, &snapshot))
+	assert.NotContains(suite.T(), snapshot, "Outbox")
+}
+
+func (suite *NodeVMLifecycleTestSuite) TestRestoreIgnoresLegacyOutbox() {
+	n := suite.newLifecycleNode("pid-1", &lifecycleVM{}, &lifecycleDB{})
+	snapshot, err := n.vmm.Checkpoint("pid-1")
+	require.NoError(suite.T(), err)
+	snapshot.Env.Nonce = 7
+	// Even malformed legacy outbox data must not be restored with the VM.
+	snapshot.Outbox = "invalid legacy outbox"
+	item, err := n.signCheckpoint(snapshot)
+	require.NoError(suite.T(), err)
+	require.NoError(suite.T(), saveCheckpoint(item))
+	require.NoError(suite.T(), n.vmm.Kill("pid-1"))
+
+	nonce, err := n.Restore(item.Id)
+
+	require.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(7), nonce)
+	assert.True(suite.T(), n.vmm.IsExists("pid-1"))
 }
 
 func (suite *NodeVMLifecycleTestSuite) TestStopSuccessKillsVM() {

@@ -9,7 +9,6 @@ import (
 	"github.com/hymatrix/hymx/chainkit"
 	"github.com/hymatrix/hymx/common"
 	"github.com/hymatrix/hymx/cryptor"
-	"github.com/hymatrix/hymx/db/cache"
 	"github.com/hymatrix/hymx/db/rdb"
 	"github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/sdk"
@@ -53,8 +52,7 @@ type Node struct {
 	outboxSendingLock map[string]bool
 	outboxLockMu      sync.RWMutex
 
-	db       schema.IDB
-	outboxDB schema.IDBOutbox
+	db schema.IDB
 
 	chainkit *chainkit.Chainkit
 
@@ -107,7 +105,6 @@ func New(
 		outboxSendingLock: map[string]bool{},
 
 		db:               rdb.New(redisURL),
-		outboxDB:         cache.NewOutbox(),
 		recoveryTaskPool: taskPool,
 		chainkit:         chainkit,
 		registrySpawned:  registryCh,

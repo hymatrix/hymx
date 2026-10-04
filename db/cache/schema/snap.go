@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/hymatrix/hymx/vmm/core/registry/schema"
-	goarSchema "github.com/permadao/goar/schema"
 )
 
 type TokenSnapshot struct {
@@ -30,11 +29,6 @@ type RegistrySnapshot struct {
 	AccidToProcessesIndex map[string]map[string]string       `json:"ai"`
 	Registered            map[string]bool                    `json:"re"`
 	Nodes                 map[string]*schema.Node            `json:"n"`
-}
-
-type OutboxSnapshot struct {
-	Id      string                                `json:"i"`
-	Targets map[string][]*goarSchema.BundleItem   `json:"t"`
 }
 
 type PaySnapshot struct {

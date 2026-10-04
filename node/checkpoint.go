@@ -48,7 +48,7 @@ func (n *Node) Restore(ckpId string) (nonce int64, err error) {
 		return -1, err
 	}
 
-	return snap.Env.Nonce, n.outboxDB.Restore(snap.Outbox)
+	return snap.Env.Nonce, nil
 }
 
 func (n *Node) Checkpoint(pid string) (ckpItem goarSchema.BundleItem, err error) {
@@ -56,12 +56,6 @@ func (n *Node) Checkpoint(pid string) (ckpItem goarSchema.BundleItem, err error)
 	if err != nil {
 		return
 	}
-
-	outSnap, err := n.outboxDB.Checkpoint(pid)
-	if err != nil {
-		return
-	}
-	snap.Outbox = outSnap
 
 	return n.signCheckpoint(snap)
 }
