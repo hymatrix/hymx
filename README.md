@@ -159,11 +159,16 @@ removes its PID file after shutdown; checkpoint failures are logged and shutdown
 `--checkpoint` uses SIGUSR1 and requires a daemon running this version; do not use it with an older daemon.
 
 For embedded use, `Node.Close()` and `Server.Close()` skip VM checkpoints;
-use `CloseWithCheckpoint()` to save them. Single-VM stop, explicit checkpoint APIs and payment
-state persistence retain their existing behavior.
+use `CloseWithCheckpoint()` to save them. Single-VM `Node.Stop(pid)` and `POST /admin/vms/stop`
+also skip checkpoints; use `Node.StopWithCheckpoint(pid)` or `POST /admin/vms/stopWithCheckpoint`
+to save before stopping. Explicit checkpoint APIs and payment state persistence are unchanged.
 
 Local verification: `python3 scripts/checkpoint-local-network.py` starts isolated Redis and node
 processes, checks Token/Registry operations and both shutdown/recovery paths, then cleans up its processes.
+
+For the single-VM admin APIs, run `HYMX_INTEGRATION=1 go test ./server -run '^TestAdminIntegrationTestSuite$' -count=1 -timeout=90s -v`.
+This starts a real local node and isolated Redis with a test-only non-core VM, verifying stop,
+stopWithCheckpoint, resume and checkpoint failure behavior. It is skipped in ordinary test runs.
 
 ## Join the Network
 

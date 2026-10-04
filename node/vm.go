@@ -6,6 +6,15 @@ import (
 )
 
 func (n *Node) Stop(pid string) error {
+	return n.stop(pid, false)
+}
+
+// StopWithCheckpoint saves the VM before stopping it. A save failure leaves it running.
+func (n *Node) StopWithCheckpoint(pid string) error {
+	return n.stop(pid, true)
+}
+
+func (n *Node) stop(pid string, checkpoint bool) error {
 	if n.isCore(pid) {
 		return schema.ErrCoreProcessCannotStop
 	}
@@ -19,15 +28,12 @@ func (n *Node) Stop(pid string) error {
 		return schema.ErrProcessStopped
 	}
 
-	_, err := n.SaveCheckpoint(pid)
-	if err != nil {
-		return err
+	if checkpoint {
+		if _, err := n.SaveCheckpoint(pid); err != nil {
+			return err
+		}
 	}
-
-	if err = n.vmm.Kill(pid); err != nil {
-		return err
-	}
-	return nil
+	return n.vmm.Kill(pid)
 }
 
 func (n *Node) Resume(pid string) error {

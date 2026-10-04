@@ -14,6 +14,7 @@ func (s *Server) runAdminAPI(endpoint string) {
 	engine := gin.Default()
 	engine.Use(common.CORSMiddleware())
 	engine.POST("/admin/vms/stop", s.Stop)
+	engine.POST("/admin/vms/stopWithCheckpoint", s.StopWithCheckpoint)
 	engine.POST("/admin/vms/resume", s.Resume)
 	engine.GET("/admin/vms/running", s.Running)
 
@@ -41,12 +42,20 @@ func (s *Server) closeAdminAPI() {
 }
 
 func (s *Server) Stop(c *gin.Context) {
+	s.stop(c, s.node.Stop)
+}
+
+func (s *Server) StopWithCheckpoint(c *gin.Context) {
+	s.stop(c, s.node.StopWithCheckpoint)
+}
+
+func (s *Server) stop(c *gin.Context, stop func(string) error) {
 	req := schema.RequestVM{}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Pid == "" {
 		schema.ErrorResponse(c, schema.ErrInvalidParams.Error())
 		return
 	}
-	if err := s.node.Stop(req.Pid); err != nil {
+	if err := stop(req.Pid); err != nil {
 		schema.ErrorResponse(c, err.Error())
 		return
 	}
