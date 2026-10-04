@@ -68,6 +68,16 @@ func (v *Vmm) GetVm(pid string) (vm schema.Vm, env *schema.Env, err error) {
 	return
 }
 
+// GetVmQueueLength returns queued tasks, excluding the task currently executing.
+// The value is observational; it does not reserve space for a subsequent send.
+func (v *Vmm) GetVmQueueLength(pid string) (int, error) {
+	instance, err := v.getInstance(pid)
+	if err != nil {
+		return 0, err
+	}
+	return len(instance.Tasks), nil
+}
+
 func (v *Vmm) GetVmPids() (pids []string) {
 	v.vmsLockMu.RLock()
 	defer v.vmsLockMu.RUnlock()
