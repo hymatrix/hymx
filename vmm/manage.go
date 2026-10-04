@@ -39,9 +39,6 @@ func (v *Vmm) KillAll() {
 	}
 	for _, instance := range instances {
 		<-instance.Done
-		if instance.CloseErr != nil {
-			log.Error("kill process failed", "pid", instance.Pid, "err", instance.CloseErr)
-		}
 	}
 }
 
@@ -174,16 +171,4 @@ func (v *Vmm) Restore(snap schema.Snapshot) error {
 		<-instance.Done
 	}
 	return task.Err
-}
-
-func (v *Vmm) addVm(vm schema.Vm, env *schema.Env) {
-	_, task, err := v.createInstance(env.Meta.Pid, func(instance *schema.VmInstance) error {
-		copy := cloneEnv(*env)
-		instance.Vm = vm
-		instance.Env = &copy
-		return nil
-	})
-	if err == nil {
-		<-task.Done
-	}
 }

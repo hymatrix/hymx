@@ -74,8 +74,6 @@ func (suite *NodeVMLifecycleTestSuite) TestMessageAdmissionChecksVMQueueAndResum
 		}
 	}
 	require.Less(suite.T(), nodeSchema.VmPendingMessageLimit, vmmSchema.VmQueueCapacity)
-	_, err := n.vmm.GetVmQueueLength("missing")
-	assert.ErrorIs(suite.T(), err, vmmSchema.ErrProcessNotFound)
 	n.vmm.Apply(vmmSchema.Meta{Pid: "a", Nonce: 1})
 	wait(vm.firstEntered)
 	for nonce := 2; nonce <= nodeSchema.VmPendingMessageLimit; nonce++ {

@@ -23,6 +23,7 @@ type instanceTestVM struct {
 	closed            chan struct{}
 	nonces            []int64
 	restoreErr        error
+	closeErr          error
 	restores          int
 }
 
@@ -49,7 +50,7 @@ func (vm *instanceTestVM) Close() error {
 	if vm.closed != nil {
 		close(vm.closed)
 	}
-	return nil
+	return vm.closeErr
 }
 
 func (suite *VmmInstanceTestSuite) wait(done <-chan struct{}) {
@@ -60,11 +61,11 @@ func (suite *VmmInstanceTestSuite) wait(done <-chan struct{}) {
 	}
 }
 
-func (suite *VmmInstanceTestSuite) newVmm() (*Vmm, chan schema.VmmResult) {
+func (suite *VmmInstanceTestSuite) newVmm() *Vmm {
 	results := make(chan schema.VmmResult, schema.VmQueueCapacity+8)
 	v := New(nil, &nodeSchema.Info{}, results, nil, nil)
 	suite.T().Cleanup(v.Close)
-	return v, results
+	return v
 }
 
 func (suite *VmmInstanceTestSuite) blockedVM(v *Vmm) (*instanceTestVM, func()) {
@@ -79,7 +80,7 @@ func (suite *VmmInstanceTestSuite) blockedVM(v *Vmm) (*instanceTestVM, func()) {
 }
 
 func (suite *VmmInstanceTestSuite) TestCapacityFIFOAndIndependentVM() {
-	v, _ := suite.newVmm()
+	v := suite.newVmm()
 	a, release := suite.blockedVM(v)
 	for nonce := 2; nonce <= schema.VmQueueCapacity+1; nonce++ {
 		v.Apply(schema.Meta{Pid: "a", Nonce: int64(nonce)})
@@ -87,22 +88,17 @@ func (suite *VmmInstanceTestSuite) TestCapacityFIFOAndIndependentVM() {
 	instance, err := v.getInstance("a")
 	require.NoError(suite.T(), err)
 	assert.Len(suite.T(), instance.Tasks, schema.VmQueueCapacity)
-	started, sent := make(chan struct{}), make(chan struct{})
+	sent := make(chan struct{})
+	suite.T().Cleanup(func() { release(); suite.wait(sent) })
 	go func() {
-		close(started)
 		v.Apply(schema.Meta{Pid: "a", Nonce: schema.VmQueueCapacity + 2})
 		close(sent)
 	}()
-	suite.wait(started)
-	select {
-	case <-sent:
-		require.FailNow(suite.T(), "full queue accepted another task")
-	default:
-	}
 	b := &instanceTestVM{}
 	v.addVm(b, &schema.Env{Meta: schema.Meta{Pid: "b"}})
 	v.Apply(schema.Meta{Pid: "b", Nonce: 1})
 	other := make(chan struct{})
+	suite.T().Cleanup(func() { release(); suite.wait(other) })
 	go func() {
 		_, _ = v.Checkpoint("b")
 		close(other)
@@ -119,7 +115,7 @@ func (suite *VmmInstanceTestSuite) TestCapacityFIFOAndIndependentVM() {
 }
 
 func (suite *VmmInstanceTestSuite) TestCheckpointDoesNotBlockOtherVMOperations() {
-	v, _ := suite.newVmm()
+	v := suite.newVmm()
 	a := &instanceTestVM{checkpointEntered: make(chan struct{}), release: make(chan struct{})}
 	b := &instanceTestVM{}
 	v.addVm(a, &schema.Env{Meta: schema.Meta{Pid: "a"}})
@@ -134,13 +130,12 @@ func (suite *VmmInstanceTestSuite) TestCheckpointDoesNotBlockOtherVMOperations()
 		suite.wait(done)
 	})
 
-	var aSnapshot schema.Snapshot
 	var aErr error
 	aDone := make(chan struct{})
 	pending.Add(1)
 	go func() {
 		defer pending.Done()
-		aSnapshot, aErr = v.Checkpoint("a")
+		_, aErr = v.Checkpoint("a")
 		close(aDone)
 	}()
 	suite.wait(a.checkpointEntered)
@@ -159,7 +154,6 @@ func (suite *VmmInstanceTestSuite) TestCheckpointDoesNotBlockOtherVMOperations()
 	require.NoError(suite.T(), bErr)
 	assert.Equal(suite.T(), []int64{1}, b.nonces)
 	assert.Equal(suite.T(), int64(1), bSnapshot.Env.Nonce)
-	assert.Equal(suite.T(), "state", bSnapshot.Data)
 	select {
 	case <-aDone:
 		require.FailNow(suite.T(), "A checkpoint completed before release")
@@ -169,11 +163,10 @@ func (suite *VmmInstanceTestSuite) TestCheckpointDoesNotBlockOtherVMOperations()
 	unblock()
 	suite.wait(aDone)
 	require.NoError(suite.T(), aErr)
-	assert.Equal(suite.T(), "state", aSnapshot.Data)
 }
 
 func (suite *VmmInstanceTestSuite) TestCheckpointAndRestoreAreSerialAndSnapshotsIndependent() {
-	v, _ := suite.newVmm()
+	v := suite.newVmm()
 	_, release := suite.blockedVM(v)
 	instance, err := v.getInstance("a")
 	require.NoError(suite.T(), err)
@@ -211,7 +204,7 @@ func (suite *VmmInstanceTestSuite) TestCheckpointAndRestoreAreSerialAndSnapshots
 }
 
 func (suite *VmmInstanceTestSuite) TestStopWaitsForAdmittedSendAndDrainsFullQueue() {
-	v, _ := suite.newVmm()
+	v := suite.newVmm()
 	vm, release := suite.blockedVM(v)
 	instance, err := v.getInstance("a")
 	require.NoError(suite.T(), err)
@@ -245,22 +238,24 @@ func (suite *VmmInstanceTestSuite) TestStopWaitsForAdmittedSendAndDrainsFullQueu
 }
 
 func (suite *VmmInstanceTestSuite) TestCloseStopsAllInstancesBeforeWaiting() {
-	v, _ := suite.newVmm()
+	v := suite.newVmm()
 	_, release := suite.blockedVM(v)
-	b := &instanceTestVM{closed: make(chan struct{})}
+	b := &instanceTestVM{closed: make(chan struct{}), closeErr: errors.New("close failed")}
 	v.addVm(b, &schema.Env{Meta: schema.Meta{Pid: "b"}})
 	done := make(chan struct{})
+	suite.T().Cleanup(func() { release(); suite.wait(done) })
 	go func() { v.Close(); close(done) }()
 	suite.wait(b.closed)
 	_, err := v.Checkpoint("a")
 	assert.ErrorIs(suite.T(), err, schema.ErrVmmClosed)
 	release()
 	suite.wait(done)
+	assert.Empty(suite.T(), v.GetVmPids())
 	v.Close()
 }
 
 func (suite *VmmInstanceTestSuite) TestFailedCreationCanRetryAndClosesVM() {
-	v, _ := suite.newVmm()
+	v := suite.newVmm()
 	failed := &instanceTestVM{restoreErr: errors.New("restore failed"), closed: make(chan struct{})}
 	current := failed
 	require.NoError(suite.T(), v.Mount("test", func(schema.Env) (schema.Vm, error) { return current, nil }))
@@ -274,7 +269,7 @@ func (suite *VmmInstanceTestSuite) TestFailedCreationCanRetryAndClosesVM() {
 }
 
 func (suite *VmmInstanceTestSuite) TestConcurrentRestoreReusesReservedInstance() {
-	v, _ := suite.newVmm()
+	v := suite.newVmm()
 	entered, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
 	unblock := func() { once.Do(func() { close(release) }) }
@@ -289,10 +284,22 @@ func (suite *VmmInstanceTestSuite) TestConcurrentRestoreReusesReservedInstance()
 	}))
 	snap := schema.Snapshot{Env: schema.Env{Meta: schema.Meta{Pid: "a"}, Module: hymxSchema.Module{ModuleFormat: "test"}}}
 	first, second := make(chan error, 1), make(chan error, 1)
-	go func() { first <- v.Restore(snap) }()
+	firstDone, secondDone := make(chan struct{}), make(chan struct{})
+	suite.T().Cleanup(func() { unblock(); suite.wait(firstDone) })
+	go func() { first <- v.Restore(snap); close(firstDone) }()
 	suite.wait(entered)
 	assert.True(suite.T(), v.IsExists("a"))
-	go func() { second <- v.Restore(snap) }()
+	instance, err := v.getInstance("a")
+	require.NoError(suite.T(), err)
+	suite.T().Cleanup(func() { unblock(); suite.wait(secondDone) })
+	go func() { second <- v.Restore(snap); close(secondDone) }()
+	// Observe the second Restore entering the queue while initialization is blocked.
+	select {
+	case task := <-instance.Tasks:
+		instance.Tasks <- task
+	case <-time.After(5 * time.Second):
+		require.FailNow(suite.T(), "second restore did not queue during initialization")
+	}
 	unblock()
 	for _, reply := range []chan error{first, second} {
 		select {

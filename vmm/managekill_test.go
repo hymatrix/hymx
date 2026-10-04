@@ -42,6 +42,18 @@ func newKillTestVMM() *Vmm {
 	return New(nil, &nodeSchema.Info{}, nil, nil, nil)
 }
 
+func (v *Vmm) addVm(vm schema.Vm, env *schema.Env) {
+	_, task, err := v.createInstance(env.Meta.Pid, func(instance *schema.VmInstance) error {
+		copy := cloneEnv(*env)
+		instance.Vm = vm
+		instance.Env = &copy
+		return nil
+	})
+	if err == nil {
+		<-task.Done
+	}
+}
+
 func (suite *VmmKillTestSuite) TestKillClosesAndRemovesVM() {
 	v := newKillTestVMM()
 	vm := &killTestVM{}
@@ -85,18 +97,6 @@ func (suite *VmmKillTestSuite) TestKillCloseFailureRemovesVMAndAllowsRestore() {
 	assert.NoError(suite.T(), err)
 	require.NoError(suite.T(), v.Kill("pid-1"))
 	assert.True(suite.T(), replacement.closed)
-}
-
-func (suite *VmmKillTestSuite) TestCloseFailureRemovesVM() {
-	v := newKillTestVMM()
-	vm := &killTestVM{err: errors.New("close failed")}
-	v.addVm(vm, &schema.Env{Meta: schema.Meta{Pid: "pid-1"}})
-
-	v.Close()
-
-	assert.True(suite.T(), vm.closed)
-	assert.False(suite.T(), v.IsExists("pid-1"))
-	assert.Empty(suite.T(), v.GetVmPids())
 }
 
 func (suite *VmmKillTestSuite) TestKillMissingProcessReturnsProcessNotFound() {
