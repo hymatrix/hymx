@@ -15,32 +15,30 @@ func (v *Vmm) Mount(moduleFormat string, spawner schema.VmSpawnFunc) error {
 }
 
 func (v *Vmm) Kill(pid string) (err error) {
-	vm, _, err := v.GetVm(pid)
+	instance, err := v.getInstance(pid)
 	if err != nil {
 		return
 	}
 
-	v.vmsLockMu.Lock()
-	defer v.vmsLockMu.Unlock()
-	if err = vm.Close(); err != nil {
-		return err
-	}
-	delete(v.vms, pid)
-	delete(v.vmsEnv, pid)
-
-	return
+	v.stopInstance(instance)
+	<-instance.Done
+	return instance.CloseErr
 }
 
 func (v *Vmm) KillAll() {
-	pids := v.GetVmPids()
-	if len(pids) == 0 {
-		return
+	v.vmsLockMu.RLock()
+	instances := make([]*schema.VmInstance, 0, len(v.vms))
+	for _, instance := range v.vms {
+		instances = append(instances, instance)
 	}
+	v.vmsLockMu.RUnlock()
 
-	for _, pid := range pids {
-		if err := v.Kill(pid); err != nil {
-			log.Error("kill process failed", "pid", pid)
-		}
+	// Stop admission on every instance before waiting for any one to exit.
+	for _, instance := range instances {
+		v.stopInstance(instance)
+	}
+	for _, instance := range instances {
+		<-instance.Done
 	}
 }
 
@@ -53,18 +51,28 @@ func (v *Vmm) IsExists(pid string) (ok bool) {
 }
 
 func (v *Vmm) GetVm(pid string) (vm schema.Vm, env *schema.Env, err error) {
-	v.vmsLockMu.RLock()
-	defer v.vmsLockMu.RUnlock()
-
-	ok := false
-	if vm, ok = v.vms[pid]; !ok {
-		err = schema.ErrProcessNotFound
-		return
+	instance, err := v.getInstance(pid)
+	if err != nil {
+		return nil, nil, err
 	}
-	if env, ok = v.vmsEnv[pid]; !ok {
-		err = schema.ErrProcessEnvNotFound
-	}
+	// Return an environment copy; operations on Vm must still use the task loop.
+	err = v.call(instance, func(instance *schema.VmInstance) error {
+		vm = instance.Vm
+		copy := cloneEnv(*instance.Env)
+		env = &copy
+		return nil
+	})
 	return
+}
+
+// GetVmQueueLength returns queued tasks, excluding the task currently executing.
+// The value is observational; it does not reserve space for a subsequent send.
+func (v *Vmm) GetVmQueueLength(pid string) (int, error) {
+	instance, err := v.getInstance(pid)
+	if err != nil {
+		return 0, err
+	}
+	return len(instance.Tasks), nil
 }
 
 func (v *Vmm) GetVmPids() (pids []string) {
@@ -122,68 +130,45 @@ func (v *Vmm) IsRecovering(pid string) bool {
 }
 
 func (v *Vmm) Checkpoint(pid string) (snap schema.Snapshot, err error) {
-	if !v.IsExists(pid) {
-		err = schema.ErrProcessNotFound
+	instance, err := v.getInstance(pid)
+	if err != nil {
 		return
 	}
-
-	res := make(chan schema.Snapshot)
-	defer close(res)
-
-	v.ckpChan <- schema.Checkpoint{
-		Pid: pid,
-		Res: res,
-	}
-
-	snap = <-res
-	if snap.Err != nil {
-		err = snap.Err
-	}
+	err = v.call(instance, func(instance *schema.VmInstance) error {
+		snap.Data, snap.Err = instance.Vm.Checkpoint()
+		snap.Env = cloneEnv(*instance.Env)
+		return snap.Err
+	})
+	snap.Err = err
 	return
 }
 
 func (v *Vmm) Restore(snap schema.Snapshot) error {
-	vm, _, err := v.GetVm(snap.Env.Meta.Pid)
-	if err != nil {
-		if vm, err = v.spawn(snap.Env); err != nil {
+	snap.Env = cloneEnv(snap.Env)
+	restore := func(instance *schema.VmInstance) error {
+		if instance.Vm == nil {
+			vm, err := v.spawn(cloneEnv(snap.Env))
+			if err != nil {
+				return err
+			}
+			instance.Vm = vm
+		}
+		if err := instance.Vm.Restore(snap.Data); err != nil {
 			return err
 		}
+		instance.Env = &snap.Env
+		return nil
 	}
-
-	if err = vm.Restore(snap.Data); err != nil {
+	instance, task, err := v.createInstance(snap.Env.Meta.Pid, restore)
+	if err == schema.ErrProcessAlreadyExists {
+		return v.call(instance, restore)
+	}
+	if err != nil {
 		return err
 	}
-	v.addVm(vm, &snap.Env)
-	return nil
-}
-
-func (v *Vmm) checkpoint(pid string, res chan<- schema.Snapshot) {
-	vm, env, err := v.GetVm(pid)
-	if err != nil {
-		res <- schema.Snapshot{
-			Err: err,
-		}
-		return
+	<-task.Done
+	if task.Err != nil {
+		<-instance.Done
 	}
-
-	data, err := vm.Checkpoint()
-	if err != nil {
-		res <- schema.Snapshot{
-			Err: err,
-		}
-		return
-	}
-
-	res <- schema.Snapshot{
-		Env:  *env,
-		Data: data,
-	}
-}
-
-func (v *Vmm) addVm(vm schema.Vm, env *schema.Env) {
-	v.vmsLockMu.Lock()
-	defer v.vmsLockMu.Unlock()
-
-	v.vms[env.Meta.Pid] = vm
-	v.vmsEnv[env.Meta.Pid] = env
+	return task.Err
 }

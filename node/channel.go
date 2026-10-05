@@ -6,7 +6,6 @@ import (
 )
 
 func (n *Node) runMsgChan() {
-	n.wg.Add(1)
 	defer n.wg.Done()
 	for {
 		select {
@@ -38,7 +37,6 @@ func (n *Node) runMsgChan() {
 }
 
 func (n *Node) runProcChan() {
-	n.wg.Add(1)
 	defer n.wg.Done()
 	for {
 		select {
@@ -70,81 +68,55 @@ func (n *Node) runProcChan() {
 }
 
 func (n *Node) runResultChan() {
-	n.wg.Add(1)
-	defer n.wg.Done()
-	for {
-		select {
-		case <-n.ctx.Done():
-
-			return
-
-		case result := <-n.resultChan:
-			// handle result
-			n.resultHandlerLockMu.RLock()
-			for _, handler := range n.resultHandlers {
-				handler(result)
-			}
-			n.resultHandlerLockMu.RUnlock()
-
-			// apply mode  => save cache and result
-			// replay mode => save cache and result
-			// dryrun mode  => NOT save cache and result
-			if result.Mode == vmmSchema.ExecModeDryRun {
-				continue
-			}
-
-			// save cache to db
-			for k, v := range result.Cache {
-				if err := n.db.SaveCache(result.FromProcess, k, v); err != nil {
-					log.Error("save cache failed", "pid", result.FromProcess, "k", k, "v", v)
-				}
-			}
-
-			// save result to db, remove cache in result
-			result.Cache = nil
-			if err := n.db.SaveResult(result); err != nil {
-				log.Error("save result failed", "msgid", result.ItemId, "err", err)
-			}
-
+	defer n.outputWg.Done()
+	for result := range n.resultChan {
+		// handle result
+		n.resultHandlerLockMu.RLock()
+		for _, handler := range n.resultHandlers {
+			handler(result)
 		}
+		n.resultHandlerLockMu.RUnlock()
+
+		// apply mode  => save cache and result
+		// replay mode => save cache and result
+		// dryrun mode  => NOT save cache and result
+		if result.Mode == vmmSchema.ExecModeDryRun {
+			continue
+		}
+
+		// save cache to db
+		for k, v := range result.Cache {
+			if err := n.db.SaveCache(result.FromProcess, k, v); err != nil {
+				log.Error("save cache failed", "pid", result.FromProcess, "k", k, "v", v)
+			}
+		}
+
+		// save result to db, remove cache in result
+		result.Cache = nil
+		if err := n.db.SaveResult(result); err != nil {
+			log.Error("save result failed", "msgid", result.ItemId, "err", err)
+		}
+
 	}
 }
 
 func (n *Node) runAssignmentChan() {
-	n.wg.Add(1)
-	defer n.wg.Done()
-	for {
-		select {
-		case <-n.ctx.Done():
-			return
+	defer n.outputWg.Done()
+	for assignmentResult := range n.assignResChan {
+		log.Debug("assign chan get notice", "msgid", assignmentResult.Item.Id)
 
-		case assignmentResult := <-n.assignResChan:
-			log.Debug("assign chan get notice", "msgid", assignmentResult.Item.Id)
-
-			// handle assignment success
-			n.assignResHandlerLockMu.RLock()
-			for _, handler := range n.assignResHandlers {
-				handler(assignmentResult)
-			}
-			n.assignResHandlerLockMu.RUnlock()
+		// handle assignment success
+		n.assignResHandlerLockMu.RLock()
+		for _, handler := range n.assignResHandlers {
+			handler(assignmentResult)
 		}
+		n.assignResHandlerLockMu.RUnlock()
 	}
 }
 
 func (n *Node) runOutboxChan() {
-	n.wg.Add(1)
-	defer n.wg.Done()
-	for {
-		select {
-
-		case <-n.ctx.Done():
-
-			return
-
-		case o := <-n.outboxChan:
-
-			n.outbox(o)
-
-		}
+	defer n.outputWg.Done()
+	for o := range n.outboxChan {
+		n.outbox(o)
 	}
 }

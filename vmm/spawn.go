@@ -16,7 +16,7 @@ func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.
 	if v.IsExists(pid) {
 		return schema.ErrProcessAlreadyExists
 	}
-	if v.registry == nil && module.ModuleFormat != schema.ModuleFormatRegistry && module.ModuleFormat != schema.ModuleFormatToken {
+	if v.RegistryId() == "" && module.ModuleFormat != schema.ModuleFormatRegistry && module.ModuleFormat != schema.ModuleFormatToken {
 		log.Debug("wait for registry spawned", "pid", pid)
 		select {
 		case <-v.ctx.Done():
@@ -35,21 +35,30 @@ func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.
 		ReceivedSeq: map[string]int64{},
 	}
 
-	vm, err := v.spawn(*env)
+	copy := cloneEnv(*env)
+	instance, task, err := v.createInstance(pid, func(instance *schema.VmInstance) error {
+		vm, err := v.spawn(cloneEnv(copy))
+		if err != nil {
+			return err
+		}
+		instance.Vm = vm
+		instance.Env = &copy
+		result := v.genSpawnResult(instance.Env)
+		result.Mode = meta.Mode
+		v.outbox(instance.Env, result)
+		if meta.Mode != schema.ExecModeApply && meta.Nonce == meta.RecoveryMaxNonce {
+			v.RecoveryUnlock(meta.Pid)
+		}
+		return nil
+	})
 	if err != nil {
-		return
+		return err
 	}
-	v.addVm(vm, env)
-
-	result := v.genSpawnResult(env)
-	result.Mode = meta.Mode
-	// send to outbox
-	v.outbox(env, result)
-	if meta.Mode != schema.ExecModeApply && meta.Nonce == meta.RecoveryMaxNonce {
-		v.RecoveryUnlock(meta.Pid)
+	<-task.Done
+	if task.Err != nil {
+		<-instance.Done
 	}
-
-	return
+	return task.Err
 }
 func (v *Vmm) spawn(env schema.Env) (vm schema.Vm, err error) {
 	v.vmsLockMu.RLock()
@@ -80,9 +89,9 @@ func (v *Vmm) genSpawnResult(env *schema.Env) (result *schema.VmmResult) {
 	}
 
 	// registry process
-	if v.registry != nil {
+	if registryId := v.RegistryId(); registryId != "" {
 		registerMsg := &schema.ResMessage{
-			Target: v.registry.GetId(),
+			Target: registryId,
 			Tags: []goarSchema.Tag{
 				{Name: "Action", Value: "RegisterProcess"},
 				{Name: "Pid", Value: env.Meta.Pid},

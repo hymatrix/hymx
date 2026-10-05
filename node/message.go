@@ -38,6 +38,14 @@ func (n *Node) handleMessage(
 		return
 	}
 
+	pending, err := n.vmm.GetVmQueueLength(pid)
+	if err != nil {
+		return err
+	}
+	if pending >= schema.VmPendingMessageLimit {
+		return schema.ErrProcessBusy
+	}
+
 	n.assignMesChan <- schema.AssignMessage{
 		Pid:     pid,
 		AccId:   accid,
