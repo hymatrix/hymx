@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -74,9 +75,10 @@ func (suite *OutboxIntegrationTestSuite) TestRecreatedNodeSendsStoredOutbox() {
 	first := New(nil, bundler, redisURL, "", "", &nodeSchema.Info{}, nil)
 	t.Cleanup(first.db.(*rdb.RDB).Close)
 	t.Cleanup(first.sdk.Close)
-	t.Cleanup(first.Close)
+	closeFirst := sync.OnceFunc(first.Close)
+	t.Cleanup(closeFirst)
 	require.NoError(t, first.db.PushOutbox("sender", item.Target, item))
-	first.Close()
+	closeFirst()
 	first.db.(*rdb.RDB).Close()
 
 	_, assignment, err := first.signAssign(item.Target, item.Id, 0)
