@@ -1,7 +1,6 @@
 package node
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -86,13 +85,36 @@ func (n *Node) applyProcess(
 }
 
 func (n *Node) LoadModule(itemId string) (module hymxSchema.Module, err error) {
-	// try load from local first
-	module, err = n.loadModuleByLocal(itemId)
-	if err == nil {
-		return
+	if cached, ok := n.moduleCache.Load(itemId); ok {
+		return cloneModule(cached.(hymxSchema.Module)), nil
 	}
-	// try load from chainkit if not found in local
-	return n.downloadModule(itemId)
+	value, err, _ := n.moduleLoads.Do(itemId, func() (interface{}, error) {
+		if cached, ok := n.moduleCache.Load(itemId); ok {
+			return cached, nil
+		}
+		module, err := n.loadModuleByLocal(itemId)
+		if err != nil {
+			// Downloads still decode a full bundle in goar. Serialize different
+			// missing modules too, rather than multiplying that memory cost.
+			n.moduleDownloadMu.Lock()
+			module, err = n.downloadModule(itemId)
+			n.moduleDownloadMu.Unlock()
+		}
+		if err != nil {
+			return nil, err
+		}
+		n.moduleCache.Store(itemId, module)
+		return module, nil
+	})
+	if err != nil {
+		return module, err
+	}
+	return cloneModule(value.(hymxSchema.Module)), nil
+}
+
+func cloneModule(module hymxSchema.Module) hymxSchema.Module {
+	module.Tags = append([]goarSchema.Tag(nil), module.Tags...)
+	return module
 }
 
 func (n *Node) loadModuleByLocal(itemId string) (module hymxSchema.Module, err error) {
@@ -107,17 +129,16 @@ func (n *Node) loadModuleByLocal(itemId string) (module hymxSchema.Module, err e
 		return
 	}
 
-	data, err := os.ReadFile(filename)
+	file, err := os.Open(filename)
 	if err != nil {
 		return
 	}
-
-	var item goarSchema.BundleItem
-	if err = json.Unmarshal(data, &item); err != nil {
+	defer file.Close()
+	tags, err := readModuleTags(file)
+	if err != nil {
 		return
 	}
-
-	return utils.TagsToModule(item.Tags)
+	return utils.TagsToModule(tags)
 }
 
 func (n *Node) downloadModule(itemId string) (module hymxSchema.Module, err error) {
