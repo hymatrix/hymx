@@ -3,7 +3,7 @@ package node
 import (
 	"errors"
 	"fmt"
-	"sync"
+	"sort"
 
 	"github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/utils"
@@ -12,44 +12,89 @@ import (
 )
 
 func (n *Node) runRecovery() error {
-	// get all process id and nonce from db
-	allProcessId, allNonce, err := n.db.GetAllProcess()
+	pids, nonces, err := n.db.GetAllProcess()
 	if err != nil {
 		return err
 	}
+	return n.recoverProcesses(pids, nonces, vmmSchema.ExecModeDryRun)
+}
 
-	pCount := len(allProcessId)
-	var wg sync.WaitGroup
-	wg.Add(pCount)
+type recoveryPlan struct {
+	order         []int
+	coreCount     int
+	registryTasks map[int]bool
+}
 
-	// for each process id, create new vm and start it
-	for i := 0; i < pCount; i++ {
-		pid := allProcessId[i]
-		maxNonce := allNonce[i]
-
-		err := n.recoveryTaskPool.Submit(func() {
-			defer wg.Done()
-
-			ckpId, err := n.db.GetCheckpointIndex(pid)
-			if err != nil {
-				log.Error("can not get checkpoint index", "pid", pid, "err", err)
+// Resolve metadata sequentially, retain valid jobs, and report failures by PID.
+// Core tasks must finish before admitting ordinary VMs that depend on registry.
+func (n *Node) recoveryOrder(pids []string) (recoveryPlan, error) {
+	plan := recoveryPlan{registryTasks: make(map[int]bool)}
+	priorities := make([]int, len(pids))
+	type moduleResult struct {
+		format string
+		err    error
+	}
+	modules := make(map[string]moduleResult)
+	var failures []error
+	for i, pid := range pids {
+		moduleID, err := n.recoveryModuleID(pid)
+		priority := 2
+		if err == nil {
+			result, ok := modules[moduleID]
+			if !ok {
+				module, loadErr := n.LoadModule(moduleID)
+				result = moduleResult{format: module.ModuleFormat, err: loadErr}
+				modules[moduleID] = result
 			}
-
-			if err := n.recoveryProcess(pid, maxNonce, ckpId, vmmSchema.ExecModeDryRun); err != nil {
-				log.Error("recovery process error", "pid", pid, "maxNonce", maxNonce, "ckpId", ckpId, "err", err)
+			err = result.err
+			switch result.format {
+			case vmmSchema.ModuleFormatRegistry:
+				priority = 0
+			case vmmSchema.ModuleFormatToken:
+				priority = 1
 			}
-		})
+		}
 		if err != nil {
-			log.Error("submit recovery task error", "pid", pid, "maxNonce", maxNonce, "err", err)
+			failure := fmt.Errorf("skip recovery process %s (module %s): %w", pid, moduleID, err)
+			log.Error("skipping recovery process", "pid", pid, "module", moduleID, "err", err)
+			failures = append(failures, failure)
+			continue
+		}
+		priorities[i] = priority
+		plan.order = append(plan.order, i)
+		if priority < 2 {
+			plan.coreCount++
+		}
+		if priority == 0 {
+			plan.registryTasks[i] = true
 		}
 	}
+	sort.SliceStable(plan.order, func(i, j int) bool {
+		return priorities[plan.order[i]] < priorities[plan.order[j]]
+	})
+	return plan, errors.Join(failures...)
+}
 
-	// wait all process recoverd
-	wg.Wait()
-
-	// finish recovery
-	log.Info("recovery node successfully!")
-	return nil
+func (n *Node) recoveryModuleID(pid string) (string, error) {
+	msg, err := n.db.GetMessageByNonce(pid, 0)
+	if err != nil || msg == nil {
+		if n.sdk == nil {
+			return "", fmt.Errorf("spawn message unavailable")
+		}
+		remote, err := n.sdk.Client.GetMessageByNonce(pid, 0)
+		if err != nil {
+			return "", err
+		}
+		msg = &remote
+	}
+	process, err := utils.TagsToProcess(msg.Tags)
+	if err != nil {
+		return "", err
+	}
+	if process.Module == "" {
+		return "", fmt.Errorf("spawn message has no module")
+	}
+	return process.Module, nil
 }
 
 func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string, mode vmmSchema.ExecMode) error {
@@ -94,8 +139,7 @@ func (n *Node) recoveryProcess(pid string, maxNonce int64, ckpId string, mode vm
 			}
 
 			if err = n.HandleMode(*msg, assign, mode, maxNonce); err != nil {
-				log.Error("handle message failed in recover", "nonce", nonce, "err", err)
-				continue
+				return fmt.Errorf("recover process %s at nonce %d: %w", pid, nonce, err)
 			}
 		}
 
@@ -110,7 +154,7 @@ func (n *Node) getMessageAndAssignByNonce(pid string, nonce int64) (msgItem, ass
 	assignItem, err2 := n.db.GetAssignByNonce(pid, nonce)
 
 	// If both are available locally, return them
-	if err1 == nil || err2 == nil || msgItem != nil || assignItem != nil {
+	if err1 == nil && err2 == nil && msgItem != nil && assignItem != nil {
 		return msgItem, assignItem, nil
 	}
 
@@ -121,6 +165,9 @@ func (n *Node) getMessageAndAssignByNonce(pid string, nonce int64) (msgItem, ass
 	result, err := n.chainkit.DownloadByPid(pid, nonce, nonce)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(result) == 0 || result[0].Message == nil || result[0].Assignment == nil {
+		return nil, nil, fmt.Errorf("message or assignment unavailable for process %s at nonce %d", pid, nonce)
 	}
 	msgItem = result[0].Message
 	assignItem = result[0].Assignment

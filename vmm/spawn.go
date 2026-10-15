@@ -17,6 +17,9 @@ func (v *Vmm) Spawn(meta schema.Meta, process hySchema.Process, module hySchema.
 		return schema.ErrProcessAlreadyExists
 	}
 	if v.registry == nil && module.ModuleFormat != schema.ModuleFormatRegistry && module.ModuleFormat != schema.ModuleFormatToken {
+		if meta.Mode == schema.ExecModeDryRun || meta.Mode == schema.ExecModeReplay {
+			return schema.ErrRegistryNotFound
+		}
 		log.Debug("wait for registry spawned", "pid", pid)
 		select {
 		case <-v.ctx.Done():

@@ -19,6 +19,7 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
+	"golang.org/x/sync/singleflight"
 )
 
 var log = common.NewLog("node")
@@ -60,6 +61,9 @@ type Node struct {
 
 	recoveryTaskPool *ants.Pool
 	registrySpawned  chan struct{}
+	moduleCache      sync.Map
+	moduleLoads      singleflight.Group
+	moduleDownloadMu sync.Mutex
 }
 
 func New(
@@ -70,12 +74,17 @@ func New(
 	hymxURL string,
 	nodeInfo *schema.Info,
 	chainkit *chainkit.Chainkit,
+	options ...Option,
 ) *Node {
 	outboxChan := make(chan vmmSchema.Outbox, 1000)
 	resultChan := make(chan vmmSchema.VmmResult, 1000)
 	registryCh := make(chan struct{}, 1)
 
-	taskPool, err := ants.NewPool(1000)
+	config := nodeOptions{recoveryConcurrency: DefaultRecoveryConcurrency}
+	for _, option := range options {
+		option(&config)
+	}
+	taskPool, err := ants.NewPool(config.recoveryConcurrency)
 	if err != nil {
 		panic(err)
 	}
@@ -126,19 +135,27 @@ func (n *Node) Run(startMode string) {
 	go n.runResultChan()
 	go n.runAssignmentChan()
 	go n.runOutboxChan()
-
-	if startMode == schema.StartModeRebuild {
-		log.Info("start mode selected", "startMode", startMode)
-		go n.runReplay()
-	} else {
-		log.Info("start mode selected", "startMode", startMode)
-		go n.runRecovery()
-	}
 	n.runJoin()
 	if n.info.Node.Role == registrySchema.RoleMain && startMode == schema.StartModeRebuild {
 		n.runDefaultFork(vmmSchema.ExecModeReplay)
 	} else {
 		n.runDefaultFork(vmmSchema.ExecModeDryRun)
+	}
+
+	if startMode == schema.StartModeRebuild {
+		log.Info("start mode selected", "startMode", startMode)
+		go func() {
+			if err := n.runReplay(); err != nil {
+				log.Error("node replay finished with errors", "err", err)
+			}
+		}()
+	} else {
+		log.Info("start mode selected", "startMode", startMode)
+		go func() {
+			if err := n.runRecovery(); err != nil {
+				log.Error("node recovery finished with errors", "err", err)
+			}
+		}()
 	}
 }
 
