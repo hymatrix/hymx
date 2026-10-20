@@ -142,13 +142,11 @@ func (n *Node) retryForkClients(pid string, clients []sdk.Client, bootstrapURL s
 	if errors.As(err, &status) {
 		retry = status.StatusCode/100 == 5
 	}
-	if !retry {
-		return clients
-	}
 
 	failedURL := clients[0].BaseURL()
+	// Refresh on every failure: a stale URL can answer 404 for a process it no longer hosts.
 	clients = n.refreshForkClients(pid, clients, bootstrapURL)
-	if len(clients) > 1 && clients[0].BaseURL() == failedURL {
+	if retry && len(clients) > 1 && clients[0].BaseURL() == failedURL {
 		// Try the next candidate on the next polling cycle, retaining fallback URLs.
 		failed := clients[0]
 		copy(clients, clients[1:])
