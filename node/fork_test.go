@@ -183,9 +183,16 @@ func (suite *NodeForkTestSuite) TestNotFoundKeepsExplicitSourceAndConnection() {
 				w.WriteHeader(http.StatusServiceUnavailable)
 			}))
 			suite.T().Cleanup(alternate.Close)
-			n, _ := suite.newForkNode(registrySchema.Node{AccId: "stale", URL: alternate.URL})
+			n, _ := suite.newForkNode(
+				registrySchema.Node{AccId: "source", URL: source.URL},
+				registrySchema.Node{AccId: "alternate", URL: alternate.URL},
+			)
 			clients := []sdk.Client{*sdk.NewClient(source.URL)}
-			suite.T().Cleanup(clients[0].Close)
+			suite.T().Cleanup(func() {
+				for _, client := range clients {
+					client.Close()
+				}
+			})
 			for i := 0; i < 4; i++ {
 				_, err := clients[0].GetMessageByNonce("process", 7)
 				if err == nil {
@@ -196,6 +203,7 @@ func (suite *NodeForkTestSuite) TestNotFoundKeepsExplicitSourceAndConnection() {
 				require.True(suite.T(), errors.As(err, &status))
 				assert.Equal(suite.T(), http.StatusNotFound, status.StatusCode)
 				assert.Equal(suite.T(), source.URL, got[0].BaseURL())
+				clients = got
 			}
 			assert.EqualValues(suite.T(), 1, connections.Load())
 			assert.Zero(suite.T(), alternateRequests.Load())
@@ -204,7 +212,10 @@ func (suite *NodeForkTestSuite) TestNotFoundKeepsExplicitSourceAndConnection() {
 }
 
 func (suite *NodeForkTestSuite) TestRetryRetainsConfiguredFallback() {
-	n, _ := suite.newForkNode(registrySchema.Node{AccId: "remote", URL: "http://new"})
+	n, _ := suite.newForkNode(
+		registrySchema.Node{AccId: "remote", URL: "http://new"},
+		registrySchema.Node{AccId: "other", URL: "http://other"},
+	)
 	clients := []sdk.Client{*sdk.NewClient("http://configured")}
 	suite.T().Cleanup(func() {
 		for _, client := range clients {
@@ -213,10 +224,13 @@ func (suite *NodeForkTestSuite) TestRetryRetainsConfiguredFallback() {
 	})
 	clients = n.retryForkClients("process", clients, "http://configured",
 		&url.Error{Op: "Get", URL: "http://configured", Err: errors.New("connection refused")})
-	require.Len(suite.T(), clients, 2)
+	require.Len(suite.T(), clients, 3)
 	assert.Equal(suite.T(), "http://new", clients[0].BaseURL())
-	assert.Equal(suite.T(), "http://configured", clients[1].BaseURL())
+	assert.Equal(suite.T(), "http://configured", clients[2].BaseURL())
 
+	clients = n.retryForkClients("process", clients, "http://configured",
+		&sdkSchema.HTTPStatusError{StatusCode: http.StatusServiceUnavailable})
+	assert.Equal(suite.T(), "http://other", clients[0].BaseURL())
 	clients = n.retryForkClients("process", clients, "http://configured",
 		&sdkSchema.HTTPStatusError{StatusCode: http.StatusServiceUnavailable})
 	assert.Equal(suite.T(), "http://configured", clients[0].BaseURL())
@@ -236,6 +250,22 @@ func (suite *NodeForkTestSuite) TestNotFoundDropsStaleRegistryURL() {
 	assert.Equal(suite.T(), "http://new", clients[0].BaseURL())
 }
 
+func (suite *NodeForkTestSuite) TestNotFoundDemotesStaleConfiguredSource() {
+	n, _ := suite.newForkNode(registrySchema.Node{AccId: "remote", URL: "http://new"})
+	clients := []sdk.Client{*sdk.NewClient("http://old")}
+	original := clients[0]
+	suite.T().Cleanup(func() {
+		for _, client := range clients {
+			client.Close()
+		}
+	})
+	clients = n.retryForkClients("process", clients, "http://old",
+		&sdkSchema.HTTPStatusError{StatusCode: http.StatusNotFound})
+	require.Len(suite.T(), clients, 2)
+	assert.Equal(suite.T(), "http://new", clients[0].BaseURL())
+	assert.Equal(suite.T(), original, clients[1])
+}
+
 func (suite *NodeForkTestSuite) TestForkRefreshesAfterReadFailure() {
 	for _, failedPath := range []string{"/messageByNonce/process/0", "/assignmentByNonce/process/0"} {
 		suite.Run(failedPath, func() {
@@ -246,7 +276,7 @@ func (suite *NodeForkTestSuite) TestForkRefreshesAfterReadFailure() {
 				if r.URL.Path == failedPath {
 					enteredOnce.Do(func() { close(entered) })
 					<-release
-					w.WriteHeader(http.StatusServiceUnavailable)
+					w.WriteHeader(http.StatusNotFound)
 					return
 				}
 				assert.NoError(suite.T(), json.NewEncoder(w).Encode(forkTestMessage()))

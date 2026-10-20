@@ -173,6 +173,8 @@ func (n *Node) refreshForkClients(pid string, clients []sdk.Client, bootstrapURL
 	if len(urls) == 0 {
 		return clients
 	}
+	bootstrapFallback := bootstrapURL != "" && !urls[bootstrapURL] &&
+		len(clients) > 0 && clients[0].BaseURL() == bootstrapURL
 	if bootstrapURL != "" {
 		urls[bootstrapURL] = true
 	}
@@ -196,6 +198,17 @@ func (n *Node) refreshForkClients(pid string, clients []sdk.Client, bootstrapURL
 	for _, url := range added {
 		refreshed = append(refreshed, *sdk.NewClient(url))
 		log.Info("fork candidate added", "pid", pid, "url", url)
+	}
+	// Demote a failed, unlisted configured source without reordering other fallbacks.
+	if bootstrapFallback {
+		for i, client := range refreshed {
+			if client.BaseURL() == bootstrapURL && i < len(refreshed)-1 {
+				copy(refreshed[i:], refreshed[i+1:])
+				refreshed[len(refreshed)-1] = client
+				changed = true
+				break
+			}
+		}
 	}
 	if !changed && len(added) == 0 {
 		return clients
