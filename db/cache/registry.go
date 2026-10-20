@@ -205,9 +205,9 @@ func (r *Registry) GetNodesByProcess(pid string) (nodes []registrySchema.Node, e
 	}
 
 	nodes = []registrySchema.Node{}
-	for _, n := range nodesMap {
-		if r.registered[n.AccId] {
-			nodes = append(nodes, *n)
+	for accid := range nodesMap {
+		if node := r.nodes[accid]; node != nil && r.registered[accid] {
+			nodes = append(nodes, *node)
 		}
 	}
 

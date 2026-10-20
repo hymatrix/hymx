@@ -53,9 +53,14 @@ func (n *Node) Fork(pid, checkpointID, nodeURL string, mode vmmSchema.ExecMode) 
 			log.Error("fork process not found nodes", "pid", pid)
 			return schema.ErrNotFoundNodes
 		}
-		clients = make([]sdk.Client, len(nodes))
+		clients = make([]sdk.Client, 0, len(nodes))
 		for _, node := range nodes {
-			clients = append(clients, *sdk.NewClient(node.URL))
+			if node.AccId != n.info.Node.AccId && node.URL != "" {
+				clients = append(clients, *sdk.NewClient(node.URL))
+			}
+		}
+		if len(clients) == 0 {
+			return schema.ErrNotFoundNodes
 		}
 	}
 
@@ -65,6 +70,12 @@ func (n *Node) Fork(pid, checkpointID, nodeURL string, mode vmmSchema.ExecMode) 
 }
 
 func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mode vmmSchema.ExecMode) {
+	defer func() {
+		for _, client := range clients {
+			client.Close()
+		}
+	}()
+
 	// init nonce to 0
 	nonce := int64(0)
 
@@ -86,12 +97,14 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mo
 			// todo: ensure message retrieval succeeds even when using multiple clients in the future
 			msgItem, err := clients[0].GetMessageByNonce(pid, nonce)
 			if err != nil {
+				clients = n.refreshForkClients(pid, clients)
 				time.Sleep(delay)
 				continue
 			}
 			assignItem, err := clients[0].GetAssignByNonce(pid, nonce)
 			if err != nil {
 				log.Error("fork process is in progress, can not get assign", "pid", pid, "nonce", nonce, "err", err)
+				clients = n.refreshForkClients(pid, clients)
 				time.Sleep(delay)
 				continue
 			}
@@ -113,4 +126,25 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mo
 		}
 
 	}
+}
+
+func (n *Node) refreshForkClients(pid string, clients []sdk.Client) []sdk.Client {
+	nodes, err := n.vmm.GetNodesByProcess(pid)
+	if err != nil {
+		return clients
+	}
+	refreshed := make([]sdk.Client, 0, len(nodes))
+	for _, node := range nodes {
+		if node.AccId == n.info.Node.AccId || node.URL == "" {
+			continue
+		}
+		refreshed = append(refreshed, *sdk.NewClient(node.URL))
+	}
+	if len(refreshed) == 0 {
+		return clients
+	}
+	for _, client := range clients {
+		client.Close()
+	}
+	return refreshed
 }
