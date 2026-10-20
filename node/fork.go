@@ -34,55 +34,37 @@ func (n *Node) runDefaultFork(mode vmmSchema.ExecMode) {
 	}
 }
 
-// Fork uses a fixed nodeURL when provided, or follows Registry URLs when it is empty.
 func (n *Node) Fork(pid, checkpointID, nodeURL string, mode vmmSchema.ExecMode) error {
 	if n.vmm.IsExists(pid) {
 		log.Error("fork process is already exists", "pid", pid)
 		return schema.ErrProcessAlreadyExists
 	}
 
-	discover := nodeURL == ""
-	var client *sdk.Client
-	if discover {
-		var err error
-		nodeURL, client, err = n.refreshForkClient(pid, "", nil)
+	clients := []sdk.Client{}
+	if nodeURL != "" {
+		clients = append(clients, *sdk.NewClient(nodeURL))
+	} else {
+		nodes, err := n.vmm.GetNodesByProcess(pid)
 		if err != nil {
+			log.Error("fork process not found nodes", "err", err)
 			return err
 		}
-		if client == nil {
+		if len(nodes) == 0 {
+			log.Error("fork process not found nodes", "pid", pid)
 			return schema.ErrNotFoundNodes
 		}
-	} else {
-		client = sdk.NewClient(nodeURL)
+		clients = make([]sdk.Client, len(nodes))
+		for _, node := range nodes {
+			clients = append(clients, *sdk.NewClient(node.URL))
+		}
 	}
 
-	n.wg.Add(1)
-	go n.runForkProcess(pid, checkpointID, discover, nodeURL, client, mode)
+	go n.runForkProcess(pid, checkpointID, clients, mode)
 
 	return nil
 }
 
-func (n *Node) refreshForkClient(pid, nodeURL string, client *sdk.Client) (string, *sdk.Client, error) {
-	nodes, err := n.vmm.GetNodesByProcess(pid)
-	if err != nil {
-		return nodeURL, client, err
-	}
-	if len(nodes) == 0 || nodes[0].URL == "" || nodes[0].AccId == n.info.Node.AccId {
-		return nodeURL, client, nil
-	}
-	if nodes[0].URL != nodeURL {
-		if client != nil {
-			client.Close()
-		}
-		nodeURL = nodes[0].URL
-		client = sdk.NewClient(nodeURL)
-	}
-	return nodeURL, client, nil
-}
-
-func (n *Node) runForkProcess(pid, checkpointID string, discover bool, nodeURL string, client *sdk.Client, mode vmmSchema.ExecMode) {
-	defer n.wg.Done()
-	defer func() { client.Close() }()
+func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mode vmmSchema.ExecMode) {
 	// init nonce to 0
 	nonce := int64(0)
 
@@ -93,26 +75,23 @@ func (n *Node) runForkProcess(pid, checkpointID string, discover bool, nodeURL s
 
 	delay := 10 * time.Second
 
+	n.wg.Add(1)
+	defer n.wg.Done()
 	// fork all message from source
 	for {
 		select {
 		case <-n.ctx.Done():
 			return
 		default:
-			msgItem, err := client.GetMessageByNonce(pid, nonce)
+			// todo: ensure message retrieval succeeds even when using multiple clients in the future
+			msgItem, err := clients[0].GetMessageByNonce(pid, nonce)
 			if err != nil {
-				if discover {
-					nodeURL, client, _ = n.refreshForkClient(pid, nodeURL, client)
-				}
 				time.Sleep(delay)
 				continue
 			}
-			assignItem, err := client.GetAssignByNonce(pid, nonce)
+			assignItem, err := clients[0].GetAssignByNonce(pid, nonce)
 			if err != nil {
 				log.Error("fork process is in progress, can not get assign", "pid", pid, "nonce", nonce, "err", err)
-				if discover {
-					nodeURL, client, _ = n.refreshForkClient(pid, nodeURL, client)
-				}
 				time.Sleep(delay)
 				continue
 			}
