@@ -3,9 +3,13 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,6 +17,7 @@ import (
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/sdk"
+	sdkSchema "github.com/hymatrix/hymx/sdk/schema"
 	"github.com/hymatrix/hymx/vmm"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
@@ -86,7 +91,7 @@ func (suite *NodeForkTestSuite) TestRefreshKeepsBootstrapWithoutAlternative() {
 		client := sdk.NewClient("http://bootstrap")
 		suite.T().Cleanup(client.Close)
 		clients := []sdk.Client{*client}
-		got := n.refreshForkClients("process", clients)
+		got := n.refreshForkClients("process", clients, "http://bootstrap")
 		require.Len(suite.T(), got, 1)
 		assert.Same(suite.T(), &clients[0], &got[0])
 	}
@@ -107,7 +112,7 @@ func (suite *NodeForkTestSuite) TestRefreshKeepsAllRemoteCandidates() {
 	n, _ := suite.newForkNode(nodes...)
 	bootstrap := sdk.NewClient("http://bootstrap")
 	suite.T().Cleanup(bootstrap.Close)
-	clients := n.refreshForkClients("process", []sdk.Client{*bootstrap})
+	clients := n.refreshForkClients("process", []sdk.Client{*bootstrap}, "")
 	suite.T().Cleanup(func() {
 		for _, client := range clients {
 			client.Close()
@@ -121,6 +126,100 @@ func (suite *NodeForkTestSuite) TestRefreshKeepsAllRemoteCandidates() {
 		ids = append(ids, item.Id)
 	}
 	assert.ElementsMatch(suite.T(), []string{"first", "second"}, ids)
+}
+
+func (suite *NodeForkTestSuite) TestRefreshReusesClientsAndOrder() {
+	n, db := suite.newForkNode(
+		registrySchema.Node{AccId: "first", URL: "http://first"},
+		registrySchema.Node{AccId: "second", URL: "http://second"},
+		registrySchema.Node{AccId: "duplicate", URL: "http://first"},
+	)
+	clients := []sdk.Client{*sdk.NewClient("http://second"), *sdk.NewClient("http://first")}
+	suite.T().Cleanup(func() {
+		for _, client := range clients {
+			client.Close()
+		}
+	})
+	original := clients
+	for i := 0; i < 10; i++ {
+		clients = n.refreshForkClients("process", clients, "")
+		require.Len(suite.T(), clients, 2)
+		assert.Same(suite.T(), &original[0], &clients[0])
+		assert.Equal(suite.T(), "http://second", clients[0].BaseURL())
+	}
+
+	require.NoError(suite.T(), db.Register(registrySchema.Node{AccId: "second", URL: "http://new"}))
+	data, err := db.Checkpoint()
+	require.NoError(suite.T(), err)
+	vm, _, err := n.vmm.GetVm("registry")
+	require.NoError(suite.T(), err)
+	require.NoError(suite.T(), vm.Restore(data))
+	clients = n.refreshForkClients("process", clients, "")
+	require.Len(suite.T(), clients, 2)
+	assert.Equal(suite.T(), original[1], clients[0])
+	assert.Equal(suite.T(), "http://new", clients[1].BaseURL())
+}
+
+func (suite *NodeForkTestSuite) TestNotFoundKeepsExplicitSourceAndConnection() {
+	for _, path := range []string{"/messageByNonce/process/7", "/assignmentByNonce/process/7"} {
+		suite.Run(path, func() {
+			var connections, alternateRequests atomic.Int32
+			source := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == path {
+					http.Error(w, "next nonce is not available", http.StatusNotFound)
+				} else {
+					assert.NoError(suite.T(), json.NewEncoder(w).Encode(forkTestMessage()))
+				}
+			}))
+			source.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+				if state == http.StateNew {
+					connections.Add(1)
+				}
+			}
+			source.Start()
+			suite.T().Cleanup(source.Close)
+			alternate := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				alternateRequests.Add(1)
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}))
+			suite.T().Cleanup(alternate.Close)
+			n, _ := suite.newForkNode(registrySchema.Node{AccId: "stale", URL: alternate.URL})
+			clients := []sdk.Client{*sdk.NewClient(source.URL)}
+			suite.T().Cleanup(clients[0].Close)
+			for i := 0; i < 4; i++ {
+				_, err := clients[0].GetMessageByNonce("process", 7)
+				if err == nil {
+					_, err = clients[0].GetAssignByNonce("process", 7)
+				}
+				got := n.retryForkClients("process", clients, source.URL, err)
+				var status *sdkSchema.HTTPStatusError
+				require.True(suite.T(), errors.As(err, &status))
+				assert.Equal(suite.T(), http.StatusNotFound, status.StatusCode)
+				assert.Same(suite.T(), &clients[0], &got[0])
+			}
+			assert.EqualValues(suite.T(), 1, connections.Load())
+			assert.Zero(suite.T(), alternateRequests.Load())
+		})
+	}
+}
+
+func (suite *NodeForkTestSuite) TestRetryRetainsConfiguredFallback() {
+	n, _ := suite.newForkNode(registrySchema.Node{AccId: "remote", URL: "http://new"})
+	clients := []sdk.Client{*sdk.NewClient("http://configured")}
+	suite.T().Cleanup(func() {
+		for _, client := range clients {
+			client.Close()
+		}
+	})
+	clients = n.retryForkClients("process", clients, "http://configured",
+		&url.Error{Op: "Get", URL: "http://configured", Err: errors.New("connection refused")})
+	require.Len(suite.T(), clients, 2)
+	assert.Equal(suite.T(), "http://new", clients[0].BaseURL())
+	assert.Equal(suite.T(), "http://configured", clients[1].BaseURL())
+
+	clients = n.retryForkClients("process", clients, "http://configured",
+		&sdkSchema.HTTPStatusError{StatusCode: http.StatusServiceUnavailable})
+	assert.Equal(suite.T(), "http://configured", clients[0].BaseURL())
 }
 
 func (suite *NodeForkTestSuite) TestForkRefreshesAfterReadFailure() {
@@ -158,7 +257,7 @@ func (suite *NodeForkTestSuite) TestForkRefreshesAfterReadFailure() {
 			done := make(chan struct{})
 			go func() {
 				defer close(done)
-				n.runForkProcess("process", "", []sdk.Client{*sdk.NewClient(old.URL)}, vmmSchema.ExecModeDryRun)
+				n.runForkProcess("process", "", []sdk.Client{*sdk.NewClient(old.URL)}, old.URL, vmmSchema.ExecModeDryRun)
 			}()
 			suite.T().Cleanup(func() {
 				n.cancel()

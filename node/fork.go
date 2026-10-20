@@ -1,10 +1,14 @@
 package node
 
 import (
+	"errors"
+	"net/url"
+	"sort"
 	"time"
 
 	"github.com/hymatrix/hymx/node/schema"
 	"github.com/hymatrix/hymx/sdk"
+	sdkSchema "github.com/hymatrix/hymx/sdk/schema"
 	"github.com/hymatrix/hymx/utils"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 )
@@ -54,22 +58,26 @@ func (n *Node) Fork(pid, checkpointID, nodeURL string, mode vmmSchema.ExecMode) 
 			return schema.ErrNotFoundNodes
 		}
 		clients = make([]sdk.Client, 0, len(nodes))
+		seen := map[string]bool{}
 		for _, node := range nodes {
-			if node.AccId != n.info.Node.AccId && node.URL != "" {
+			if node.AccId != n.info.Node.AccId && node.URL != "" && !seen[node.URL] {
 				clients = append(clients, *sdk.NewClient(node.URL))
+				seen[node.URL] = true
 			}
 		}
 		if len(clients) == 0 {
+			log.Error("fork process not found remote nodes", "pid", pid)
 			return schema.ErrNotFoundNodes
 		}
+		sort.Slice(clients, func(i, j int) bool { return clients[i].BaseURL() < clients[j].BaseURL() })
 	}
 
-	go n.runForkProcess(pid, checkpointID, clients, mode)
+	go n.runForkProcess(pid, checkpointID, clients, nodeURL, mode)
 
 	return nil
 }
 
-func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mode vmmSchema.ExecMode) {
+func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, bootstrapURL string, mode vmmSchema.ExecMode) {
 	defer func() {
 		for _, client := range clients {
 			client.Close()
@@ -94,17 +102,16 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mo
 		case <-n.ctx.Done():
 			return
 		default:
-			// todo: ensure message retrieval succeeds even when using multiple clients in the future
 			msgItem, err := clients[0].GetMessageByNonce(pid, nonce)
 			if err != nil {
-				clients = n.refreshForkClients(pid, clients)
+				clients = n.retryForkClients(pid, clients, bootstrapURL, err)
 				time.Sleep(delay)
 				continue
 			}
 			assignItem, err := clients[0].GetAssignByNonce(pid, nonce)
 			if err != nil {
 				log.Error("fork process is in progress, can not get assign", "pid", pid, "nonce", nonce, "err", err)
-				clients = n.refreshForkClients(pid, clients)
+				clients = n.retryForkClients(pid, clients, bootstrapURL, err)
 				time.Sleep(delay)
 				continue
 			}
@@ -128,23 +135,72 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mo
 	}
 }
 
-func (n *Node) refreshForkClients(pid string, clients []sdk.Client) []sdk.Client {
+func (n *Node) retryForkClients(pid string, clients []sdk.Client, bootstrapURL string, err error) []sdk.Client {
+	var requestErr *url.Error
+	retry := errors.As(err, &requestErr)
+	var status *sdkSchema.HTTPStatusError
+	if errors.As(err, &status) {
+		retry = status.StatusCode/100 == 5
+	}
+	if !retry {
+		return clients
+	}
+
+	failedURL := clients[0].BaseURL()
+	clients = n.refreshForkClients(pid, clients, bootstrapURL)
+	if len(clients) > 1 && clients[0].BaseURL() == failedURL {
+		// Try the next candidate on the next polling cycle, retaining fallback URLs.
+		failed := clients[0]
+		copy(clients, clients[1:])
+		clients[len(clients)-1] = failed
+	}
+	if clients[0].BaseURL() != failedURL {
+		log.Info("fork source changed", "pid", pid, "oldURL", failedURL, "newURL", clients[0].BaseURL())
+	}
+	return clients
+}
+
+func (n *Node) refreshForkClients(pid string, clients []sdk.Client, bootstrapURL string) []sdk.Client {
 	nodes, err := n.vmm.GetNodesByProcess(pid)
 	if err != nil {
 		return clients
 	}
-	refreshed := make([]sdk.Client, 0, len(nodes))
+	urls := map[string]bool{}
 	for _, node := range nodes {
 		if node.AccId == n.info.Node.AccId || node.URL == "" {
 			continue
 		}
-		refreshed = append(refreshed, *sdk.NewClient(node.URL))
+		urls[node.URL] = true
 	}
-	if len(refreshed) == 0 {
+	if len(urls) == 0 {
 		return clients
 	}
+	if bootstrapURL != "" {
+		urls[bootstrapURL] = true
+	}
+	refreshed := make([]sdk.Client, 0, len(urls))
+	changed := false
 	for _, client := range clients {
-		client.Close()
+		if urls[client.BaseURL()] {
+			refreshed = append(refreshed, client)
+			delete(urls, client.BaseURL())
+		} else {
+			client.Close()
+			changed = true
+			log.Info("fork candidate removed", "pid", pid, "url", client.BaseURL())
+		}
+	}
+	added := make([]string, 0, len(urls))
+	for url := range urls {
+		added = append(added, url)
+	}
+	sort.Strings(added)
+	for _, url := range added {
+		refreshed = append(refreshed, *sdk.NewClient(url))
+		log.Info("fork candidate added", "pid", pid, "url", url)
+	}
+	if !changed && len(added) == 0 {
+		return clients
 	}
 	return refreshed
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/hymatrix/hymx/cryptor"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
 	hymxSchema "github.com/hymatrix/hymx/schema"
+	sdkSchema "github.com/hymatrix/hymx/sdk/schema"
 	serverSchema "github.com/hymatrix/hymx/server/schema"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
@@ -46,6 +47,10 @@ func NewClient(hmxURL string) *Client {
 
 func (c *Client) Close() {
 	c.httpClient.CloseIdleConnections()
+}
+
+func (c *Client) BaseURL() string {
+	return c.baseURL
 }
 
 func (c *Client) buildURL(path string) (string, error) {
@@ -351,7 +356,8 @@ func (c *Client) GetMessageByNonce(pid string, nonce int64) (item goarSchema.Bun
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		_, _ = io.Copy(io.Discard, resp.Body)
+		err = &sdkSchema.HTTPStatusError{StatusCode: resp.StatusCode}
 		return
 	}
 
@@ -371,7 +377,8 @@ func (c *Client) GetAssignByNonce(pid string, nonce int64) (item goarSchema.Bund
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err = fmt.Errorf("invalid server response: %d", resp.StatusCode)
+		_, _ = io.Copy(io.Discard, resp.Body)
+		err = &sdkSchema.HTTPStatusError{StatusCode: resp.StatusCode}
 		return
 	}
 

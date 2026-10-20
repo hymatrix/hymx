@@ -2,18 +2,41 @@ package sdk
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	sdkSchema "github.com/hymatrix/hymx/sdk/schema"
 	serverSchema "github.com/hymatrix/hymx/server/schema"
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestNonceReadsReturnHTTPStatusError(t *testing.T) {
+	for _, status := range []int{http.StatusNotFound, http.StatusServiceUnavailable} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(status)
+			}))
+			defer server.Close()
+			client := NewClient(server.URL)
+			defer client.Close()
+			_, messageErr := client.GetMessageByNonce("process", 1)
+			_, assignErr := client.GetAssignByNonce("process", 1)
+			for _, err := range []error{messageErr, assignErr} {
+				var statusErr *sdkSchema.HTTPStatusError
+				require.True(t, errors.As(err, &statusErr))
+				assert.Equal(t, status, statusErr.StatusCode)
+				assert.EqualError(t, err, fmt.Sprintf("invalid server response: %d", status))
+			}
+		})
+	}
+}
 
 // ========================================
 // Send Method Redirect Tests
