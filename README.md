@@ -21,6 +21,7 @@
   - [Wallet Setup](#wallet-setup)
   - [Installation](#installation)
   - [Configuration](#configuration)
+  - [Redis Security](#redis-security)
   - [Running](#running)
 - [Network Participation](#network-participation)
 - [Developer Resources](#developer-resources)
@@ -59,7 +60,7 @@ Specific information can be viewed in the /info endpoint
 
 | Component        | Version        | Required       | Description                                     |
 | ---------------- | -------------- | -------------- | ----------------------------------------------- |
-| **Redis**        | Latest stable  | ✅ Required     | Internal task queue, messaging, and caching     |
+| **Redis**        | Pinned, patched release (see [Redis Security](#redis-security)) | ✅ Required     | Internal task queue, messaging, and caching     |
 | **Go**           | ≥ 1.24.0       | Optional (only for source builds) | Go language toolchain for building nodes         |
 | **Git**          | Latest stable  | Optional (source builds only)     | Source control for cloning HyMatrix repo         |
 
@@ -96,8 +97,8 @@ Create a `config.yaml` file with the following settings:
 port: :8080
 ginMode: release  # Options: "debug", "release"
 
-# Redis Configuration
-redisURL: redis://@localhost:6379/0
+# Redis Configuration (dedicated ACL user, see "Redis Security")
+redisURL: redis://hymx:<url-encoded-password>@127.0.0.1:6379/0
 
 # Storage & Network
 arweaveURL: https://arweave.net
@@ -120,15 +121,150 @@ joinNetwork: false
 
 | Field | Description |
 |-------|-------------|
+| `redisURL` | Redis connection URL. Use a dedicated ACL user with a password; use `rediss://` when Redis is reached over an untrusted network |
 | `hymxURL` | Local node address for SDK-based calls |
 | `prvKey` | Ethereum private key for signing operations |
 | `nodeName`/`nodeURL` | Node metadata for network identification |
 | `joinNetwork` | Set `false` for local testing, `true` to join network |
 
+> 🔒 `config.yaml` contains wallet material and Redis credentials. Make it owned by the service account that runs hymx and readable only by it: `chmod 600 config.yaml`.
+
+When `enableChainkit: true`, `chainkit.redisURL` is a second Redis connection; apply the same credentials and network rules to it.
+
+### Redis Security
+
+HyMatrix stores its message queues, results, checkpoint indexes, outbox queues and caches in Redis. Anyone who can reach that Redis instance can read, modify or delete this data. Redis must only be reachable by hymx — never expose it to the Internet (see the [Redis security guide](https://redis.io/docs/latest/operate/oss_and_stack/management/security/)).
+
+The `redis://@localhost:6379/0` style URL (no credentials) is only acceptable for throwaway local development.
+
+#### 1. Network exposure
+
+**Redis installed directly on the host** — bind to loopback only in `redis.conf`:
+
+```conf
+bind 127.0.0.1 -::1
+protected-mode yes
+```
+
+**hymx on the host, Redis in Docker** — publish the port on loopback only:
+
+```yaml
+services:
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"   # loopback only
+```
+
+> ⚠️ Never use a mapping without a host address, such as `"6379:6379"` or `-p 6379:6379`. Docker then publishes the port on **all** host interfaces (`0.0.0.0` and `[::]`) and its iptables rules can bypass host firewalls such as ufw. See [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/).
+
+**hymx and Redis both in Docker** — do not publish Redis at all; put it on an internal network shared only with hymx:
+
+```yaml
+services:
+  hymx:
+    image: <your-hymx-image>
+    networks: [frontend, redis-internal]
+    # redisURL: redis://hymx:<url-encoded-password>@redis:6379/0
+
+  redis:
+    image: redis:<patched-version>@sha256:<digest>
+    expose: ["6379"]           # reachable from redis-internal only, no "ports:"
+    networks: [redis-internal]
+
+networks:
+  frontend:
+  redis-internal:
+    internal: true
+```
+
+Inside the container Redis may bind to all container interfaces; exposure is controlled by Docker networking.
+
+#### 2. Authentication and ACLs
+
+Disable the `default` user and give hymx a dedicated ACL user that can only run the commands it needs on its own key prefixes. Example `users.acl`:
+
+```conf
+user default off
+user hymx on #<sha256-hex-of-password> resetkeys ~p:* ~m:* ~ckp:* ~cache:* ~chainkit:* ~outbox:* resetchannels -@all +auth +hello +ping +select +client|setinfo +get +set +exists +del +scan +hget +hset +hdel +rpush +lpop +llen +lrange +lindex +sadd +sismember +smembers +scard
+```
+
+- Generate the password hash with `printf '%s' "$REDIS_PASSWORD" | shasum -a 256`, so the plaintext password is not stored in the ACL file.
+- Load the file with `aclfile /usr/local/etc/redis/users.acl` in `redis.conf`.
+- Keep `protected-mode yes` as defense in depth.
+- Administrative (`CONFIG`, `ACL`, `SHUTDOWN`, `DEBUG`, `MODULE`), destructive (`FLUSHALL`, `FLUSHDB`, `KEYS`) and scripting (`EVAL`, `FUNCTION`) commands are denied; hymx does not need them. Use a separate admin user for maintenance and never put it in `redisURL`.
+- The command list matches what the current hymx code uses. If a future version needs another command, hymx logs a `NOPERM` error; grant only that command.
+- URL-encode special characters in the password inside `redisURL` (for example `@` → `%40`, `/` → `%2F`).
+- If Redis must be reached over a network you do not fully trust, enable TLS on Redis and use `rediss://` in `redisURL`.
+
+#### 3. Version pinning
+
+- Do not use mutable tags such as `redis:latest` or `redis:7`. Pin a supported, patched release and its image digest:
+
+  ```bash
+  docker pull redis:<patched-version>
+  docker inspect --format '{{index .RepoDigests 0}}' redis:<patched-version>
+  ```
+
+- Minimum versions for [CVE-2025-49844](https://redis.io/blog/security-advisory-cve-2025-49844/) (critical Lua use-after-free): **7.2.11**, **7.4.6**, **8.0.4**, **8.2.2** or later on the same branch. Follow Redis security advisories and move to new patch releases promptly; a dependency bot (e.g. Dependabot or Renovate) can keep the pinned digest up to date.
+
+#### 4. Container hardening
+
+Recommended settings for the Redis container:
+
+```yaml
+services:
+  redis:
+    image: redis:<patched-version>@sha256:<digest>
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    user: "999:999"            # redis user in the official image
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    volumes:
+      - redis-data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./redis/users.acl:/usr/local/etc/redis/users.acl:ro
+    pids_limit: 256
+    mem_limit: 2g              # size to your workload; also set maxmemory in redis.conf
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+```
+
+Do not mount the Docker socket or unrelated host paths into the Redis container. Files bind-mounted into the container (`redis.conf`, `users.acl`, existing data) must be readable by UID 999.
+
+#### 5. Migrating an existing installation
+
+1. Stop hymx (`hymx stop --checkpoint` if you want fresh checkpoints) and back up Redis data: run `SAVE` (or `BGSAVE`) and copy `dump.rdb` and the `appendonlydir`/AOF files from the data directory.
+2. Recreate Redis from a pinned, patched image with the network layout above (no public port, or loopback-only when hymx runs on the host), reusing the backed-up data directory.
+3. Add the ACL file, update `redisURL` (and `chainkit.redisURL` if used) with the new user and password, and rotate any credentials used previously.
+4. Start hymx and confirm it runs normally.
+
+#### 6. Verifying the deployment
+
+```bash
+# From another machine: the connection must fail
+redis-cli -h <server-public-ip> -p 6379 ping
+
+# On the host: Redis must only listen on loopback (no 0.0.0.0 or [::])
+ss -ltnp | grep 6379
+
+# Unauthenticated access must be rejected with NOAUTH
+redis-cli -h 127.0.0.1 -p 6379 ping
+
+# The hymx user works, but administrative/scripting commands are rejected with NOPERM
+redis-cli -h 127.0.0.1 -p 6379 --user hymx --askpass ping
+redis-cli -h 127.0.0.1 -p 6379 --user hymx --askpass config get maxmemory
+redis-cli -h 127.0.0.1 -p 6379 --user hymx --askpass eval "return 1" 0
+```
+
+For the internal-network Compose layout, run the `redis-cli` checks with `docker compose exec redis redis-cli ...` and confirm `docker compose port redis 6379` prints nothing.
 
 ### Running
 
-1. **Start Redis** - Ensure Redis is running and `redisURL` in your config is correct
+1. **Start Redis** - Ensure Redis is running with the settings in [Redis Security](#redis-security) and `redisURL` in your config is correct
 
 2. **Launch the Node** - Run the binary with your configuration:
 
