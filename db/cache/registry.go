@@ -205,8 +205,9 @@ func (r *Registry) GetNodesByProcess(pid string) (nodes []registrySchema.Node, e
 	}
 
 	nodes = []registrySchema.Node{}
-	for _, n := range nodesMap {
-		if r.registered[n.AccId] {
+	// Checkpoint restoration does not preserve shared node pointers.
+	for accid := range nodesMap {
+		if n := r.nodes[accid]; r.registered[accid] && n != nil {
 			nodes = append(nodes, *n)
 		}
 	}
