@@ -136,6 +136,9 @@ func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess st
 		log.Error("missing required tags in registry message", "Pid", pid, "Acc-Id", accid)
 		return schema.ErrUnauthorizedNode
 	}
+	if pid != fromProcess || accid != signer {
+		return schema.ErrUnauthorizedNode
+	}
 
 	// 2. get original message by 'Pid'
 	// * pid is the id of the spawn message that created the process
@@ -165,6 +168,9 @@ func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess st
 
 	if spawnMsg == nil {
 		return errors.New("spawn message not found, msgid: " + pid)
+	}
+	if spawnMsg.Id != pid {
+		return schema.ErrUnauthorizedNode
 	}
 
 	// 3. verify original message

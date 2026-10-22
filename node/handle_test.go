@@ -1,6 +1,9 @@
 package node
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -197,6 +200,100 @@ func (suite *RegistryAuthTestSuite) TestRegisterProcessKeepsSpawnVerification() 
 	)
 	assert.ErrorIs(suite.T(), suite.n.Handle(invalid), nodeSchema.ErrUnauthorizedNode)
 	assert.Empty(suite.T(), suite.n.assignMesChan)
+}
+
+func (suite *RegistryAuthTestSuite) TestRegisterProcessRejectsSpoofedBindings() {
+	spawn := func(scheduler string) goarSchema.BundleItem {
+		tags, err := utils.ProcessToTags(hymxSchema.Process{
+			Base: hymxSchema.DefaultBaseProcess, Module: "module", Scheduler: scheduler,
+		})
+		require.NoError(suite.T(), err)
+		item, err := suite.outsider.CreateAndSignItem(nil, "", "", tags)
+		require.NoError(suite.T(), err)
+		return item
+	}
+	ownSpawn := spawn(suite.otherNode.Address)
+	victimSpawn := spawn(suite.n.bundler.Address)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		item := ownSpawn
+		if r.URL.Path == "/message/"+victimSpawn.Id {
+			item = victimSpawn
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(item); err != nil {
+			suite.T().Error(err)
+		}
+	}))
+	suite.T().Cleanup(server.Close)
+
+	register := func(nonce string) {
+		item := suite.message(suite.n.bundler, "Register", suite.tokenPid, nonce,
+			goarSchema.Tag{Name: "Acc-Id", Value: suite.otherNode.Address},
+			goarSchema.Tag{Name: "Name", Value: "registered-" + nonce},
+			goarSchema.Tag{Name: "Desc", Value: "local test"},
+			goarSchema.Tag{Name: "URL", Value: server.URL},
+		)
+		require.NoError(suite.T(), suite.n.Handle(item))
+		require.Len(suite.T(), suite.n.assignMesChan, 1)
+		assigned := <-suite.n.assignMesChan
+		require.NoError(suite.T(), suite.n.applyMessage(assigned.Pid, assigned.AccId, assigned.Item, assigned.Message,
+			hymxSchema.Assignment{Nonce: nonce, Timestamp: "1"}, vmmSchema.ExecModeApply, 0))
+		_, err := suite.n.vmm.Checkpoint(suite.registryPid)
+		require.NoError(suite.T(), err)
+		require.Len(suite.T(), suite.results, 1)
+		require.Empty(suite.T(), (<-suite.results).Error)
+	}
+	register("1")
+	before, err := suite.n.vmm.Checkpoint(suite.registryPid)
+	require.NoError(suite.T(), err)
+
+	for _, test := range []struct {
+		name, from, pid, accid string
+	}{
+		{name: "source differs from pid", from: suite.tokenPid, pid: ownSpawn.Id, accid: suite.otherNode.Address},
+		{name: "signer differs from scheduler", from: victimSpawn.Id, pid: victimSpawn.Id, accid: suite.n.bundler.Address},
+		{name: "returned spawn differs from pid", from: suite.tokenPid, pid: suite.tokenPid, accid: suite.otherNode.Address},
+		{name: "claimed scheduler differs from spawn", from: victimSpawn.Id, pid: victimSpawn.Id, accid: suite.otherNode.Address},
+	} {
+		suite.Run(test.name, func() {
+			defer func() {
+				select {
+				case <-suite.n.assignMesChan:
+				default:
+				}
+			}()
+			item := suite.message(suite.otherNode, "RegisterProcess", test.from, "1000000",
+				goarSchema.Tag{Name: "Pid", Value: test.pid},
+				goarSchema.Tag{Name: "Acc-Id", Value: test.accid},
+			)
+
+			require.ErrorIs(suite.T(), suite.n.Handle(item), nodeSchema.ErrUnauthorizedNode)
+			assert.Empty(suite.T(), suite.n.assignMesChan)
+			after, err := suite.n.vmm.Checkpoint(suite.registryPid)
+			require.NoError(suite.T(), err)
+			assert.Equal(suite.T(), before.Env.Nonce, after.Env.Nonce)
+			assert.Equal(suite.T(), before.Env.ReceivedSeq, after.Env.ReceivedSeq)
+			assert.Equal(suite.T(), before.Data, after.Data)
+		})
+	}
+
+	register("2")
+	node, err := suite.n.GetNode(suite.otherNode.Address)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), node)
+	assert.Equal(suite.T(), "registered-2", node.Name)
+	snap, err := suite.n.vmm.Checkpoint(suite.registryPid)
+	require.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(2), snap.Env.Nonce)
+	assert.Equal(suite.T(), int64(2), snap.Env.ReceivedSeq[suite.tokenPid])
+
+	item := suite.message(suite.otherNode, "RegisterProcess", ownSpawn.Id, "1",
+		goarSchema.Tag{Name: "Pid", Value: ownSpawn.Id},
+		goarSchema.Tag{Name: "Acc-Id", Value: suite.otherNode.Address},
+	)
+	require.NoError(suite.T(), suite.n.Handle(item))
+	require.Len(suite.T(), suite.n.assignMesChan, 1)
+	assert.Equal(suite.T(), item.Id, (<-suite.n.assignMesChan).Item.Id)
 }
 
 func TestRegistryAuthTestSuite(t *testing.T) {
