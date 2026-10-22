@@ -1,12 +1,16 @@
 package node
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/hymatrix/hymx/node/schema"
+	hymxSchema "github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/sdk"
 	"github.com/hymatrix/hymx/utils"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
+	goarSchema "github.com/permadao/goar/schema"
+	goarUtils "github.com/permadao/goar/utils"
 )
 
 func (n *Node) runDefaultFork(mode vmmSchema.ExecMode) {
@@ -77,6 +81,26 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mo
 
 	n.wg.Add(1)
 	defer n.wg.Done()
+
+	// The scheduler comes from the spawn item, which is bound to pid by its id and signature.
+	// Every forked assignment must be signed by this scheduler.
+	scheduler := ""
+	for scheduler == "" {
+		select {
+		case <-n.ctx.Done():
+			return
+		default:
+		}
+		spawn, err := clients[0].GetMessage(pid)
+		if err == nil {
+			scheduler, err = forkScheduler(pid, spawn)
+		}
+		if err != nil {
+			log.Error("fork process can not verify spawn", "pid", pid, "err", err)
+			time.Sleep(delay)
+		}
+	}
+
 	// fork all message from source
 	for {
 		select {
@@ -96,9 +120,9 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mo
 				continue
 			}
 
-			assign, err := utils.TagsToAssignment(assignItem.Tags)
+			assign, err := verifyForkItem(pid, nonce, scheduler, msgItem, assignItem)
 			if err != nil {
-				log.Error("fork process is in progress, decode assign failed", "pid", pid, "nonce", nonce, "err", err)
+				log.Error("fork process is in progress, invalid history item", "pid", pid, "nonce", nonce, "err", err)
 				time.Sleep(delay)
 				continue
 			}
@@ -113,4 +137,45 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mo
 		}
 
 	}
+}
+
+// forkScheduler returns the scheduler of pid from its spawn item.
+// The spawn item must be validly signed and its id must equal pid.
+func forkScheduler(pid string, spawn goarSchema.BundleItem) (scheduler string, err error) {
+	if spawn.Id != pid {
+		return "", schema.ErrInvalidForkItem
+	}
+	if err = goarUtils.VerifyBundleItem(spawn); err != nil {
+		return
+	}
+	_, _, _, instance, err := utils.Decode(spawn)
+	if err != nil {
+		return
+	}
+	proc, ok := instance.(hymxSchema.Process)
+	if !ok || proc.Scheduler == "" {
+		return "", schema.ErrInvalidForkItem
+	}
+	return proc.Scheduler, nil
+}
+
+// verifyForkItem checks one forked history entry: both items are validly signed,
+// and the assignment is signed by the scheduler and binds msgItem to (pid, nonce).
+func verifyForkItem(pid string, nonce int64, scheduler string, msgItem, assignItem goarSchema.BundleItem) (assign hymxSchema.Assignment, err error) {
+	if err = goarUtils.VerifyBundleItem(msgItem); err != nil {
+		return
+	}
+	if err = goarUtils.VerifyBundleItem(assignItem); err != nil {
+		return
+	}
+	_, signer, _, instance, err := utils.Decode(assignItem)
+	if err != nil {
+		return
+	}
+	assign, ok := instance.(hymxSchema.Assignment)
+	if !ok || signer != scheduler || assign.Process != pid || assign.Message != msgItem.Id ||
+		assign.Nonce != strconv.FormatInt(nonce, 10) {
+		return assign, schema.ErrInvalidForkItem
+	}
+	return
 }
