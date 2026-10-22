@@ -41,6 +41,12 @@ func (r *Registry) Apply(from string, meta vmmSchema.Meta) (res vmmSchema.Result
 	return
 }
 
+// AuthSource verifies that the message signer may speak for meta.FromProcess.
+// Vmm calls it before the sequence check, so a rejected message does not change the received sequence.
+func (r *Registry) AuthSource(meta vmmSchema.Meta) error {
+	return r.authSource(meta)
+}
+
 func (r *Registry) Close() error {
 	return nil
 }

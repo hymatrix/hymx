@@ -39,6 +39,14 @@ type Vm interface {
 	Close() error
 }
 
+// SourceAuthenticator is an optional Vm capability.
+// It authenticates the From-Process claim of a message before its Sequence is recorded,
+// so a forged claim cannot advance the claimed process's received sequence.
+// notice: the check must depend only on the VM's own state to keep replay deterministic.
+type SourceAuthenticator interface {
+	AuthSource(meta Meta) error
+}
+
 type Meta struct {
 	// from item
 	ItemId string `json:"Item-Id"`

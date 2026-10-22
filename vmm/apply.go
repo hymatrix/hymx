@@ -96,6 +96,13 @@ func (v *Vmm) applyCheck(vm schema.Vm, env *schema.Env, m schema.Meta) (from str
 	from = m.AccId
 	if m.FromProcess != "" {
 		from = m.FromProcess
+		// Authenticate the From-Process claim before recording its sequence.
+		if auth, ok := vm.(schema.SourceAuthenticator); ok {
+			if err = auth.AuthSource(m); err != nil {
+				log.Error("unauthorized message source", "pid", m.Pid, "itemId", m.ItemId, "accid", m.AccId, "fromProcess", m.FromProcess, "err", err)
+				return
+			}
+		}
 		// Prevent rollback or replay attacks by rejecting transactions with a lower sequence number.
 		if lastSeq, ok := env.ReceivedSeq[from]; ok {
 			if lastSeq >= m.Sequence {
