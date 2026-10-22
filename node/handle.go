@@ -42,7 +42,7 @@ func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
 	// Verify that the item is signed by the correct node owner.
 	// If the accid is registered in the node list, it is allowed to send a From-Process message.
 	// The From-Process value must also be registered under the corresponding node.
-	// If this io a registration request sent to the registry, this step is skipped.
+	// RegisterProcess requests to the registry use spawn verification instead.
 	if err = n.verifyFromProcess(item, pid, signer, fromProcess); err != nil {
 		return
 	}
@@ -88,15 +88,8 @@ func (n *Node) verifyFromProcess(item goarSchema.BundleItem, pid, signer, fromPr
 		return nil
 	}
 
-	// Handle registry process verification
-	if pid == n.vmm.RegistryId() {
-		// return n.verifyRegistryProcess(item, pid, signer, fromProcess)
-		// Verify this is a RegisterProcess action
-		action := utils.GetTagsValue("Action", item.Tags)
-		if action != "RegisterProcess" {
-			return nil
-		}
-
+	// Only RegisterProcess uses spawn verification; other actions require node authentication.
+	if pid == n.vmm.RegistryId() && utils.GetTagsValue("Action", item.Tags) == "RegisterProcess" {
 		if err := n.verifyRegistry(item, signer, fromProcess); err != nil {
 			log.Error("verify registry process message failed", "pid", pid, "signer", signer, "fromProcess", fromProcess, "err", err)
 			return err
@@ -143,6 +136,9 @@ func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess st
 		log.Error("missing required tags in registry message", "Pid", pid, "Acc-Id", accid)
 		return schema.ErrUnauthorizedNode
 	}
+	if pid != fromProcess || accid != signer {
+		return schema.ErrUnauthorizedNode
+	}
 
 	// 2. get original message by 'Pid'
 	// * pid is the id of the spawn message that created the process
@@ -172,6 +168,9 @@ func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess st
 
 	if spawnMsg == nil {
 		return errors.New("spawn message not found, msgid: " + pid)
+	}
+	if spawnMsg.Id != pid {
+		return schema.ErrUnauthorizedNode
 	}
 
 	// 3. verify original message
