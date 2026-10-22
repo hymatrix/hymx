@@ -200,6 +200,14 @@ func (suite *RegistryAuthTestSuite) TestRegisterProcessKeepsSpawnVerification() 
 	)
 	assert.ErrorIs(suite.T(), suite.n.Handle(invalid), nodeSchema.ErrUnauthorizedNode)
 	assert.Empty(suite.T(), suite.n.assignMesChan)
+
+	// Local database reads must still verify the stored spawn signature.
+	suite.n.db.(*registryAuthDB).spawn.Data = "eA"
+	assert.Error(suite.T(), suite.n.Handle(item))
+	assert.Empty(suite.T(), suite.n.assignMesChan)
+	suite.n.db.(*registryAuthDB).spawn = goarSchema.BundleItem{}
+	assert.Error(suite.T(), suite.n.Handle(item))
+	assert.Empty(suite.T(), suite.n.assignMesChan)
 }
 
 func (suite *RegistryAuthTestSuite) TestRegisterProcessRejectsSpoofedBindings() {
