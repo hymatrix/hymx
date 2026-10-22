@@ -83,8 +83,6 @@ func (suite *OutboxIntegrationTestSuite) TestRecreatedNodeSendsStoredOutbox() {
 
 	_, assignment, err := first.signAssign(item.Target, item.Id, 0)
 	require.NoError(t, err)
-	assignmentData, err := json.Marshal(assignment)
-	require.NoError(t, err)
 	received := make(chan []byte, 1)
 	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -99,8 +97,9 @@ func (suite *OutboxIntegrationTestSuite) TestRecreatedNodeSendsStoredOutbox() {
 			default:
 			}
 			_, _ = w.Write([]byte(`{}`))
-		case r.URL.Path == "/assignmentByMessage/"+item.Id:
-			_, _ = w.Write(assignmentData)
+		case r.URL.Path == "/assignmentBinByMessage/"+item.Id:
+			w.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = w.Write(assignment.Binary)
 		default:
 			http.NotFound(w, r)
 		}
@@ -116,6 +115,7 @@ func (suite *OutboxIntegrationTestSuite) TestRecreatedNodeSendsStoredOutbox() {
 	registryData, err := json.Marshal(cacheSchema.RegistrySnapshot{
 		Id: "registry-pid", TokenPid: "token-pid",
 		Registered: map[string]bool{bundler.Address: true},
+		Nodes:      map[string]*registrySchema.Node{bundler.Address: remoteNode},
 		ProcessToNodeIndex: map[string]map[string]*registrySchema.Node{
 			item.Target: {bundler.Address: remoteNode},
 		},

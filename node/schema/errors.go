@@ -19,4 +19,5 @@ var (
 	ErrNotFoundMod               = errors.New("err_not_found_mod")
 	ErrUnrecognizedSignatureType = errors.New("err_unrecognized_signature_type")
 	ErrUnauthorizedNode          = errors.New("err_unauthorized_node")
+	ErrInvalidForkItem           = errors.New("err_invalid_fork_item")
 )
