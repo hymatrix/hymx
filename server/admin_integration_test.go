@@ -130,7 +130,7 @@ func (suite *AdminIntegrationTestSuite) TestStopAndCheckpointOverHTTP() {
 	}, 10*time.Second, 50*time.Millisecond)
 	token, err := client.SpawnAndWait("1i03Vpe8DljkUMBEEEvR0VmbJjvgZtP_ytZdThkVSMw", client.GetAddress(), nil)
 	require.NoError(t, err)
-	_, err = client.SpawnAndWait("MVTil0kn5SRiJELW7W2jLZ6cBr3QUGj1nJ67I2Wi4Ps", client.GetAddress(), []goarSchema.Tag{{Name: "Token-Pid", Value: token.Id}, {Name: "URL", Value: base}})
+	registry, err := client.SpawnAndWait("MVTil0kn5SRiJELW7W2jLZ6cBr3QUGj1nJ67I2Wi4Ps", client.GetAddress(), []goarSchema.Tag{{Name: "Token-Pid", Value: token.Id}, {Name: "URL", Value: base}})
 	require.NoError(t, err)
 	mid, err := client.SaveModule(nil, hySchema.Module{Base: hySchema.DefaultBaseModule, ModuleFormat: "integration.vm"})
 	require.NoError(t, err)
@@ -171,6 +171,45 @@ func (suite *AdminIntegrationTestSuite) TestStopAndCheckpointOverHTTP() {
 	}
 	checkpoints := func() []string { files, err := filepath.Glob("ckp/ckp-*.json"); require.NoError(t, err); return files }
 	send("Set", "state-42")
+	// Exercise all binary routes against persisted JSON records and the real SDK.
+	spawn, err := client.Client.GetMessageBin(vm.Id)
+	require.NoError(t, err)
+	assert.Equal(t, vm.Id, spawn.Id)
+	message, err := client.Client.GetMessageBinByNonce(vm.Id, 1)
+	require.NoError(t, err)
+	assignment, err := client.Client.GetAssignBinByNonce(vm.Id, 1)
+	require.NoError(t, err)
+	byMessage, err := client.Client.GetAssignBinByMessage(message.Id)
+	require.NoError(t, err)
+	assert.Equal(t, assignment.Id, byMessage.Id)
+	legacy, err := client.Client.GetMessage(message.Id)
+	require.NoError(t, err)
+	assert.Equal(t, message.Tags, legacy.Tags)
+	// A second isolated database rebuilds Registry, Token and the VM over binary HTTP.
+	follower := node.New(nil, client.Bundler, "redis://"+redisAddr+"/1", base, base,
+		&nodeSchema.Info{Node: registrySchema.Node{AccId: client.GetAddress()}, Registry: registry.Id, Token: token.Id}, nil)
+	require.NoError(t, follower.Mount("integration.vm", func(env vmmSchema.Env) (vmmSchema.Vm, error) { return &adminIntegrationVM{}, nil }))
+	follower.Run(nodeSchema.StartModeNormal)
+	t.Cleanup(follower.Close)
+	require.NoError(t, follower.Fork(vm.Id, "", base, vmmSchema.ExecModeDryRun))
+	require.Eventually(t, func() bool {
+		item, err := follower.Checkpoint(vm.Id)
+		if err != nil {
+			return false
+		}
+		data, err := goarUtils.Base64Decode(item.Data)
+		if err != nil {
+			return false
+		}
+		var snap vmmSchema.Snapshot
+		return json.Unmarshal(data, &snap) == nil && snap.Env.Nonce == 1 && snap.Data == "state-42"
+	}, 30*time.Second, 50*time.Millisecond)
+	for _, path := range []string{"/messageBin/missing", "/messageBinByNonce/" + vm.Id + "/9999", "/assignmentBinByNonce/" + vm.Id + "/9999", "/assignmentBinByMessage/missing"} {
+		res, err := httpClient.Get(base + path)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusNotFound, res.StatusCode)
+		_ = res.Body.Close()
+	}
 	post("stop", vm.Id, http.StatusOK)
 	assert.NotContains(t, n.Running(), vm.Id)
 	require.Empty(t, checkpoints())

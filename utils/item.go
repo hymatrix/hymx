@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	nodeSchema "github.com/hymatrix/hymx/node/schema"
@@ -8,6 +10,47 @@ import (
 	goarSchema "github.com/permadao/goar/schema"
 	goarUtils "github.com/permadao/goar/utils"
 )
+
+// VerifyBundleItem checks that the tags read by hymx are covered by the signature.
+func VerifyBundleItem(item goarSchema.BundleItem) error {
+	if item.TagsBy != "" {
+		by, err := goarUtils.Base64Decode(item.TagsBy)
+		if err != nil {
+			return err
+		}
+		tags, err := goarUtils.DeserializeTags(by)
+		if err != nil {
+			return err
+		}
+		if len(tags) != len(item.Tags) {
+			return nodeSchema.ErrTagsMismatch
+		}
+		for i, tag := range tags {
+			if tag != item.Tags[i] {
+				return nodeSchema.ErrTagsMismatch
+			}
+		}
+	}
+	return goarUtils.VerifyBundleItem(item)
+}
+
+// DecodeBundleItem returns only verified items. goar can panic on truncated headers.
+func DecodeBundleItem(binary []byte) (item goarSchema.BundleItem, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			item = goarSchema.BundleItem{}
+			err = fmt.Errorf("invalid bundle item: %v", r)
+		}
+	}()
+	item, err = goarUtils.DecodeBundleItem(binary)
+	if err == nil {
+		err = VerifyBundleItem(item)
+	}
+	if err != nil {
+		item = goarSchema.BundleItem{}
+	}
+	return
+}
 
 func Decode(item goarSchema.BundleItem) (pid, accid, fromProcess string, instance interface{}, err error) {
 	switch item.SignatureType {

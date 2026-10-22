@@ -9,7 +9,6 @@ import (
 	"github.com/hymatrix/hymx/utils"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
-	goarUtils "github.com/permadao/goar/utils"
 )
 
 // hymx fee
@@ -87,12 +86,8 @@ func (p *Pay) HymxDepositHandler(res vmmSchema.VmmResult) {
 }
 
 func (p *Pay) getHymxBeneficiary(sender, itemId string) (beneficiary string, err error) {
-	item, err := p.sdk.Client.GetMessage(itemId)
+	item, err := p.sdk.Client.GetMessageBin(itemId)
 	if err != nil {
-		return
-	}
-
-	if err = goarUtils.VerifyBundleItem(item); err != nil {
 		return
 	}
 

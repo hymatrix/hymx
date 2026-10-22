@@ -203,11 +203,7 @@ func (n *Node) tryGetAssign(msgId string, nodes []registrySchema.Node, itemBin [
 		if schema.TryAssignSleepTime[retry] > 0 {
 			time.Sleep(schema.TryAssignSleepTime[retry])
 		}
-		assignItem, err = cli.GetAssignByMessage(msgId)
-		if err != nil {
-			continue
-		}
-		err = goarUtils.VerifyBundleItem(assignItem)
+		assignItem, err = cli.GetAssignBinByMessage(msgId)
 		if err != nil {
 			continue
 		}

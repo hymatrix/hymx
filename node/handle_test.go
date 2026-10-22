@@ -216,11 +216,11 @@ func (suite *RegistryAuthTestSuite) TestRegisterProcessRejectsSpoofedBindings() 
 	victimSpawn := spawn(suite.n.bundler.Address)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		item := ownSpawn
-		if r.URL.Path == "/message/"+victimSpawn.Id {
+		if r.URL.Path == "/messageBin/"+victimSpawn.Id {
 			item = victimSpawn
 		}
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(item); err != nil {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		if _, err := w.Write(item.Binary); err != nil {
 			suite.T().Error(err)
 		}
 	}))
@@ -298,4 +298,39 @@ func (suite *RegistryAuthTestSuite) TestRegisterProcessRejectsSpoofedBindings() 
 
 func TestRegistryAuthTestSuite(t *testing.T) {
 	suite.Run(t, new(RegistryAuthTestSuite))
+}
+
+func (suite *RegistryAuthTestSuite) TestRegisterProcessRejectsTamperedSpawnTags() {
+	tags, err := utils.ProcessToTags(hymxSchema.Process{Base: hymxSchema.DefaultBaseProcess, Module: "module", Scheduler: suite.n.bundler.Address})
+	require.NoError(suite.T(), err)
+	spawn, err := suite.outsider.CreateAndSignItem(nil, "", "", tags)
+	require.NoError(suite.T(), err)
+	for i := range spawn.Tags {
+		if spawn.Tags[i].Name == "Scheduler" {
+			spawn.Tags[i].Value = suite.otherNode.Address
+		}
+	}
+	// A malicious old node can still serve JSON, but the binary client rejects it.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(spawn)
+	}))
+	suite.T().Cleanup(server.Close)
+	register := suite.message(suite.n.bundler, "Register", suite.tokenPid, "1",
+		goarSchema.Tag{Name: "Acc-Id", Value: suite.otherNode.Address}, goarSchema.Tag{Name: "Name", Value: "other"},
+		goarSchema.Tag{Name: "Desc", Value: "test"}, goarSchema.Tag{Name: "URL", Value: server.URL})
+	require.NoError(suite.T(), suite.n.Handle(register))
+	require.Len(suite.T(), suite.n.assignMesChan, 1)
+	assigned := <-suite.n.assignMesChan
+	require.NoError(suite.T(), suite.n.applyMessage(assigned.Pid, assigned.AccId, assigned.Item, assigned.Message,
+		hymxSchema.Assignment{Nonce: "1", Timestamp: "1"}, vmmSchema.ExecModeApply, 0))
+	_, err = suite.n.vmm.Checkpoint(suite.registryPid)
+	require.NoError(suite.T(), err)
+	require.Len(suite.T(), suite.results, 1)
+	require.Empty(suite.T(), (<-suite.results).Error)
+	item := suite.message(suite.otherNode, "RegisterProcess", spawn.Id, "1",
+		goarSchema.Tag{Name: "Pid", Value: spawn.Id}, goarSchema.Tag{Name: "Acc-Id", Value: suite.otherNode.Address})
+	assert.Error(suite.T(), suite.n.Handle(item))
+	assert.Empty(suite.T(), suite.n.assignMesChan)
+	assert.ErrorIs(suite.T(), suite.n.Handle(spawn), nodeSchema.ErrTagsMismatch)
 }

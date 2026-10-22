@@ -10,11 +10,10 @@ import (
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
-	goarUtils "github.com/permadao/goar/utils"
 )
 
 func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
-	if err = goarUtils.VerifyBundleItem(item); err != nil {
+	if err = utils.VerifyBundleItem(item); err != nil {
 		return
 	}
 
@@ -127,7 +126,7 @@ func (n *Node) authNode(accid, fromProcess string) (err error) {
 	return
 }
 
-// verifyRegistry verifies registry process registration messages with 4 steps
+// verifyRegistry binds registration to a verified spawn and its scheduler.
 func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess string) (err error) {
 	// 1. get 'Pid' and 'Acc-Id' from Tags
 	pid := utils.GetTagsValue("Pid", item.Tags)
@@ -149,6 +148,11 @@ func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess st
 		if err != nil {
 			return errors.New("get origin spawn message failed, msgid: " + pid)
 		}
+		if spawnMsg != nil {
+			if err = utils.VerifyBundleItem(*spawnMsg); err != nil {
+				return
+			}
+		}
 	} else { // get message from other node
 		var node *registrySchema.Node
 		node, err = n.GetNode(signer)
@@ -159,9 +163,9 @@ func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess st
 			return errors.New("node not found, accid: " + signer)
 		}
 		cli := sdk.NewClient(node.URL)
-		msg, msgErr := cli.GetMessage(pid)
+		msg, msgErr := cli.GetMessageBin(pid)
 		if msgErr != nil {
-			return errors.New("get origin spawn message failed, msgid: " + pid)
+			return msgErr
 		}
 		spawnMsg = &msg
 	}
@@ -169,16 +173,11 @@ func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess st
 	if spawnMsg == nil {
 		return errors.New("spawn message not found, msgid: " + pid)
 	}
-	if spawnMsg.Id != pid {
+	if spawnMsg.Id != pid || utils.GetType(*spawnMsg) != hymxSchema.TypeProcess {
 		return schema.ErrUnauthorizedNode
 	}
 
-	// 3. verify original message
-	if err = goarUtils.VerifyBundleItem(*spawnMsg); err != nil {
-		return
-	}
-
-	// 4. Validate that the spawn message's scheduler matches the node via RegisterProcess.​
+	// Validate that the spawn message's scheduler matches the registering node.
 	scheduler := utils.GetTagsValue("Scheduler", spawnMsg.Tags)
 	if accid != scheduler {
 		log.Error("verify registry message failed, node accid not match", "pid", pid, "accid", accid, "fromProcess", fromProcess, "scheduler", scheduler)
