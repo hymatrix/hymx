@@ -56,7 +56,7 @@ func (n *Node) Fork(pid, checkpointID, nodeURL string, mode vmmSchema.ExecMode) 
 			log.Error("fork process not found nodes", "pid", pid)
 			return schema.ErrNotFoundNodes
 		}
-		clients = make([]sdk.Client, 0, len(nodes))
+		clients = make([]sdk.Client, len(nodes))
 		for _, node := range nodes {
 			clients = append(clients, *sdk.NewClient(node.URL))
 		}

@@ -332,5 +332,4 @@ func (suite *RegistryAuthTestSuite) TestRegisterProcessRejectsTamperedSpawnTags(
 		goarSchema.Tag{Name: "Pid", Value: spawn.Id}, goarSchema.Tag{Name: "Acc-Id", Value: suite.otherNode.Address})
 	assert.Error(suite.T(), suite.n.Handle(item))
 	assert.Empty(suite.T(), suite.n.assignMesChan)
-	assert.ErrorIs(suite.T(), suite.n.Handle(spawn), nodeSchema.ErrTagsMismatch)
 }

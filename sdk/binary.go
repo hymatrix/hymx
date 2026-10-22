@@ -10,6 +10,7 @@ import (
 	"github.com/hymatrix/hymx/schema"
 	"github.com/hymatrix/hymx/utils"
 	goarSchema "github.com/permadao/goar/schema"
+	goarUtils "github.com/permadao/goar/utils"
 )
 
 func (c *Client) GetMessageBin(msgid string) (item goarSchema.BundleItem, err error) {
@@ -58,5 +59,23 @@ func (c *Client) getItemBinary(path string) (item goarSchema.BundleItem, err err
 	if err != nil {
 		return
 	}
-	return utils.DecodeBundleItem(binary)
+	return decodeItemBinary(binary)
+}
+
+// Decode and verify at the network boundary; goar can panic on truncated headers.
+func decodeItemBinary(binary []byte) (item goarSchema.BundleItem, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			item = goarSchema.BundleItem{}
+			err = fmt.Errorf("invalid bundle item: %v", r)
+		}
+	}()
+	item, err = goarUtils.DecodeBundleItem(binary)
+	if err == nil {
+		err = goarUtils.VerifyBundleItem(item)
+	}
+	if err != nil {
+		item = goarSchema.BundleItem{}
+	}
+	return
 }

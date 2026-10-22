@@ -72,3 +72,24 @@ func TestBinaryQueriesVerifyResponses(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeItemBinaryRejectsTruncationAndTampering(t *testing.T) {
+	signer, err := goar.NewSignerFromPath("../cmd/test_keyfile.json")
+	require.NoError(t, err)
+	bundler, err := goar.NewBundler(signer)
+	require.NoError(t, err)
+	item, err := bundler.CreateAndSignItem([]byte("data"), "", "", nil)
+	require.NoError(t, err)
+	got, err := decodeItemBinary(item.Binary)
+	require.NoError(t, err)
+	assert.Equal(t, item.Id, got.Id)
+	for i := 0; i < len(item.Binary); i++ {
+		got, err := decodeItemBinary(item.Binary[:i])
+		require.Error(t, err, "prefix length %d", i)
+		assert.Empty(t, got.Id)
+	}
+	changed := append([]byte{}, item.Binary...)
+	changed[len(changed)-1] ^= 1
+	_, err = decodeItemBinary(changed)
+	assert.Error(t, err)
+}

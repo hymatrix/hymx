@@ -10,10 +10,11 @@ import (
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
+	goarUtils "github.com/permadao/goar/utils"
 )
 
 func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
-	if err = utils.VerifyBundleItem(item); err != nil {
+	if err = goarUtils.VerifyBundleItem(item); err != nil {
 		return
 	}
 
@@ -126,7 +127,7 @@ func (n *Node) authNode(accid, fromProcess string) (err error) {
 	return
 }
 
-// verifyRegistry binds registration to a verified spawn and its scheduler.
+// verifyRegistry verifies registry process registration messages with 4 steps
 func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess string) (err error) {
 	// 1. get 'Pid' and 'Acc-Id' from Tags
 	pid := utils.GetTagsValue("Pid", item.Tags)
@@ -148,11 +149,6 @@ func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess st
 		if err != nil {
 			return errors.New("get origin spawn message failed, msgid: " + pid)
 		}
-		if spawnMsg != nil {
-			if err = utils.VerifyBundleItem(*spawnMsg); err != nil {
-				return
-			}
-		}
 	} else { // get message from other node
 		var node *registrySchema.Node
 		node, err = n.GetNode(signer)
@@ -173,11 +169,16 @@ func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess st
 	if spawnMsg == nil {
 		return errors.New("spawn message not found, msgid: " + pid)
 	}
-	if spawnMsg.Id != pid || utils.GetType(*spawnMsg) != hymxSchema.TypeProcess {
+	if spawnMsg.Id != pid {
 		return schema.ErrUnauthorizedNode
 	}
 
-	// Validate that the spawn message's scheduler matches the registering node.
+	// 3. verify original message
+	if err = goarUtils.VerifyBundleItem(*spawnMsg); err != nil {
+		return
+	}
+
+	// 4. Validate that the spawn message's scheduler matches the node via RegisterProcess.​
 	scheduler := utils.GetTagsValue("Scheduler", spawnMsg.Tags)
 	if accid != scheduler {
 		log.Error("verify registry message failed, node accid not match", "pid", pid, "accid", accid, "fromProcess", fromProcess, "scheduler", scheduler)

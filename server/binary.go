@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hymatrix/hymx/server/schema"
-	"github.com/hymatrix/hymx/utils"
 	goarSchema "github.com/permadao/goar/schema"
 	goarUtils "github.com/permadao/goar/utils"
 )
@@ -55,10 +54,6 @@ func writeItemBinary(c *gin.Context, item *goarSchema.BundleItem, err error) {
 	}
 	if item == nil {
 		c.JSON(http.StatusNotFound, nil)
-		return
-	}
-	if err = utils.VerifyBundleItem(*item); err != nil {
-		schema.ErrorResponse(c, err.Error())
 		return
 	}
 	// Redis stores JSON without Binary; preserve the signed TagsBy when rebuilding.
