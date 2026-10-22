@@ -163,6 +163,15 @@ func (n *Node) close(checkpoint bool) {
 
 	if checkpoint {
 		n.runCheckpoint()
+	} else {
+		for _, pid := range n.vmm.GetVmPids() {
+			if !n.isCore(pid) {
+				continue
+			}
+			if _, err := n.SaveCheckpoint(pid); err != nil {
+				log.Error("save checkpoint failed", "pid", pid, "err", err)
+			}
+		}
 	}
 	n.vmm.Close()
 	// Keep consumers alive until VM output is complete, then drain the buffers.
