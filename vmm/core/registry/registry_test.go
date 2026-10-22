@@ -50,6 +50,10 @@ func TestAuthSource(t *testing.T) {
 		{name: "register process with spoofed from", meta: vmmSchema.Meta{AccId: testNodeAccId, FromProcess: testTokenPid, Action: "RegisterProcess", Params: procParams("new-pid", testNodeAccId)}, err: schema.ErrUnauthorized},
 		{name: "register process for another node", meta: vmmSchema.Meta{AccId: testNodeAccId, FromProcess: "new-pid", Action: "RegisterProcess", Params: procParams("new-pid", testMainAccId)}, err: schema.ErrUnauthorized},
 		{name: "register process by unregistered signer", meta: vmmSchema.Meta{AccId: testOtherAccId, FromProcess: "new-pid", Action: "RegisterProcess", Params: procParams("new-pid", testOtherAccId)}, err: schema.ErrNodeNotFound},
+		{name: "re-register process by its host", meta: vmmSchema.Meta{AccId: testNodeAccId, FromProcess: testProcPid, Action: "RegisterProcess", Params: procParams(testProcPid, testNodeAccId)}},
+		{name: "register process hosted by another node", meta: vmmSchema.Meta{AccId: testNodeAccId, FromProcess: testTokenPid, Action: "RegisterProcess", Params: procParams(testTokenPid, testNodeAccId)}, err: schema.ErrUnauthorized},
+		{name: "unregister process by registered non-host", meta: vmmSchema.Meta{AccId: testNodeAccId, FromProcess: testTokenPid, Action: "UnregisterProcess", Params: procParams(testTokenPid, testNodeAccId)}, err: schema.ErrUnauthorized},
+		{name: "unregister unknown process", meta: vmmSchema.Meta{AccId: testNodeAccId, FromProcess: "new-pid", Action: "UnregisterProcess", Params: procParams("new-pid", testNodeAccId)}, err: schema.ErrUnauthorized},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

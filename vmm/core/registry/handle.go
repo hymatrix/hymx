@@ -74,11 +74,25 @@ func (r *Registry) handleUnregisterProcess(from string, params map[string]string
 }
 
 // authSource checks the signer against the registry's own state:
-//   - RegisterProcess / UnregisterProcess come from the process itself, signed by the registered node named in Acc-Id;
-//   - any other message must be signed by a node that hosts From-Process.
+//   - RegisterProcess / UnregisterProcess come from the process itself (Pid == From-Process),
+//     signed by the registered node named in Acc-Id;
+//   - RegisterProcess may bind a process that has no host yet, or re-register its current host;
+//   - UnregisterProcess and any other message must be signed by a node that hosts From-Process.
 func (r *Registry) authSource(meta vmmSchema.Meta) (err error) {
 	if meta.FromProcess == "" {
 		return
+	}
+
+	nodes, err := r.db.GetNodesByProcess(meta.FromProcess)
+	if err != nil {
+		return
+	}
+	hosted := false
+	for _, node := range nodes {
+		if node.AccId == meta.AccId {
+			hosted = true
+			break
+		}
 	}
 
 	switch meta.Action {
@@ -93,16 +107,13 @@ func (r *Registry) authSource(meta vmmSchema.Meta) (err error) {
 		if node == nil {
 			return schema.ErrNodeNotFound
 		}
-		return nil
-	default:
-		nodes, err := r.db.GetNodesByProcess(meta.FromProcess)
-		if err != nil {
-			return err
+		if hosted || (meta.Action == "RegisterProcess" && len(nodes) == 0) {
+			return nil
 		}
-		for _, node := range nodes {
-			if node.AccId == meta.AccId {
-				return nil
-			}
+		return schema.ErrUnauthorized
+	default:
+		if hosted {
+			return nil
 		}
 		return schema.ErrUnauthorized
 	}

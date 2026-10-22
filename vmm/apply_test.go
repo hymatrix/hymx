@@ -103,3 +103,34 @@ func TestApplyCheckRejectsUnauthorizedSourceBeforeSequence(t *testing.T) {
 	assert.Equal(t, int64(2), env.Nonce)
 	assert.Equal(t, int64(6), env.ReceivedSeq["token-pid"])
 }
+
+func TestApplyRejectsUnregisterProcessFromNonHost(t *testing.T) {
+	db := cache.NewRegistry("registry-pid", "token-pid", registrySchema.Node{AccId: "0xMain"})
+	require.NoError(t, db.RegisterProcess("0xMain", "token-pid"))
+	require.NoError(t, db.Register(registrySchema.Node{AccId: "0xNode"}))
+	vm, err := registry.New(db)
+	require.NoError(t, err)
+	results := make(chan schema.VmmResult, 2)
+	v := &Vmm{resultChan: results}
+	env := &schema.Env{ReceivedSeq: map[string]int64{"token-pid": 5}}
+
+	err = v.apply(vm, env, schema.Meta{
+		Pid: "registry-pid", Nonce: 1, AccId: "0xNode", FromProcess: "token-pid", Action: "UnregisterProcess",
+		Sequence: 1000000, Params: map[string]string{"Pid": "token-pid", "Acc-Id": "0xNode"}, Mode: schema.ExecModeReplay,
+	})
+	assert.ErrorIs(t, err, registrySchema.ErrUnauthorized)
+	assert.Equal(t, registrySchema.ErrUnauthorized.Error(), (<-results).Error)
+	assert.Equal(t, int64(1), env.Nonce)
+	assert.Equal(t, int64(5), env.ReceivedSeq["token-pid"])
+
+	require.NoError(t, v.apply(vm, env, schema.Meta{
+		Pid: "registry-pid", Nonce: 2, AccId: "0xMain", FromProcess: "token-pid", Action: "Register", Sequence: 6,
+		Params: map[string]string{"Acc-Id": "0x6aD04c2815aAF4Ef3fC49EE711238FaE1081829D", "Name": "new", "Desc": "new node", "URL": "http://127.0.0.1:8080"},
+		Mode:   schema.ExecModeReplay,
+	}))
+	assert.Empty(t, (<-results).Error)
+	assert.Equal(t, int64(6), env.ReceivedSeq["token-pid"])
+	node, err := db.GetNode("0x6aD04c2815aAF4Ef3fC49EE711238FaE1081829D")
+	require.NoError(t, err)
+	assert.NotNil(t, node)
+}
