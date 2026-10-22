@@ -296,6 +296,52 @@ func (suite *RegistryAuthTestSuite) TestRegisterProcessRejectsSpoofedBindings() 
 	assert.Equal(suite.T(), item.Id, (<-suite.n.assignMesChan).Item.Id)
 }
 
+func (suite *RegistryAuthTestSuite) TestRegisterProcessRejectsTamperedSpawnTags() {
+	tags, err := utils.ProcessToTags(hymxSchema.Process{
+		Base: hymxSchema.DefaultBaseProcess, Module: "module", Scheduler: suite.n.bundler.Address,
+	})
+	require.NoError(suite.T(), err)
+	victimSpawn, err := suite.outsider.CreateAndSignItem(nil, "", "", tags)
+	require.NoError(suite.T(), err)
+	require.NotEmpty(suite.T(), victimSpawn.TagsBy)
+
+	// Keep the signed TagsBy, but claim another scheduler in Tags.
+	tampered := victimSpawn
+	tampered.Tags = make([]goarSchema.Tag, 0, len(victimSpawn.Tags))
+	for _, tag := range victimSpawn.Tags {
+		if tag.Name == "Scheduler" {
+			tag.Value = suite.otherNode.Address
+		}
+		tampered.Tags = append(tampered.Tags, tag)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(tampered); err != nil {
+			suite.T().Error(err)
+		}
+	}))
+	suite.T().Cleanup(server.Close)
+
+	register := suite.message(suite.n.bundler, "Register", suite.tokenPid, "1",
+		goarSchema.Tag{Name: "Acc-Id", Value: suite.otherNode.Address},
+		goarSchema.Tag{Name: "Name", Value: "registered"},
+		goarSchema.Tag{Name: "Desc", Value: "local test"},
+		goarSchema.Tag{Name: "URL", Value: server.URL},
+	)
+	require.NoError(suite.T(), suite.n.Handle(register))
+	assigned := <-suite.n.assignMesChan
+	require.NoError(suite.T(), suite.n.applyMessage(assigned.Pid, assigned.AccId, assigned.Item, assigned.Message,
+		hymxSchema.Assignment{Nonce: "1", Timestamp: "1"}, vmmSchema.ExecModeApply, 0))
+	require.Empty(suite.T(), (<-suite.results).Error)
+
+	item := suite.message(suite.otherNode, "RegisterProcess", victimSpawn.Id, "1",
+		goarSchema.Tag{Name: "Pid", Value: victimSpawn.Id},
+		goarSchema.Tag{Name: "Acc-Id", Value: suite.otherNode.Address},
+	)
+	assert.ErrorIs(suite.T(), suite.n.Handle(item), nodeSchema.ErrTagsMismatch)
+	assert.Empty(suite.T(), suite.n.assignMesChan)
+}
+
 func TestRegistryAuthTestSuite(t *testing.T) {
 	suite.Run(t, new(RegistryAuthTestSuite))
 }

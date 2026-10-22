@@ -207,7 +207,7 @@ func (n *Node) tryGetAssign(msgId string, nodes []registrySchema.Node, itemBin [
 		if err != nil {
 			continue
 		}
-		err = goarUtils.VerifyBundleItem(assignItem)
+		err = utils.VerifyBundleItem(assignItem)
 		if err != nil {
 			continue
 		}

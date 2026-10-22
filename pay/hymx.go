@@ -9,7 +9,6 @@ import (
 	"github.com/hymatrix/hymx/utils"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
-	goarUtils "github.com/permadao/goar/utils"
 )
 
 // hymx fee
@@ -92,7 +91,7 @@ func (p *Pay) getHymxBeneficiary(sender, itemId string) (beneficiary string, err
 		return
 	}
 
-	if err = goarUtils.VerifyBundleItem(item); err != nil {
+	if err = utils.VerifyBundleItem(item); err != nil {
 		return
 	}
 

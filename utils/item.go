@@ -9,6 +9,26 @@ import (
 	goarUtils "github.com/permadao/goar/utils"
 )
 
+// VerifyBundleItem verifies the signature over the tags that hymx actually reads.
+// notice: goar signs TagsBy when it is present, so an item decoded from JSON
+// can carry Tags that differ from the signed TagsBy and still pass goar's check.
+func VerifyBundleItem(item goarSchema.BundleItem) error {
+	if item.TagsBy != "" {
+		by, err := goarUtils.Base64Decode(item.TagsBy)
+		if err != nil {
+			return err
+		}
+		signedTags, err := goarUtils.DeserializeTags(by)
+		if err != nil {
+			return err
+		}
+		if !equalTags(signedTags, item.Tags) {
+			return nodeSchema.ErrTagsMismatch
+		}
+	}
+	return goarUtils.VerifyBundleItem(item)
+}
+
 func Decode(item goarSchema.BundleItem) (pid, accid, fromProcess string, instance interface{}, err error) {
 	switch item.SignatureType {
 	case goarSchema.ArweaveSignType:
@@ -92,4 +112,16 @@ func DecodeItemToAssignment(item goarSchema.BundleItem) (assign schema.Assignmen
 
 func GetType(item goarSchema.BundleItem) string {
 	return GetTagsValue("Type", item.Tags)
+}
+
+func equalTags(a, b []goarSchema.Tag) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Name != b[i].Name || a[i].Value != b[i].Value {
+			return false
+		}
+	}
+	return true
 }

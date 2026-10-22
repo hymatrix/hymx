@@ -10,11 +10,10 @@ import (
 	registrySchema "github.com/hymatrix/hymx/vmm/core/registry/schema"
 	vmmSchema "github.com/hymatrix/hymx/vmm/schema"
 	goarSchema "github.com/permadao/goar/schema"
-	goarUtils "github.com/permadao/goar/utils"
 )
 
 func (n *Node) Handle(item goarSchema.BundleItem) (err error) {
-	if err = goarUtils.VerifyBundleItem(item); err != nil {
+	if err = utils.VerifyBundleItem(item); err != nil {
 		return
 	}
 
@@ -174,7 +173,7 @@ func (n *Node) verifyRegistry(item goarSchema.BundleItem, signer, fromProcess st
 	}
 
 	// 3. verify original message
-	if err = goarUtils.VerifyBundleItem(*spawnMsg); err != nil {
+	if err = utils.VerifyBundleItem(*spawnMsg); err != nil {
 		return
 	}
 

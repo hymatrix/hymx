@@ -5,7 +5,6 @@ import (
 	hymxSchema "github.com/hymatrix/hymx/schema"
 	hymxUtils "github.com/hymatrix/hymx/utils"
 	goarSchema "github.com/permadao/goar/schema"
-	goarUtils "github.com/permadao/goar/utils"
 )
 
 func (c *Chainkit) downloadByTxid(itemId string) (bundleItem *goarSchema.BundleItem, err error) {
@@ -97,7 +96,7 @@ func (c *Chainkit) downloads(itemsIds []string) (items []*goarSchema.BundleItem,
 
 func (c *Chainkit) verifyMessage(bundleItem *goarSchema.BundleItem, msgType string) error {
 	// verify bundle item
-	if err := goarUtils.VerifyBundleItem(*bundleItem); err != nil {
+	if err := hymxUtils.VerifyBundleItem(*bundleItem); err != nil {
 		return err
 	}
 	// get pid, signer, fromProcess, instance
