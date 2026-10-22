@@ -132,14 +132,11 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mo
 
 // forkScheduler reads the scheduler from a spawn already verified by the SDK.
 func forkScheduler(pid string, spawn goarSchema.BundleItem) (string, error) {
-	if spawn.Id != pid || utils.GetType(spawn) != hymxSchema.TypeProcess {
-		return "", schema.ErrInvalidForkItem
-	}
 	proc, err := utils.DecodeItemToProcess(spawn)
 	if err != nil {
 		return "", err
 	}
-	if proc.Scheduler == "" {
+	if spawn.Id != pid || proc.Type != hymxSchema.TypeProcess || proc.Scheduler == "" {
 		return "", schema.ErrInvalidForkItem
 	}
 	return proc.Scheduler, nil
@@ -155,16 +152,9 @@ func verifyForkItem(pid string, nonce int64, scheduler string, msg, item goarSch
 	if !ok || signer != scheduler || assign.Process != pid || assign.Message != msg.Id || assign.Nonce != strconv.FormatInt(nonce, 10) {
 		return assign, schema.ErrInvalidForkItem
 	}
-	switch utils.GetType(msg) {
-	case hymxSchema.TypeProcess:
-		if nonce != 0 || msg.Id != pid {
-			return assign, schema.ErrInvalidForkItem
-		}
-	case hymxSchema.TypeMessage:
-		if msg.Target != pid || nonce == 0 {
-			return assign, schema.ErrInvalidForkItem
-		}
-	default:
+	isSpawn := nonce == 0 && msg.Id == pid && utils.GetType(msg) == hymxSchema.TypeProcess
+	isMessage := nonce != 0 && msg.Target == pid && utils.GetType(msg) == hymxSchema.TypeMessage
+	if !isSpawn && !isMessage {
 		return assign, schema.ErrInvalidForkItem
 	}
 	return
