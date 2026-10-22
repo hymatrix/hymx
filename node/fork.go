@@ -81,31 +81,23 @@ func (n *Node) runForkProcess(pid, checkpointID string, clients []sdk.Client, mo
 	n.wg.Add(1)
 	defer n.wg.Done()
 	scheduler := ""
-	for scheduler == "" {
-		select {
-		case <-n.ctx.Done():
-			return
-		default:
-		}
-		spawn, err := clients[0].GetMessageBin(pid)
-		if err == nil {
-			scheduler, err = forkScheduler(pid, spawn)
-		}
-		if err != nil {
-			log.Error("fork process can not verify spawn", "pid", pid, "err", err)
-			select {
-			case <-n.ctx.Done():
-				return
-			case <-time.After(delay):
-			}
-		}
-	}
 	// fork all message from source
 	for {
 		select {
 		case <-n.ctx.Done():
 			return
 		default:
+			if scheduler == "" {
+				spawn, err := clients[0].GetMessageBin(pid)
+				if err == nil {
+					scheduler, err = forkScheduler(pid, spawn)
+				}
+				if err != nil {
+					log.Error("fork process can not verify spawn", "pid", pid, "err", err)
+					time.Sleep(delay)
+					continue
+				}
+			}
 			// todo: ensure message retrieval succeeds even when using multiple clients in the future
 			msgItem, err := clients[0].GetMessageBinByNonce(pid, nonce)
 			if err != nil {
