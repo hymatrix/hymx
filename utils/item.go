@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -22,13 +23,8 @@ func VerifyBundleItem(item goarSchema.BundleItem) error {
 		if err != nil {
 			return err
 		}
-		if len(tags) != len(item.Tags) {
+		if !slices.Equal(tags, item.Tags) {
 			return nodeSchema.ErrTagsMismatch
-		}
-		for i, tag := range tags {
-			if tag != item.Tags[i] {
-				return nodeSchema.ErrTagsMismatch
-			}
 		}
 	}
 	return goarUtils.VerifyBundleItem(item)
@@ -44,7 +40,8 @@ func DecodeBundleItem(binary []byte) (item goarSchema.BundleItem, err error) {
 	}()
 	item, err = goarUtils.DecodeBundleItem(binary)
 	if err == nil {
-		err = VerifyBundleItem(item)
+		// Both tag representations were decoded from the same bytes.
+		err = goarUtils.VerifyBundleItem(item)
 	}
 	if err != nil {
 		item = goarSchema.BundleItem{}
