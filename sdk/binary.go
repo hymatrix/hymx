@@ -14,7 +14,9 @@ import (
 )
 
 func (c *Client) GetMessageBin(msgid string) (item goarSchema.BundleItem, err error) {
-	item, err = c.getItemBinary("/messageBin/" + msgid)
+	item, err = c.getItemBinary("/messageBin/"+msgid, func() (goarSchema.BundleItem, error) {
+		return c.GetMessage(msgid)
+	})
 	if err == nil && item.Id != msgid {
 		return goarSchema.BundleItem{}, nodeSchema.ErrUnauthorizedNode
 	}
@@ -22,23 +24,44 @@ func (c *Client) GetMessageBin(msgid string) (item goarSchema.BundleItem, err er
 }
 
 func (c *Client) GetMessageBinByNonce(pid string, nonce int64) (goarSchema.BundleItem, error) {
-	return c.getItemBinary(fmt.Sprintf("/messageBinByNonce/%s/%d", pid, nonce))
+	return c.getItemBinary(fmt.Sprintf("/messageBinByNonce/%s/%d", pid, nonce), func() (goarSchema.BundleItem, error) {
+		return c.GetMessageByNonce(pid, nonce)
+	})
 }
 
 func (c *Client) GetAssignBinByNonce(pid string, nonce int64) (goarSchema.BundleItem, error) {
-	return c.getItemBinary(fmt.Sprintf("/assignmentBinByNonce/%s/%d", pid, nonce))
+	return c.getItemBinary(fmt.Sprintf("/assignmentBinByNonce/%s/%d", pid, nonce), func() (goarSchema.BundleItem, error) {
+		return c.GetAssignByNonce(pid, nonce)
+	})
 }
 
 func (c *Client) GetAssignBinByMessage(msgid string) (item goarSchema.BundleItem, err error) {
-	item, err = c.getItemBinary("/assignmentBinByMessage/" + msgid)
+	item, err = c.getItemBinary("/assignmentBinByMessage/"+msgid, func() (goarSchema.BundleItem, error) {
+		return c.GetAssignByMessage(msgid)
+	})
 	if err == nil && (utils.GetType(item) != schema.TypeAssignment || utils.GetTagsValue("Message", item.Tags) != msgid) {
 		return goarSchema.BundleItem{}, nodeSchema.ErrUnauthorizedNode
 	}
 	return
 }
 
-// getItemBinary never falls back to JSON: all returned fields come from signed bytes.
-func (c *Client) getItemBinary(path string) (item goarSchema.BundleItem, err error) {
+// getItemBinary returns only fields decoded from signed bytes, including items read from legacy JSON.
+func (c *Client) getItemBinary(path string, getLegacy func() (goarSchema.BundleItem, error)) (item goarSchema.BundleItem, err error) {
+	binary, found, err := c.getBinary(path)
+	if err == nil && !found {
+		// notice: nodes without binary routes return 404; rebuild their JSON from signed TagsBy, never from JSON tags.
+		var legacy goarSchema.BundleItem
+		if legacy, err = getLegacy(); err == nil {
+			binary, err = goarUtils.GenerateItemBinary(legacy)
+		}
+	}
+	if err != nil {
+		return
+	}
+	return decodeItemBinary(binary)
+}
+
+func (c *Client) getBinary(path string) (binary []byte, found bool, err error) {
 	url, err := c.buildURL(path)
 	if err != nil {
 		return
@@ -48,18 +71,19 @@ func (c *Client) getItemBinary(path string) (item goarSchema.BundleItem, err err
 		return
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return item, fmt.Errorf("invalid server response: %d", resp.StatusCode)
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return
+	default:
+		return nil, false, fmt.Errorf("invalid server response: %d", resp.StatusCode)
 	}
 	contentType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if err != nil || contentType != "application/octet-stream" {
-		return item, fmt.Errorf("invalid bundle item content type: %q", resp.Header.Get("Content-Type"))
+		return nil, false, fmt.Errorf("invalid bundle item content type: %q", resp.Header.Get("Content-Type"))
 	}
-	binary, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
-	return decodeItemBinary(binary)
+	binary, err = io.ReadAll(resp.Body)
+	return binary, err == nil, err
 }
 
 // Decode and verify at the network boundary; goar can panic on truncated headers.
