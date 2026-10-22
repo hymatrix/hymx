@@ -10,13 +10,6 @@ import (
 	goarUtils "github.com/permadao/goar/utils"
 )
 
-func (s *Server) injectBinaryAPI(engine *gin.Engine) {
-	engine.GET("/messageBin/:msgid", s.GetMessageBin)
-	engine.GET("/messageBinByNonce/:pid/:nonce", s.GetMessageBinByNonce)
-	engine.GET("/assignmentBinByNonce/:pid/:nonce", s.GetAssignBinByNonce)
-	engine.GET("/assignmentBinByMessage/:msgid", s.GetAssignBinByMsg)
-}
-
 func (s *Server) GetMessageBin(c *gin.Context) {
 	item, err := s.node.GetMessage(c.Param("msgid"))
 	writeItemBinary(c, item, err)

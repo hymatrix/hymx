@@ -37,7 +37,10 @@ func (s *Server) runAPI(endpoint string) {
 	engine.GET("/messageByNonce/:pid/:nonce", s.GetMessageByNonce)
 	engine.GET("/assignmentByNonce/:pid/:nonce", s.GetAssignByNonce)
 	engine.GET("/assignmentByMessage/:msgid", s.GetAssignByMsg)
-	s.injectBinaryAPI(engine)
+	engine.GET("/messageBin/:msgid", s.GetMessageBin)
+	engine.GET("/messageBinByNonce/:pid/:nonce", s.GetMessageBinByNonce)
+	engine.GET("/assignmentBinByNonce/:pid/:nonce", s.GetAssignBinByNonce)
+	engine.GET("/assignmentBinByMessage/:msgid", s.GetAssignBinByMsg)
 	// get current nonce by pid
 	engine.GET("/nonce/:pid", s.GetNonce)
 

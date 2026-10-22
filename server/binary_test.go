@@ -71,7 +71,10 @@ func (suite *BinaryTestSuite) TestRebuildStoredItem() {
 func (suite *BinaryTestSuite) TestRoutesAndInvalidNonce() {
 	s := &Server{}
 	engine := gin.New()
-	s.injectBinaryAPI(engine)
+	engine.GET("/messageBin/:msgid", s.GetMessageBin)
+	engine.GET("/messageBinByNonce/:pid/:nonce", s.GetMessageBinByNonce)
+	engine.GET("/assignmentBinByNonce/:pid/:nonce", s.GetAssignBinByNonce)
+	engine.GET("/assignmentBinByMessage/:msgid", s.GetAssignBinByMsg)
 	routes := []string{}
 	for _, route := range engine.Routes() {
 		routes = append(routes, route.Path)
