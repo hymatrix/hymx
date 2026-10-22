@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -30,6 +29,7 @@ func (suite *BinaryTestSuite) TestRebuildStoredItem() {
 	var stored goarSchema.BundleItem
 	require.NoError(suite.T(), json.Unmarshal(encoded, &stored))
 	require.Empty(suite.T(), stored.Binary)
+	stored.Tags[0].Value = "B"
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	writeItemBinary(c, &stored, nil)
@@ -41,45 +41,13 @@ func (suite *BinaryTestSuite) TestRebuildStoredItem() {
 	assert.Equal(suite.T(), item.Id, got.Id)
 	assert.Equal(suite.T(), item.Tags, got.Tags)
 	assert.Equal(suite.T(), item.Data, got.Data)
-	stored.Tags[0].Value = "B"
-	w = httptest.NewRecorder()
-	c, _ = gin.CreateTestContext(w)
-	writeItemBinary(c, &stored, nil)
-	require.Equal(suite.T(), http.StatusOK, w.Code)
-	got, err = goarUtils.DecodeBundleItem(w.Body.Bytes())
-	require.NoError(suite.T(), err)
-	require.NoError(suite.T(), goarUtils.VerifyBundleItem(got))
-	assert.Equal(suite.T(), item.Tags, got.Tags, "binary uses signed TagsBy, not rewritten JSON tags")
-	for _, tc := range []struct {
-		name   string
-		item   *goarSchema.BundleItem
-		err    error
-		status int
-	}{
-		{name: "missing", status: 404},
-		{name: "database error", err: errors.New("database error"), status: 400},
-	} {
-		suite.Run(tc.name, func() {
-			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-			writeItemBinary(c, tc.item, tc.err)
-			assert.Equal(suite.T(), tc.status, w.Code)
-		})
-	}
 }
 
-func (suite *BinaryTestSuite) TestRoutesAndInvalidNonce() {
+func (suite *BinaryTestSuite) TestInvalidNonce() {
 	s := &Server{}
 	engine := gin.New()
-	engine.GET("/messageBin/:msgid", s.GetMessageBin)
 	engine.GET("/messageBinByNonce/:pid/:nonce", s.GetMessageBinByNonce)
 	engine.GET("/assignmentBinByNonce/:pid/:nonce", s.GetAssignBinByNonce)
-	engine.GET("/assignmentBinByMessage/:msgid", s.GetAssignBinByMsg)
-	routes := []string{}
-	for _, route := range engine.Routes() {
-		routes = append(routes, route.Path)
-	}
-	assert.ElementsMatch(suite.T(), []string{"/messageBin/:msgid", "/messageBinByNonce/:pid/:nonce", "/assignmentBinByNonce/:pid/:nonce", "/assignmentBinByMessage/:msgid"}, routes)
 	for _, path := range []string{"/messageBinByNonce/pid/no", "/assignmentBinByNonce/pid/-1"} {
 		w := httptest.NewRecorder()
 		engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))

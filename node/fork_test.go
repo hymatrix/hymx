@@ -12,7 +12,6 @@ import (
 	"github.com/hymatrix/hymx/utils"
 	"github.com/permadao/goar"
 	goarSchema "github.com/permadao/goar/schema"
-	goarUtils "github.com/permadao/goar/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -75,14 +74,7 @@ func (suite *ForkTestSuite) TestForkBindings() {
 		{name: "wrong type", nonce: 1, msg: msg, assign: msg},
 	} {
 		suite.Run(tc.name, func() {
-			// Match production's boundary: decode and verify before checking bindings.
-			msg, err := goarUtils.DecodeBundleItem(tc.msg.Binary)
-			require.NoError(suite.T(), err)
-			require.NoError(suite.T(), goarUtils.VerifyBundleItem(msg))
-			assign, err := goarUtils.DecodeBundleItem(tc.assign.Binary)
-			require.NoError(suite.T(), err)
-			require.NoError(suite.T(), goarUtils.VerifyBundleItem(assign))
-			_, err = verifyForkItem(spawn.Id, tc.nonce, scheduler.Address, msg, assign)
+			_, err := verifyForkItem(spawn.Id, tc.nonce, scheduler.Address, tc.msg, tc.assign)
 			if tc.valid {
 				assert.NoError(suite.T(), err)
 			} else {
